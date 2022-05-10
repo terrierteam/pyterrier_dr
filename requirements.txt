@@ -1,0 +1,4 @@
+transformers
+python-terrier
+torch
+numpy
