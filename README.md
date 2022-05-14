@@ -8,7 +8,7 @@ This provides various Dense Retrieval functionality for [PyTerrier](https://gith
 This repostory can be installed using pip.
 
 ```bash
-pip install --upgrade git+https://github.com/seanmacavaney/dr.git
+pip install --upgrade git+https://github.com/terrierteam/pyterrier_dr.git
 ```
 
 You'll also need to install FAISS.
