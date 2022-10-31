@@ -697,8 +697,8 @@ class TorchIndex(NumpyIndex):
             if self.drop_query_vec:
                 query = query._replace(query_vec=None)
             if self.docids:
-                for score, docid, docno in zip(scores, docnos):
-                    res.append((*query, docno, docid, score))
+                for score, docid, docno in zip(scores, docid, docnos):
+                    res.append((*query, docno, score, docid))
             else:
                 for score, docno in zip(scores, docnos):
                     res.append((*query, docno, score))
