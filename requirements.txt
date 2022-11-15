@@ -1,4 +1,4 @@
 transformers
-python-terrier
+python-terrier>=0.9.1
 torch
 numpy
