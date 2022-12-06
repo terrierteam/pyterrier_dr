@@ -111,7 +111,7 @@ class DocnoFile:
                 f.write(np.array(docnos, dtype=f'S{max_length}').tobytes())
 
 
-class NilIndex(pt.index.IterDictIndexerBase):
+class NilIndex(pt.Indexer):
     # simulates an indexer; just used for testing
     def transform(self, res):
         return res
@@ -121,7 +121,7 @@ class NilIndex(pt.index.IterDictIndexerBase):
             pass
 
 
-class NumpyIndex(pt.index.IterDictIndexerBase):
+class NumpyIndex(pt.Indexer):
     def __init__(self, index_path=None, num_results=1000, score_fn='dot', overwrite=False, batch_size=4096, verbose=False, dtype='f4', drop_query_vec=True, inmem=False, cuda=False):
         self.index_path = Path(index_path)
         self.num_results = num_results
@@ -281,7 +281,7 @@ class NumpyIndex(pt.index.IterDictIndexerBase):
                     yield {'docno': next(docno_iter), 'doc_vec': vec_batch[vec_idx]}
 
 
-class MemIndex(pt.index.IterDictIndexerBase):
+class MemIndex(pt.Indexer):
     def __init__(self, num_results=1000, score_fn='dot', batch_size=4096, verbose=True, dtype='f4', drop_query_vec=True):
         self.num_results = num_results
         self.score_fn = score_fn
@@ -391,7 +391,7 @@ class RankedLists:
         )
 
 
-class FaissFlat(pt.index.IterDictIndexerBase):
+class FaissFlat(pt.Indexer):
     def __init__(self, index_path=None, num_results=1000, shard_size=500_000, score_fn='cos', overwrite=False, batch_size=4096, verbose=False, drop_query_vec=True, inmem=False, cuda=False):
         self.index_path = Path(index_path)
         self.num_results = num_results
@@ -499,7 +499,7 @@ class FaissFlat(pt.index.IterDictIndexerBase):
         DocnoFile.build(docnos, path/f'docnos.npy')
 
 
-class FaissHnsw(pt.index.IterDictIndexerBase):
+class FaissHnsw(pt.Indexer):
     def __init__(self, index_path, num_links=32, num_results=1000, shard_size=500_000, score_fn='cos', overwrite=False, batch_size=4096, verbose=False, drop_query_vec=True):
         self.index_path = Path(index_path)
         self.num_links = num_links
