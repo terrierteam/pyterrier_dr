@@ -52,7 +52,7 @@ class BiEncoder(pt.Transformer):
         return BiScorer(self, verbose=verbose, batch_size=batch_size)
 
 
-class BiQueryEncoder(pt.transformer.TransformerBase):
+class BiQueryEncoder(pt.Transformer):
     def __init__(self, bi_encoder_model, verbose=None, batch_size=None):
         self.bi_encoder_model = bi_encoder_model
         self.verbose = verbose if verbose is not None else bi_encoder_model.verbose
@@ -72,7 +72,7 @@ class BiQueryEncoder(pt.transformer.TransformerBase):
         return f'{repr(self.bi_encoder_model)}.query_encoder()'
 
 
-class BiDocEncoder(pt.transformer.TransformerBase):
+class BiDocEncoder(pt.Transformer):
     def __init__(self, bi_encoder_model, verbose=None, batch_size=None, text_field=None):
         self.bi_encoder_model = bi_encoder_model
         self.verbose = verbose if verbose is not None else bi_encoder_model.verbose
@@ -87,13 +87,13 @@ class BiDocEncoder(pt.transformer.TransformerBase):
         it = inp[self.text_field]
         if self.verbose:
             it = pt.tqdm(it, desc='Encoding Docs', unit='doc')
-        return inp.assign(doc_vec=list(self.encode(it))])
+        return inp.assign(doc_vec=list(self.encode(it)))
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.doc_encoder()'
 
 
-class BiScorer(pt.transformer.TransformerBase):
+class BiScorer(pt.Transformer):
     def __init__(self, bi_encoder_model, verbose=None, batch_size=None, text_field=None):
         self.bi_encoder_model = bi_encoder_model
         self.verbose = verbose if verbose is not None else bi_encoder_model.verbose
