@@ -35,8 +35,8 @@ import pyterrier_dr
 
 ## Built-in Models
 
-| Model  | `query_encoder` | `doc_encoder` | `scorer` |
-|--------|-----------------|---|---|
+| Model | `.query_encoder()` | `.doc_encoder()` | `.scorer()` |
+|-------|:---------------:|:-------------:|:--------:|
 | [`TctColBert`](https://arxiv.org/abs/2010.11386) | ✅ | ✅ | ✅ |
 | [`TasB`](https://arxiv.org/abs/2104.06967) | ✅ | ✅ | ✅ |
 | [`Ance`](https://arxiv.org/abs/2007.00808) | ✅ | ✅ | ✅ |
