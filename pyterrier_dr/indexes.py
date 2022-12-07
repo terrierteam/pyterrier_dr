@@ -500,7 +500,7 @@ class FaissFlat(pt.Indexer):
 
 
 class FaissHnsw(pt.Indexer):
-    def __init__(self, index_path, num_links=32, num_results=1000, shard_size=500_000, score_fn='cos', overwrite=False, batch_size=4096, verbose=False, drop_query_vec=True):
+    def __init__(self, index_path, num_links=32, num_results=1000, shard_size=500_000, score_fn='cos', overwrite=False, batch_size=4096, verbose=False, drop_query_vec=True, qbatch=16):
         self.index_path = Path(index_path)
         self.num_links = num_links
         self.num_results = num_results
@@ -510,20 +510,24 @@ class FaissHnsw(pt.Indexer):
         self.verbose = verbose
         self.batch_size = batch_size
         self.drop_query_vec = drop_query_vec
+        self.qbatch = qbatch
         self._shards = None
 
-    def iter_shards(self):
-        if self._shards is None:
-            shards = []
-            for shardid in itertools.count():
-                if not (self.index_path/f'{shardid}.faiss').exists():
-                    break
-                index = faiss.read_index(str(self.index_path/f'{shardid}.faiss'))
-                shards.append(index)
-            self._shards = shards
-            if shardid == 0:
-                raise RuntimeError(f'Index not found at {self.index_path}')
-        return iter(self._shards)
+    def iter_shards(self, cache=True):
+        if not cache:
+            return self._iter_shards()
+        else:
+            if self._shards is None:
+                self._shards = list(self._iter_shards())
+            return iter(self._shards)
+
+    def _iter_shards(self):
+        for shardid in itertools.count():
+            if not (self.index_path/f'{shardid}.faiss').exists():
+                break
+            yield faiss.read_index(str(self.index_path/f'{shardid}.faiss'))
+        if shardid == 0:
+            raise RuntimeError(f'Index not found at {self.index_path}')
 
     def transform(self, inp):
         columns = set(inp.columns)
@@ -543,9 +547,8 @@ class FaissHnsw(pt.Indexer):
             it = pt.tqdm(it, unit='shard', desc='scanning shards')
         for shardidx, index in it:
             scores, dids = [], []
-            QBATCH = 16
-            for qidx in range(0, num_q, QBATCH):
-                s, d = index.search(query_vecs[qidx:qidx+QBATCH], self.num_results)
+            for qidx in range(0, num_q, self.qbatch):
+                s, d = index.search(query_vecs[qidx:qidx+self.qbatch], self.num_results)
                 scores.append(s)
                 dids.append(d)
             ranked_lists.update(np.concatenate(scores, axis=0), np.concatenate(dids, axis=0)+dids_offset)
@@ -576,7 +579,11 @@ class FaissHnsw(pt.Indexer):
                 raise RuntimeError(f'Index already exists at {self.index_path}. If you want to delete and re-create an existing index, you can pass overwrite=True')
         path.mkdir(parents=True, exist_ok=True)
         docnos = []
-        for shardid, shard in enumerate(more_itertools.ichunked(inp, self.shard_size)):
+        if self.shard_size == 0:
+            it = [(0, inp)]
+        else:
+            it = enumerate(more_itertools.ichunked(inp, self.shard_size))
+        for shardid, shard in it:
             shard = more_itertools.peekable(shard)
             d = shard.peek()['doc_vec'].shape[0]
             index = faiss.index_factory(d, f'HNSW{self.num_links}', faiss.METRIC_INNER_PRODUCT)
