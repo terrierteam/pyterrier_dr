@@ -1,6 +1,7 @@
+from .util import SimFn
 from .indexes import DocnoFile, NilIndex, NumpyIndex, RankedLists, FaissFlat, FaissHnsw, MemIndex, TorchIndex
+from .flex_index import FlexIndex
 from .biencoder import BiEncoder, BiQueryEncoder, BiDocEncoder, BiScorer
-from .hgf_models import HgfModel, TasB
-from .sbert_models import SbertModel, Ance
+from .hgf_models import HgfBiEncoder, TasB, RetroMAE
+from .sbert_models import SBertBiEncoder, Ance, Query2Query
 from .tctcolbert_model import TctColBert
-from .query2query_model import Query2Query
