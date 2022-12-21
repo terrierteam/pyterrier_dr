@@ -16,8 +16,8 @@ import pyterrier as pt
 from pyterrier.model import add_ranks
 from npids import Lookup
 from enum import Enum
-from . import SimFn
-from .indexes import RankedLists, TorchRankedLists
+from .. import SimFn
+from ..indexes import RankedLists, TorchRankedLists
 import ir_datasets
 import torch
 
@@ -39,11 +39,7 @@ class FlexIndex(pt.Indexer):
         self._meta = None
         self._docnos = None
         self._dvecs = None
-        self._faiss_flat = None
-        self._faiss_flat_gpu = None
-        self._faiss_ivf = {}
-        self._faiss_hnsw = {}
-        self._corpus_graph = {}
+        self._cache = {}
         self._inmem = False
 
     def payload(self, return_dvecs=True, return_docnos=True):
@@ -123,119 +119,11 @@ class FlexIndex(pt.Indexer):
     def torch_retriever(self, batch_size=None):
         return FlexIndexTorchRetriever(self, batch_size)
 
-    def faiss_flat_retriever(self, gpu=False):
-        import faiss
-        if not self._faiss_flat:
-            meta, = self.payload(return_dvecs=False, return_docnos=False)
-            with tempfile.TemporaryDirectory() as tmp, logger.duration('reading faiss flat'):
-                DUMMY = b'\x00\x00\x10\x00\x00\x00\x00\x00'
-                #       [ type ]                                                                             [ train ]  [ metric (dot)     ]
-                header = b'IxFI'  + struct.pack('<IQ', meta['vec_size'], meta['doc_count']) + DUMMY + DUMMY  + b'\x00' + b'\x00\x00\x00\x00' + struct.pack('<Q', meta['doc_count'] * meta['vec_size'])
-                #os.mkfifo(os.path.join(tmp, 'tmp'))
-                #def write():
-                #    with open(os.path.join(tmp, 'tmp'), 'wb') as fout, (self.index_path/'vecs.f4').open('rb') as fin:
-                #        fout.write(header)
-                #        shutil.copyfileobj(fin, fout)
-                #thread = threading.Thread(target=write).run()
-                #reader = faiss.FileIOReader(os.path.join(tmp, 'tmp'))
-                with open(os.path.join(tmp, 'tmp'), 'wb') as fout:
-                    fout.write(b' ' + header)
-                reader = faiss.BufferedIOReader(faiss.FileIOReader(os.path.join(tmp, 'tmp')))
-                reader.read_bytes(1)
-                reader.reader = faiss.FileIOReader(str(self.index_path/'vecs.f4'))
-                self._faiss_flat = faiss.read_index(reader)
-        if gpu:
-            if not self._faiss_flat_gpu:
-                co = faiss.GpuMultipleClonerOptions()
-                co.shard = True
-                self._faiss_flat_gpu = faiss.index_cpu_to_all_gpus(self._faiss_flat, co=co)
-            return FaissRetriever(self, self._faiss_flat_gpu)
-        return FaissRetriever(self, self._faiss_flat)
-
-    def faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True):
-        import faiss
-        meta, = self.payload(return_dvecs=False, return_docnos=False)
-
-        if n_list is None:
-            if train_sample is None:
-                n_list = int(1 << math.ceil(math.log2(meta['doc_count'] * 0.001 / 39)))
-            else:
-                n_list = math.floor(train_sample / 39)
-            n_list = max(n_list, 4)
-
-        if train_sample is None:
-            train_sample = n_list * 39
-        elif 0 < train_sample < 1:
-            train_sample = math.ceil(train_sample * meta['doc_count'])
-
-        key = (train_sample, n_list)
-        index_name = f'ivf_train-{train_sample}_nlist-{n_list}.faiss'
-        if key not in self._faiss_ivf:
-            dvecs, meta = self.payload(return_docnos=False)
-            if not os.path.exists(self.index_path/index_name):
-                quantizer = faiss.IndexFlatIP(meta['vec_size'])
-                quantizer = faiss.index_cpu_to_all_gpus(quantizer)
-                idx = faiss.IndexIVFFlat(quantizer, meta['vec_size'], n_list, faiss.METRIC_INNER_PRODUCT)
-                with logger.duration(f'loading {train_sample} train samples'):
-                    train = self._sample_train(train_sample)
-                with logger.duration(f'training ivf with {n_list} posting lists'):
-                    idx.train(train)
-                for start_idx in pt.tqdm(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
-                    idx.add(np.array(dvecs[start_idx:start_idx+4096]))
-                if cache:
-                    with logger.duration('caching index'):
-                        idx.quantizer = faiss.index_gpu_to_cpu(idx.quantizer)
-                        faiss.write_index(idx, str(self.index_path/index_name))
-                self._faiss_ivf[key] = idx
-            else:
-                with logger.duration('reading index'):
-                    self._faiss_ivf[key] = faiss.read_index(str(self.index_path/index_name))
-        return FaissRetriever(self, self._faiss_ivf[key], n_probe=n_probe)
-
-    def faiss_hnsw_retriever(self, cache=True, ef_construction=40, ef_search=16, neighbours=32):
-        import faiss
-        meta, = self.payload(return_dvecs=False, return_docnos=False)
-
-        key = (ef_construction, neighbours)
-        index_name = f'hnsw_constr-{ef_construction}_neigh-{neighbours}.faiss'
-        if key not in self._faiss_hnsw:
-            dvecs, meta = self.payload(return_docnos=False)
-            if not os.path.exists(self.index_path/index_name):
-                idx = faiss.IndexHNSWFlat(meta['vec_size'], neighbours, faiss.METRIC_INNER_PRODUCT)
-                for start_idx in pt.tqdm(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
-                    idx.add(np.array(dvecs[start_idx:start_idx+4096]))
-                if cache:
-                    with logger.duration('caching index'):
-                        faiss.write_index(idx, str(self.index_path/index_name))
-                self._faiss_hnsw[key] = idx
-            else:
-                with logger.duration('reading hnsw table'):
-                    self._faiss_hnsw[key] = faiss.read_index(str(self.index_path/index_name))
-                self._faiss_hnsw[key].storage = self.faiss_flat_retriever().faiss_index
-        return FaissRetriever(self, self._faiss_hnsw[key], ef_search=ef_search)
-
     def vec_loader(self):
         return FlexIndexVectorLoader(self)
 
     def scorer(self):
         return FlexIndexScorer(self)
-
-    def corpus_graph(self, k, batch_size=8192):
-        from pyterrier_adaptive import CorpusGraph
-        key = k
-        if key not in self._corpus_graph:
-            path = self.index_path/f'corpusgraph_k{k}'
-            if not (path/'pt_meta.json').exists():
-                candidates = [(p, re.match(r'^corpusgraph_k([0-9]+)$', str(p).split('/')[-2])) for p in self.index_path.glob('corpusgraph_k*/pt_meta.json')]
-                candidates = sorted([(int(m.group(1)), p) for p, m in candidates if m is not None and int(m.group(1)) > k])
-                if candidates:
-                    self._corpus_graph[key] = CorpusGraph.load(candidates[0][1].parent).to_limit_k(k)
-                else:
-                    _build_corpus_graph(self, k, path, batch_size)
-                    self._corpus_graph[key] = CorpusGraph.load(path)
-            else:
-                self._corpus_graph[key] = CorpusGraph.load(path)
-        return self._corpus_graph[key]
 
     def _sample_train(self, count=None):
         dvecs, meta = self.payload(return_docnos=False)
@@ -374,87 +262,3 @@ class FlexIndexScorer(pt.Transformer):
         res = inp.assign(score=scores)
         res = add_ranks(res)
         return res
-
-
-class FaissRetriever(pt.Indexer):
-    def __init__(self, flex_index, faiss_index, n_probe=None, ef_search=None):
-        self.flex_index = flex_index
-        self.faiss_index = faiss_index
-        self.n_probe = n_probe
-        self.ef_search = ef_search
-
-    def transform(self, inp):
-        inp = inp.reset_index(drop=True)
-        assert all(f in inp.columns for f in ['qid', 'query_vec'])
-        docnos, config = self.flex_index.payload(return_dvecs=False)
-        query_vecs = np.stack(inp['query_vec'])
-        query_vecs = query_vecs.copy()
-        idxs = []
-        res = {'docid': [], 'score': [], 'rank': []}
-        num_q = query_vecs.shape[0]
-        QBATCH = 64
-        if self.n_probe is not None:
-            self.faiss_index.nprobe = self.n_probe
-        if self.ef_search is not None:
-            self.faiss_index.hnsw.efSearch = self.ef_search
-        for qidx in range(0, num_q, QBATCH):
-            scores, dids = self.faiss_index.search(query_vecs[qidx:qidx+QBATCH], self.flex_index.num_results)
-            for i, (s, d) in enumerate(zip(scores, dids)):
-                mask = d != -1
-                d = d[mask]
-                s = s[mask]
-                res['docid'].append(d)
-                res['score'].append(s)
-                res['rank'].append(np.arange(d.shape[0]))
-                idxs.extend(itertools.repeat(qidx+i, d.shape[0]))
-        res = {k: np.concatenate(v) for k, v in res.items()}
-        res['docno'] = docnos.fwd[res['docid']]
-        for col in inp.columns:
-            if col != 'query_vec':
-                res[col] = inp[col][idxs].values
-        return pd.DataFrame(res)
-
-
-
-
-def _build_corpus_graph(flex_index, k, out_dir, batch_size):
-    S = batch_size
-    vectors, meta = flex_index.payload(return_docnos=False)
-    num_vecs = vectors.shape[0]
-    num_chunks = math.ceil(num_vecs/S)
-    rankings = [TorchRankedLists(k, min((i+1)*S, num_vecs) - i*S) for i in range(num_chunks)]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    edges_path = out_dir/'edges.u32.np'
-    weights_path = out_dir/'weights.f16.np'
-    with logger.pbar_raw(total=int((num_chunks+1)*num_chunks/2), unit='chunk', smoothing=1) as pbar, \
-        ir_datasets.util.finialized_file(str(edges_path), 'wb') as fe, \
-        ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
-        for i in range(num_chunks):
-            left = torch.from_numpy(vectors[i*S:(i+1)*S]).cuda().half()
-            left /= left.norm(dim=1, keepdim=True)
-            scores = left @ left.T
-            scores[torch.eye(left.shape[0], dtype=bool, device='cuda')] = float('-inf')
-            i_scores, i_dids = scores.topk(k, sorted=True, dim=1)
-            rankings[i].update(i_scores, (i_dids + i*S))
-            pbar.update()
-            for j in range(i+1, num_chunks):
-                right = torch.from_numpy(vectors[j*S:(j+1)*S]).cuda().half()
-                right /= right.norm(dim=1, keepdim=True)
-                scores = left @ right.T
-                i_scores, i_dids = scores.topk(min(k, right.shape[0]), sorted=True, dim=1)
-                j_scores, j_dids = scores.topk(min(k, left.shape[0]), sorted=True, dim=0)
-                rankings[i].update(i_scores, (i_dids + j*S))
-                rankings[j].update(j_scores.T, (j_dids + i*S).T)
-                pbar.update()
-            sims, idxs = rankings[i].results()
-            fe.write(idxs.astype(np.uint32).tobytes())
-            fw.write(sims.astype(np.float16).tobytes())
-            rankings[i] = None
-    (out_dir/'docnos.npids').symlink_to('../docnos.npids')
-    with (out_dir/'pt_meta.json').open('wt') as fout:
-      json.dump({
-        'type': 'corpus_graph',
-        'format': 'np_topk',
-        'doc_count': vectors.shape[0],
-        'k': k,
-      }, fout)
