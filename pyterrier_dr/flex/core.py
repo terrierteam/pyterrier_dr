@@ -225,7 +225,7 @@ class FlexIndexTorchRetriever(pt.Transformer):
         return res
 
 
-def _load_dvecs(flex_index, dvec):
+def _load_dvecs(flex_index, inp):
     assert 'docid' in inp.columns or 'docno' in inp.columns
     docnos, dvecs, config = flex_index.payload()
     if 'docid' in inp.columns:
