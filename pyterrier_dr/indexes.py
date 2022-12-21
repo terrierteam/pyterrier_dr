@@ -391,6 +391,34 @@ class RankedLists:
         )
 
 
+class TorchRankedLists:
+    def __init__(self, num_results, num_queries):
+        self.num_results = num_results
+        self.num_queries = num_queries
+        self.scores = None
+        self.docids = None
+
+    def update(self, scores, docids):
+        if self.scores is not None:
+            self.scores, idxs = torch.cat([self.scores, scores], dim=1).topk(self.num_results, dim=1)
+            self.docids = torch.cat([self.docids, docids], dim=1).take_along_dim(idxs, dim=1)
+        else:
+            self.scores = scores
+            self.docids = docids
+        #self.scores.append(scores)
+        #self.docids.append(docids)
+
+    def results(self):
+        return (self.scores.cpu().numpy(), self.docids.cpu().numpy())
+        #scores = torch.cat(self.scores, dim=0)
+        #docids = torch.cat(self.docids, dim=0)
+        #top_scores, top_idxs = scores.topk(self.num_results, dim=1)
+        #return (
+        #    top_scores.cpu().numpy(),
+        #    docids[top_idxs].cpu().numpy()
+        #)
+
+
 class FaissFlat(pt.Indexer):
     def __init__(self, index_path=None, num_results=1000, shard_size=500_000, score_fn='cos', overwrite=False, batch_size=4096, verbose=False, drop_query_vec=True, inmem=False, cuda=False):
         self.index_path = Path(index_path)

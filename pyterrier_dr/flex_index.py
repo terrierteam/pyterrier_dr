@@ -1,3 +1,4 @@
+import re
 import math
 import os
 import shutil
@@ -16,7 +17,7 @@ from pyterrier.model import add_ranks
 from npids import Lookup
 from enum import Enum
 from . import SimFn
-from .indexes import RankedLists
+from .indexes import RankedLists, TorchRankedLists
 import ir_datasets
 import torch
 
@@ -42,6 +43,7 @@ class FlexIndex(pt.Indexer):
         self._faiss_flat_gpu = None
         self._faiss_ivf = {}
         self._faiss_hnsw = {}
+        self._corpus_graph = {}
         self._inmem = False
 
     def payload(self, return_dvecs=True, return_docnos=True):
@@ -149,29 +151,6 @@ class FlexIndex(pt.Indexer):
                 self._faiss_flat_gpu = faiss.index_cpu_to_all_gpus(self._faiss_flat, co=co)
             return FaissRetriever(self, self._faiss_flat_gpu)
         return FaissRetriever(self, self._faiss_flat)
-    """
-    def faiss_lsh_retriever(self, n_bits=None):
-        import faiss
-        meta, = self.payload(return_dvecs=False, return_docnos=False)
-        n_bits = meta['vec_size'] * 2
-        key = (n_bits,)
-        index_name = f'lsh_n-{n_bits}.faiss'
-        if key not in self._faiss_lsh:
-            dvecs, meta = self.payload(return_docnos=False)
-            if not os.path.exists(self.index_path/index_name):
-                import pdb; pdb.set_trace()
-                idx = faiss.IndexLSH.new_with_options(meta['vec_size'], n_bits, train_thresholds=True)
-                train = self._sample_train()
-                print(f'sampled {train.shape}')
-                idx.train(train)
-                for start_idx in pt.tqdm(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
-                    idx.add(np.array(dvecs[start_idx:start_idx+4096]))
-                faiss.write_index(idx, str(self.index_path/index_name))
-                self._faiss_lsh[key] = idx
-            else:
-                self._faiss_lsh[key] = faiss.read_index(str(self.index_path/index_name))
-        return FaissRetriever(self, self._faiss_lsh[key])
-    """
 
     def faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True):
         import faiss
@@ -227,7 +206,6 @@ class FlexIndex(pt.Indexer):
                     idx.add(np.array(dvecs[start_idx:start_idx+4096]))
                 if cache:
                     with logger.duration('caching index'):
-                        import pdb;pdb.set_trace()
                         faiss.write_index(idx, str(self.index_path/index_name))
                 self._faiss_hnsw[key] = idx
             else:
@@ -242,9 +220,25 @@ class FlexIndex(pt.Indexer):
     def scorer(self):
         return FlexIndexScorer(self)
 
+    def corpus_graph(self, k, batch_size=8192):
+        from pyterrier_adaptive import CorpusGraph
+        key = k
+        if key not in self._corpus_graph:
+            path = self.index_path/f'corpusgraph_k{k}'
+            if not (path/'pt_meta.json').exists():
+                candidates = [(p, re.match(r'^corpusgraph_k([0-9]+)$', str(p).split('/')[-2])) for p in self.index_path.glob('corpusgraph_k*/pt_meta.json')]
+                candidates = sorted([(int(m.group(1)), p) for p, m in candidates if m is not None and int(m.group(1)) > k])
+                if candidates:
+                    self._corpus_graph[key] = CorpusGraph.load(candidates[0][1].parent).to_limit_k(k)
+                else:
+                    _build_corpus_graph(self, k, path, batch_size)
+                    self._corpus_graph[key] = CorpusGraph.load(path)
+            else:
+                self._corpus_graph[key] = CorpusGraph.load(path)
+        return self._corpus_graph[key]
+
     def _sample_train(self, count=None):
         dvecs, meta = self.payload(return_docnos=False)
-        #count = math.ceil(0.001 * dvecs.shape[0])
         count = count or min(10_000, dvecs.shape[0])
         idxs = np.random.RandomState(0).choice(dvecs.shape[0], size=count, replace=False)
         return dvecs[idxs]
@@ -419,3 +413,48 @@ class FaissRetriever(pt.Indexer):
             if col != 'query_vec':
                 res[col] = inp[col][idxs].values
         return pd.DataFrame(res)
+
+
+
+
+def _build_corpus_graph(flex_index, k, out_dir, batch_size):
+    S = batch_size
+    vectors, meta = flex_index.payload(return_docnos=False)
+    num_vecs = vectors.shape[0]
+    num_chunks = math.ceil(num_vecs/S)
+    rankings = [TorchRankedLists(k, min((i+1)*S, num_vecs) - i*S) for i in range(num_chunks)]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    edges_path = out_dir/'edges.u32.np'
+    weights_path = out_dir/'weights.f16.np'
+    with logger.pbar_raw(total=int((num_chunks+1)*num_chunks/2), unit='chunk', smoothing=1) as pbar, \
+        ir_datasets.util.finialized_file(str(edges_path), 'wb') as fe, \
+        ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
+        for i in range(num_chunks):
+            left = torch.from_numpy(vectors[i*S:(i+1)*S]).cuda().half()
+            left /= left.norm(dim=1, keepdim=True)
+            scores = left @ left.T
+            scores[torch.eye(left.shape[0], dtype=bool, device='cuda')] = float('-inf')
+            i_scores, i_dids = scores.topk(k, sorted=True, dim=1)
+            rankings[i].update(i_scores, (i_dids + i*S))
+            pbar.update()
+            for j in range(i+1, num_chunks):
+                right = torch.from_numpy(vectors[j*S:(j+1)*S]).cuda().half()
+                right /= right.norm(dim=1, keepdim=True)
+                scores = left @ right.T
+                i_scores, i_dids = scores.topk(min(k, right.shape[0]), sorted=True, dim=1)
+                j_scores, j_dids = scores.topk(min(k, left.shape[0]), sorted=True, dim=0)
+                rankings[i].update(i_scores, (i_dids + j*S))
+                rankings[j].update(j_scores.T, (j_dids + i*S).T)
+                pbar.update()
+            sims, idxs = rankings[i].results()
+            fe.write(idxs.astype(np.uint32).tobytes())
+            fw.write(sims.astype(np.float16).tobytes())
+            rankings[i] = None
+    (out_dir/'docnos.npids').symlink_to('../docnos.npids')
+    with (out_dir/'pt_meta.json').open('wt') as fout:
+      json.dump({
+        'type': 'corpus_graph',
+        'format': 'np_topk',
+        'doc_count': vectors.shape[0],
+        'k': k,
+      }, fout)
