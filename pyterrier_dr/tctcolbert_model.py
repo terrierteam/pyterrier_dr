@@ -11,6 +11,15 @@ logger = ir_datasets.log.easy()
 
 class BiEncoder(pt.Transformer):
 
+    @staticmethod
+    def from_model(model, encode_docs=None, encode_queries=None, **kwargs):
+        rtr = BiEncoder(model, **kwargs)
+        if encode_docs is not None:
+            pt.apply._bind(rtr, encode_docs, as_name='_encode_docs')
+        if encode_queries is not None:
+            pt.apply._bind(rtr, encode_docs, as_name='_encode_queries')
+        return rtr
+
     def __init__(self, model, batch_size=32, text_field='text', verbose=False, tokenizer=None, cuda=None):
         self.model_name = str(model)
         if isinstance(model,str):
