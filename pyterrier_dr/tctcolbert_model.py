@@ -9,19 +9,29 @@ from transformers import RobertaConfig, AutoTokenizer, AutoModel, AdamW
 
 logger = ir_datasets.log.easy()
 
+class BiEncoder(pt.Transformer):
 
-class TctColBert(pt.Transformer):
-    def __init__(self, model_name='castorini/tct_colbert-msmarco', batch_size=32, text_field='text', verbose=False, cuda=None):
-        self.model_name = model_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+    def __init__(self, model, batch_size=32, text_field='text', verbose=False, tokenizer=None, cuda=None):
+        self.model_name = str(model)
+        if isinstance(model,str):
+            if tokenizer is None:
+                tokenizer = model
+            self.model = model
+        else:
+            self.model = AutoModel.from_pretrained(model).eval()
+            
+        if isinstance(tokenizer, str):
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
+        else:
+            self.tokenizer = tokenizer
+        assert self.tokenizer is not None
+
         self.cuda = torch.cuda.is_available() if cuda is None else cuda
-        self.model = AutoModel.from_pretrained(model_name).eval()
         if self.cuda:
             self.model = self.model.cuda()
         self.batch_size = batch_size
         self.text_field = text_field
         self.verbose = verbose
-        self._optimizer = None
 
     def transform(self, inp):
         columns = set(inp.columns)
@@ -37,6 +47,75 @@ class TctColBert(pt.Transformer):
         for fields, fn in modes:
             f += f'\n - {fn.__doc__.strip()}: {columns}\n'
         raise RuntimeError(message)
+
+    def _encode_queries(self, texts):
+        pass
+
+    def _encode_docs(self, texts):
+        pass
+
+    def _transform_D(self, inp):
+        """
+        Document vectorisation
+        """
+        res = self._encode_docs(inp[self.text_field])
+        return inp.assign(doc_vec=[res[i] for i in range(res.shape[0])])
+
+    def _transform_Q(self, inp):
+        """
+        Query vectorisation
+        """
+        it = inp['query']
+        if self.verbose:
+            it = pt.tqdm(it, desc='Encoding Queries', unit='query')
+        res = self._encode_queries(it)
+        return inp.assign(query_vec=[res[i] for i in range(res.shape[0])])
+
+    def _transform_R(self, inp):
+        """
+        Result re-ranking
+        """
+        return pt.apply.by_query(self._transform_R_byquery, add_ranks=True, verbose=self.verbose)(inp)
+
+    def _transform_R_byquery(self, query_df):
+        query_rep = self._encode_queries([query_df['query'].iloc[0]])
+        doc_reps = self._encode_docs(query_df[self.text_field])
+        scores = (query_rep * doc_reps).sum(axis=1)
+        query_df['score'] = scores
+        return query_df
+
+class TctColBert(pt.Transformer):
+    def __init__(self, model_name='castorini/tct_colbert-msmarco', **kwargs):
+        super().__init__(model_name, **kwargs)
+        self._optimizer = None
+
+    def _encode_queries(self, texts):
+        results = []
+        with torch.no_grad():
+            for chunk in chunked(texts, self.batch_size):
+                inps = self.tokenizer([f'[CLS] [Q] {q} ' + ' '.join(['[MASK]'] * 32) for q in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=36)
+                if self.cuda:
+                    inps = {k: v.cuda() for k, v in inps.items()}
+                res = self.model(**inps).last_hidden_state
+                res = res[:, 4:, :].mean(dim=1) # remove the first 4 tokens (representing [CLS] [ Q ]), and average
+                results.append(res.cpu().numpy())
+        return np.concatenate(results, axis=0)
+
+    def _encode_docs(self, texts):
+        results = []
+        with torch.no_grad():
+            for chunk in chunked(texts, self.batch_size):
+                inps = self.tokenizer([f'[CLS] [D] {d}' for d in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=512)
+                if self.cuda:
+                    inps = {k: v.cuda() for k, v in inps.items()}
+                res = self.model(**inps).last_hidden_state
+                res = res[:, 4:, :] # remove the first 4 tokens (representing [CLS] [ D ])
+                res = res * inps['attention_mask'][:, 4:].unsqueeze(2) # apply attention mask
+                lens = inps['attention_mask'][:, 4:].sum(dim=1).unsqueeze(1)
+                lens[lens == 0] = 1 # avoid edge case of div0 errors
+                res = res.sum(dim=1) / lens # average based on dim
+                results.append(res.cpu().numpy())
+        return np.concatenate(results, axis=0)
 
     def fit(self, dataset, pair_it=None, steps=100_000, lr=3e-6, in_batch_negs=False):
         self.model.train()
@@ -98,63 +177,7 @@ class TctColBert(pt.Transformer):
                     logger.info(f'it={i+1} loss={sum(running_losses)/len(running_losses)} acc={sum(running_accs)/len(running_accs)}')
                     running_losses, running_accs = [], []
 
-    def _encode_queries(self, texts):
-        results = []
-        with torch.no_grad():
-            for chunk in chunked(texts, self.batch_size):
-                inps = self.tokenizer([f'[CLS] [Q] {q} ' + ' '.join(['[MASK]'] * 32) for q in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=36)
-                if self.cuda:
-                    inps = {k: v.cuda() for k, v in inps.items()}
-                res = self.model(**inps).last_hidden_state
-                res = res[:, 4:, :].mean(dim=1) # remove the first 4 tokens (representing [CLS] [ Q ]), and average
-                results.append(res.cpu().numpy())
-        return np.concatenate(results, axis=0)
-
-    def _encode_docs(self, texts):
-        results = []
-        with torch.no_grad():
-            for chunk in chunked(texts, self.batch_size):
-                inps = self.tokenizer([f'[CLS] [D] {d}' for d in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=512)
-                if self.cuda:
-                    inps = {k: v.cuda() for k, v in inps.items()}
-                res = self.model(**inps).last_hidden_state
-                res = res[:, 4:, :] # remove the first 4 tokens (representing [CLS] [ D ])
-                res = res * inps['attention_mask'][:, 4:].unsqueeze(2) # apply attention mask
-                lens = inps['attention_mask'][:, 4:].sum(dim=1).unsqueeze(1)
-                lens[lens == 0] = 1 # avoid edge case of div0 errors
-                res = res.sum(dim=1) / lens # average based on dim
-                results.append(res.cpu().numpy())
-        return np.concatenate(results, axis=0)
-
-    def _transform_D(self, inp):
-        """
-        Document vectorisation
-        """
-        res = self._encode_docs(inp[self.text_field])
-        return inp.assign(doc_vec=[res[i] for i in range(res.shape[0])])
-
-    def _transform_Q(self, inp):
-        """
-        Query vectorisation
-        """
-        it = inp['query']
-        if self.verbose:
-            it = pt.tqdm(it, desc='Encoding Queies', unit='query')
-        res = self._encode_queries(it)
-        return inp.assign(query_vec=[res[i] for i in range(res.shape[0])])
-
-    def _transform_R(self, inp):
-        """
-        Result re-ranking
-        """
-        return pt.apply.by_query(self._transform_R_byquery, add_ranks=True, verbose=self.verbose)(inp)
-
-    def _transform_R_byquery(self, query_df):
-        query_rep = self._encode_queries([query_df['query'].iloc[0]])
-        doc_reps = self._encode_docs(query_df[self.text_field])
-        scores = (query_rep * doc_reps).sum(axis=1)
-        query_df['score'] = scores
-        return query_df
+    
 
     def reverse(self, doc):
         with torch.no_grad():
