@@ -632,6 +632,7 @@ class TorchIndex(NumpyIndex):
         self._docnos = None
         self._did_start = None
         self._cuda_slice = None
+        self.docids=docids
 
     def docnos_and_data(self):
         if self._meta is None:
