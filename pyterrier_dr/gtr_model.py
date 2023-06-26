@@ -11,7 +11,7 @@ logger = ir_datasets.log.easy()
 
 
 class GTRT5(pt.Transformer):
-    def __init__(self, model_name='sentence-transformers/gtr-t5-large', batch_size=32, text_field='text', verbose=False, cuda=None):
+    def __init__(self, model_name='sentence-transformers/gtr-t5-large', batch_size=32, text_field='text', score_fn='cos', verbose=False, cuda=None):
         self.model_name = model_name
         self.cuda = torch.cuda.is_available() if cuda is None else cuda
         self.model = SentenceTransformer(model_name).eval()
@@ -19,6 +19,7 @@ class GTRT5(pt.Transformer):
             self.model = self.model.cuda()
         self.batch_size = batch_size
         self.text_field = text_field
+        self.score_fn = score_fn
         self.verbose = verbose
         self._optimizer = None
 
