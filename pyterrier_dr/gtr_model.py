@@ -5,7 +5,6 @@ from torch import nn
 import ir_datasets
 import pyterrier as pt
 from sentence_transformers import SentenceTransformer, CrossEncoder, util
-from transformers import RobertaConfig, AutoTokenizer, AutoModel, AdamW
 
 
 logger = ir_datasets.log.easy()
@@ -14,9 +13,8 @@ logger = ir_datasets.log.easy()
 class GTRT5(pt.Transformer):
     def __init__(self, model_name='sentence-transformers/gtr-t5-large', batch_size=32, text_field='text', verbose=False, cuda=None):
         self.model_name = model_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.cuda = torch.cuda.is_available() if cuda is None else cuda
-        self.model = AutoModel.from_pretrained(model_name).eval()
+        self.model = SentenceTransformer(model_name).eval()
         if self.cuda:
             self.model = self.model.cuda()
         self.batch_size = batch_size
