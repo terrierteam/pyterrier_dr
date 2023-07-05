@@ -51,6 +51,14 @@ class Ance(_SBertBiEncoder):
     }
 
 
+class GTR(_SBertBiEncoder):
+    VARIANTS = {
+        'base': 'sentence-transformers/gtr-t5-base',
+        'large': 'sentence-transformers/gtr-t5-large',
+        'xl': 'sentence-transformers/gtr-t5-xl',
+        'xxl': 'sentence-transformers/gtr-t5-xxl',
+    }
+
 class Query2Query(pt.Transformer):
     DEFAULT_MODEL_NAME = 'neeva/query2query'
     def __init__(self, model_name=DEFAULT_MODEL_NAME, batch_size=32, verbose=False, device=None):
