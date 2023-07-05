@@ -40,31 +40,21 @@ class FlexIndex(pt.Indexer):
         self._docnos = None
         self._dvecs = None
         self._cache = {}
-        self._inmem = False
 
     def payload(self, return_dvecs=True, return_docnos=True):
-        inmem = False
-        path = self.index_path
         if self._meta is None:
-            with open(path/'pt_meta.json', 'rt') as f_meta:
+            with open(self.index_path/'pt_meta.json', 'rt') as f_meta:
                 meta = json.load(f_meta)
                 assert meta.get('type') == 'dense_index' and meta['format'] == 'flex'
                 self._meta = meta
         res = [self._meta]
         if return_dvecs:
-            if self._dvecs is None or (inmem and not self._inmem):
-                if inmem:
-                    if self._dvecs is not None:
-                        self._dvecs.close()
-                    with (path/'vecs.f4').open('rb') as fin:
-                        self._dvecs = np.fromfile(fin, dtype=np.float32).reshape(self._meta['doc_count'], self._meta['vec_size'])
-                    self._inmem = True
-                else:
-                    self._dvecs = np.memmap(path/'vecs.f4', mode='r', dtype=np.float32, shape=(self._meta['doc_count'], self._meta['vec_size']))
+            if self._dvecs is None:
+                self._dvecs = np.memmap(self.index_path/'vecs.f4', mode='r', dtype=np.float32, shape=(self._meta['doc_count'], self._meta['vec_size']))
             res.insert(0, self._dvecs)
         if return_docnos:
             if self._docnos is None:
-                self._docnos = Lookup(path/'docnos.npids')
+                self._docnos = Lookup(self.index_path/'docnos.npids')
             res.insert(0, self._docnos)
         return res
 
@@ -113,8 +103,8 @@ class FlexIndex(pt.Indexer):
         for docno, i in it:
             yield {'docno': docno, 'doc_vec': dvecs[i]}
 
-    def np_retriever(self, batch_size=None):
-        return FlexIndexNumpyRetriever(self, batch_size)
+    def np_retriever(self, batch_size=None, num_results=None):
+        return FlexIndexNumpyRetriever(self, batch_size, num_results=num_results or self.num_results)
 
     def torch_retriever(self, batch_size=None):
         return FlexIndexTorchRetriever(self, batch_size)
@@ -125,17 +115,22 @@ class FlexIndex(pt.Indexer):
     def scorer(self):
         return FlexIndexScorer(self)
 
-    def _sample_train(self, count=None):
-        dvecs, meta = self.payload(return_docnos=False)
-        count = count or min(10_000, dvecs.shape[0])
-        idxs = np.random.RandomState(0).choice(dvecs.shape[0], size=count, replace=False)
-        return dvecs[idxs]
+    def _load_docids(self, inp):
+        assert 'docid' in inp.columns or 'docno' in inp.columns
+        if 'docid' in inp.columns:
+            return inp['docid'].values
+        docnos, config = self.payload(return_dvecs=False)
+        return docnos.inv[inp['docno'].values] # look up docids from docnos
+
+    def built(self):
+        return self.index_path.exists()
 
 
 class FlexIndexNumpyRetriever(pt.Transformer):
-    def __init__(self, flex_index, batch_size=None):
+    def __init__(self, flex_index, batch_size=None, num_results=None):
         self.flex_index = flex_index
         self.batch_size = batch_size or 4096
+        self.num_results = num_results or self.flex_index.num_results
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         inp = inp.reset_index(drop=True)
@@ -149,7 +144,7 @@ class FlexIndexNumpyRetriever(pt.Transformer):
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
         num_q = query_vecs.shape[0]
         res = []
-        ranked_lists = RankedLists(self.flex_index.num_results, num_q)
+        ranked_lists = RankedLists(self.num_results, num_q)
         batch_it = range(0, dvecs.shape[0], self.batch_size)
         if self.flex_index.verbose:
             batch_it = pt.tqdm(batch_it)
@@ -161,7 +156,7 @@ class FlexIndexNumpyRetriever(pt.Transformer):
             dids = np.arange(idx_start, idx_start+doc_batch.shape[1], dtype='i4').reshape(1, -1).repeat(num_q, axis=0)
             ranked_lists.update(scores, dids)
         result_scores, result_dids = ranked_lists.results()
-        result_docnos = docnos.fwd[result_dids]
+        result_docnos = [docnos.fwd[d] for d in result_dids]
         cols = {
             'score': np.concatenate(result_scores),
             'docno': np.concatenate(result_docnos),

@@ -10,7 +10,7 @@ from . import FlexIndex
 logger = ir_datasets.log.easy()
 
 
-def _corpus_graph(self, k, batch_size=8192):
+def _corpus_graph(self, k=16, batch_size=8192):
     from pyterrier_adaptive import CorpusGraph
     key = ('corpus_graph', k)
     if key not in self._cache:
