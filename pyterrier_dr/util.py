@@ -13,3 +13,8 @@ class Variants(type):
 
     def __init__(self, *args, **kwargs):
         return super().__init__(*args, **kwargs)
+
+def infer_device(device):
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    return torch.device(device)

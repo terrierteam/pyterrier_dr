@@ -1,4 +1,4 @@
-from .util import SimFn
+from .util import SimFn, infer_device
 from .indexes import DocnoFile, NilIndex, NumpyIndex, RankedLists, FaissFlat, FaissHnsw, MemIndex, TorchIndex
 from .flex import FlexIndex
 from .biencoder import BiEncoder, BiQueryEncoder, BiDocEncoder, BiScorer
