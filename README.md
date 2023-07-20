@@ -33,6 +33,15 @@ pt.init()
 import pyterrier_dr
 ```
 
+## Built-in Models
+
+| Model | `.query_encoder()` | `.doc_encoder()` | `.scorer()` |
+|-------|:---------------:|:-------------:|:--------:|
+| [`TctColBert`](https://arxiv.org/abs/2010.11386) | ✅ | ✅ | ✅ |
+| [`TasB`](https://arxiv.org/abs/2104.06967) | ✅ | ✅ | ✅ |
+| [`Ance`](https://arxiv.org/abs/2007.00808) | ✅ | ✅ | ✅ |
+| [`Query2Query`](https://neeva.com/blog/state-of-the-art-query2query-similarity) | ✅ | | |
+
 ## Inference
 
 Bi-encoder models are represented as PyTerrier transformers. For instance,
