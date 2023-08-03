@@ -5,4 +5,5 @@ from .biencoder import BiEncoder, BiQueryEncoder, BiDocEncoder, BiScorer
 from .hgf_models import HgfBiEncoder, TasB, RetroMAE
 from .sbert_models import SBertBiEncoder, Ance, Query2Query
 from .tctcolbert_model import TctColBert
+from .gtr_model import GTRT5
 from .electra import ElectraScorer
