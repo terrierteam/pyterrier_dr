@@ -15,7 +15,7 @@ class TestIndexingTCT(unittest.TestCase):
         else:
             destdir = tempfile.mkdtemp()
             self.test_dirs.append(destdir)
-            index = indexer_clz(destdir)
+            index = indexer_clz(destdir, overwrite=True)
 
         # create an indexing pipelne
         idx_pipeline = model >> index
