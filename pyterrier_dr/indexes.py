@@ -283,6 +283,8 @@ class NumpyIndex(pt.Indexer):
 
 class MemIndex(pt.Indexer):
     def __init__(self, num_results=1000, score_fn='dot', batch_size=4096, verbose=True, dtype='f4', drop_query_vec=True):
+        # check we havent been passed a destination index, as per disk-based indexers
+        assert isinstance(num_results, int)
         self.num_results = num_results
         self.score_fn = score_fn
         self.verbose = verbose
@@ -368,7 +370,7 @@ class MemIndex(pt.Indexer):
 
 
 class RankedLists:
-    def __init__(self, num_results, num_queries):
+    def __init__(self, num_results : int, num_queries : int):
         self.num_results = num_results
         self.num_queries = num_queries
         self.scores = np.empty((num_queries, 0), dtype='f4')
@@ -378,6 +380,7 @@ class RankedLists:
         assert self.num_queries == scores.shape[0]
         self.scores = np.concatenate([self.scores, -scores], axis=1)
         self.docids = np.concatenate([self.docids,  docids], axis=1)
+        print(self.scores.shape[1], self.num_results)
         if self.scores.shape[1] > self.num_results:
             partition_idxs = np.argpartition(self.scores, self.num_results, axis=1)[:, :self.num_results]
             self.scores = np.take_along_axis(self.scores, partition_idxs, axis=1)
