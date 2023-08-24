@@ -7,9 +7,17 @@ import pyterrier as pt
 class TestIndexingTCT(unittest.TestCase):
 
     def _indexing_100doc(self, model : pt.Transformer, indexer_clz, dim=None):
-        destdir = tempfile.mkdtemp()
-        self.test_dirs.append(destdir)
-        index = indexer_clz(destdir, overwrite=True)
+        import pyterrier_dr
+        
+        # a memoryindex doesnt need a directory
+        if indexer_clz == pyterrier_dr.MemIndex:
+            index = indexer_clz()
+        else:
+            destdir = tempfile.mkdtemp()
+            self.test_dirs.append(destdir)
+            index = indexer_clz(destdir)
+
+        # create an indexing pipelne
         idx_pipeline = model >> index
         
         iter = pt.get_dataset("vaswani").get_corpus_iter()
@@ -50,6 +58,13 @@ class TestIndexingTCT(unittest.TestCase):
         self._indexing_100doc(
             pyterrier_dr.TctColBert(),
             pyterrier_dr.FaissFlat
+        )
+
+    def test_indexing_tct_mem(self):
+        import pyterrier_dr
+        self._indexing_100doc(
+            pyterrier_dr.TctColBert(),
+            pyterrier_dr.MemIndex
         )
 
     def setUp(self):
