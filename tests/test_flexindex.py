@@ -16,7 +16,7 @@ class TestFlexIndex(unittest.TestCase):
         self.assertFalse(index.built())
 
         dataset = [
-            {'docno': str(i), 'doc_vec': np.random.rand(100)}
+            {'docno': str(i), 'doc_vec': np.random.rand(100).astype(np.float32)}
             for i in range(1000)
         ]
 
@@ -30,7 +30,7 @@ class TestFlexIndex(unittest.TestCase):
         self.assertEqual(len(stored_dataset), len(dataset))
         for a, b in zip(stored_dataset, dataset):
             self.assertEqual(a['docno'], b['docno'])
-            self.assertEqual(a['doc_vec'], b['doc_vec'])
+            self.assertTrue((a['doc_vec'] == b['doc_vec']).all())
 
     def setUp(self):
         import pyterrier as pt
