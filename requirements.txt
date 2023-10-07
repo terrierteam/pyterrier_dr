@@ -3,3 +3,4 @@ python-terrier>=0.9.1
 torch
 numpy
 npids
+sentence_transformers

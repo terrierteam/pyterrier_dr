@@ -32,6 +32,22 @@ class TestFlexIndex(unittest.TestCase):
             self.assertEqual(a['docno'], b['docno'])
             self.assertTrue((a['doc_vec'] == b['doc_vec']).all())
 
+    # TODO: tests for:
+    #  - corpus_graph
+    #  - faiss_flat_retriever
+    #  - faiss_hnsw_retriever
+    #  - faiss_hnsw_graph
+    #  - faiss_ivf_retriever
+    #  - pre_ladr
+    #  - ada_ladr
+    #  - np_retriever
+    #  - np_vec_loader
+    #  - np_scorer
+    #  - scann_retriever
+    #  - torch_vecs
+    #  - torch_scorer
+    #  - torch_retriever
+
     def setUp(self):
         import pyterrier as pt
         if not pt.started():
