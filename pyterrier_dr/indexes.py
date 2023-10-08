@@ -7,7 +7,6 @@ from pathlib import Path
 from os.path import commonprefix
 import numpy as np
 import shutil
-import faiss
 import more_itertools
 import pandas as pd
 import pyterrier as pt
@@ -437,6 +436,7 @@ class FaissFlat(pt.Indexer):
         self._shards = list(self.iter_shards())
 
     def iter_shards(self):
+        import faiss
         if self.cuda:
             res = faiss.StandardGpuResources()
         if self._shards is None:
@@ -503,6 +503,7 @@ class FaissFlat(pt.Indexer):
         return res
 
     def index(self, inp):
+        import faiss
         if isinstance(inp, pd.DataFrame):
             inp = inp.to_dict(orient="records")
         path = Path(self.index_path)
@@ -553,6 +554,7 @@ class FaissHnsw(pt.Indexer):
             return iter(self._shards)
 
     def _iter_shards(self):
+        import faiss
         for shardid in itertools.count():
             if not (self.index_path/f'{shardid}.faiss').exists():
                 break
@@ -600,6 +602,7 @@ class FaissHnsw(pt.Indexer):
         return res
 
     def index(self, inp):
+        import faiss
         if isinstance(inp, pd.DataFrame):
             inp = inp.to_dict(orient="records")
         path = Path(self.index_path)
