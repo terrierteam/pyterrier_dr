@@ -24,6 +24,9 @@ class BiEncoder(pt.Transformer):
         columns = set(inp.columns)
         modes = [
             (['qid', 'query', self.text_field], self.scorer),
+            (['qid', 'query_vec', self.text_field], self.scorer),
+            (['qid', 'query', 'doc_vec'], self.scorer),
+            (['qid', 'query_vec', 'doc_vec'], self.scorer),
             (['query'], self.query_encoder),
             ([self.text_field], self.doc_encoder),
         ]
