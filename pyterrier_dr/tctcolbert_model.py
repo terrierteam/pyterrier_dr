@@ -2,6 +2,7 @@ from more_itertools import chunked
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
+import pyterrier as pt
 from . import BiEncoder
 
 
