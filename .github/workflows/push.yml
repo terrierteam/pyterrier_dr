@@ -32,13 +32,7 @@ jobs:
         conda-channels: anaconda, conda-forge
         activate-conda: true
 
-        # follows https://medium.com/ai2-blog/python-caching-in-github-actions-e9452698e98d
-    - name: Loading Python & dependencies from cache
-      uses: actions/cache@v3
-      with:
-        path: /usr/share/miniconda/envs/__setup_conda/lib/python3.8/
-        key: /usr/share/miniconda/envs/__setup_conda/lib/python3.8/-${{ hashFiles('requirements.txt') }}
-
+    # follows https://medium.com/ai2-blog/python-caching-in-github-actions-e9452698e98d
     - name: Loading Torch models from cache
       uses: actions/cache@v3
       with:
