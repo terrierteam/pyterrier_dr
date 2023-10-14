@@ -5,6 +5,7 @@ import pyterrier as pt
 import itertools
 import numpy as np
 import ir_datasets
+import pyterrier_dr
 from . import FlexIndex
 
 logger = ir_datasets.log.easy()
@@ -46,8 +47,8 @@ class ScannRetriever(pt.Indexer):
 
 
 def _scann_retriever(self, n_leaves=None, leaves_to_search=1, train_sample=None):
+    pyterrier_dr.util.assert_scann()
     import scann
-    assert not hasattr(scann.scann_ops_pybind, 'builder'), "scann==1.0.0 required; install from wheel here: <https://github.com/google-research/google-research/blob/master/scann/docs/releases.md#scann-wheel-archive>"
     dvecs, meta, = self.payload(return_docnos=False)
 
     if n_leaves is None:

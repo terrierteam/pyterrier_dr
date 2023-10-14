@@ -8,6 +8,7 @@ import itertools
 import numpy as np
 import tempfile
 import ir_datasets
+import pyterrier_dr
 from . import FlexIndex
 
 logger = ir_datasets.log.easy()
@@ -60,6 +61,7 @@ class FaissRetriever(pt.Indexer):
 
 
 def _faiss_flat_retriever(self, gpu=False, qbatch=64):
+        pyterrier_dr.util.assert_faiss()
         import faiss
         if 'faiss_flat' not in self._cache:
             meta, = self.payload(return_dvecs=False, return_docnos=False)
@@ -84,6 +86,7 @@ FlexIndex.faiss_flat_retriever = _faiss_flat_retriever
 
 
 def _faiss_hnsw_retriever(self, neighbours=32, ef_construction=40, ef_search=16, cache=True, search_bounded_queue=True, qbatch=64):
+        pyterrier_dr.util.assert_faiss()
         import faiss
         meta, = self.payload(return_dvecs=False, return_docnos=False)
 
@@ -152,6 +155,7 @@ def _sample_train(index, count=None):
     return dvecs[idxs]
 
 def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_probe=1):
+        pyterrier_dr.util.assert_faiss()
         import faiss
         meta, = self.payload(return_dvecs=False, return_docnos=False)
 

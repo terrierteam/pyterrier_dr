@@ -30,3 +30,23 @@ def package_available(name):
         return True
     except ImportError:
         return False
+
+
+def faiss_available():
+    return package_available('faiss')
+
+
+def assert_faiss():
+    assert faiss_available(), "faiss required; install using instructions here: <https://github.com/facebookresearch/faiss/blob/main/INSTALL.md>"
+
+
+def scann_available():
+    if not package_available('scann'):
+        return False
+    import scann
+    # version 1.0.0 is requiredl detect via scann.scann_ops_pybind.builder
+    return hasattr(scann.scann_ops_pybind, 'builder')
+
+
+def assert_scann():
+    assert scann_available(), "scann==1.0.0 required; install from wheel here: <https://github.com/google-research/google-research/blob/master/scann/docs/releases.md#scann-wheel-archive>"

@@ -106,19 +106,19 @@ class TestFlexIndex(unittest.TestCase):
                 self.assertTrue(len(res[res.qid=='0']) <= 100)
                 self.assertTrue(len(res[res.qid=='1']) <= 100)
 
-    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_flat_retriever(self):
         self._test_retr(FlexIndex.faiss_flat_retriever)
 
-    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_hnsw_retriever(self):
         self._test_retr(FlexIndex.faiss_hnsw_retriever, exact=False)
 
-    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_ivf_retriever(self):
         self._test_retr(FlexIndex.faiss_ivf_retriever, exact=False)
 
-    @unittest.skipIf(not pyterrier_dr.util.package_available('scann'), "scann not available")
+    @unittest.skipIf(not pyterrier_dr.util.scann_available(), "scann not available")
     def test_scann_retriever(self):
         self._test_retr(FlexIndex.scann_retriever, exact=False)
 
