@@ -179,7 +179,8 @@ def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_pro
         dvecs, meta = self.payload(return_docnos=False)
         if not os.path.exists(self.index_path/index_name):
             quantizer = faiss.IndexFlatIP(meta['vec_size'])
-            quantizer = faiss.index_cpu_to_all_gpus(quantizer)
+            if pyterrier_dr.util.infer_device().type == 'cuda':
+                quantizer = faiss.index_cpu_to_all_gpus(quantizer)
             idx = faiss.IndexIVFFlat(quantizer, meta['vec_size'], n_list, faiss.METRIC_INNER_PRODUCT)
             with logger.duration(f'loading {train_sample} train samples'):
                 train = _sample_train(self, train_sample)
@@ -189,7 +190,8 @@ def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_pro
                 idx.add(np.array(dvecs[start_idx:start_idx+4096]))
             if cache:
                 with logger.duration('caching index'):
-                    idx.quantizer = faiss.index_gpu_to_cpu(idx.quantizer)
+                    if pyterrier_dr.util.infer_device().type == 'cuda':
+                        idx.quantizer = faiss.index_gpu_to_cpu(idx.quantizer)
                     faiss.write_index(idx, str(self.index_path/index_name))
             self._cache[key] = idx
         else:
