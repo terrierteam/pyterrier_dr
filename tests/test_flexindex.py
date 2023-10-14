@@ -118,6 +118,10 @@ class TestFlexIndex(unittest.TestCase):
     def test_faiss_ivf_retriever(self):
         self._test_retr(FlexIndex.faiss_ivf_retriever, exact=False)
 
+    @unittest.skipIf(not pyterrier_dr.util.package_available('scann'), "scann not available")
+    def test_scann_retriever(self):
+        self._test_retr(FlexIndex.scann_retriever, exact=False)
+
     def test_np_retriever(self):
         self._test_retr(FlexIndex.np_retriever)
 

@@ -1,11 +1,9 @@
 import pandas as pd
 import math
-import struct
 import os
 import pyterrier as pt
 import itertools
 import numpy as np
-import tempfile
 import ir_datasets
 from . import FlexIndex
 
