@@ -1,0 +1,2 @@
+pytest
+git+https://github.com/terrierteam/pyterrier_adaptive

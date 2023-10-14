@@ -109,11 +109,11 @@ FlexIndex.faiss_hnsw_retriever = _faiss_hnsw_retriever
 
 
 def _faiss_hnsw_graph(self, neighbours=32, ef_construction=40):
-    key = ('faiss_hnsw', neighbours, ef_construction)
+    key = ('faiss_hnsw', neighbours//2, ef_construction)
     graph_name = f'hnsw_n-{neighbours}_ef-{ef_construction}.graph'
     if key not in self._cache:
         if not (self.index_path/graph_name/'pt_meta.json').exists():
-            retr = self.faiss_hnsw_retriever(neighbours=neighbours, ef_construction=ef_construction)
+            retr = self.faiss_hnsw_retriever(neighbours=neighbours//2, ef_construction=ef_construction)
             _build_hnsw_graph(retr.faiss_index.hnsw, self.index_path/graph_name)
         from pyterrier_adaptive import CorpusGraph
         self._cache[key] = CorpusGraph.load(self.index_path/graph_name)

@@ -50,9 +50,9 @@ jobs:
         conda install pip
         pip install --upgrade --upgrade-strategy eager git+https://github.com/terrier-org/pyterrier.git#egg=python-terrier
         pip install --upgrade --upgrade-strategy eager -r requirements.txt
+        pip install --upgrade --upgrade-strategy eager -r requirements-dev.txt
         #install this software
         pip install --timeout=120 .
-        pip install --upgrade --upgrade-strategy eager pytest
 
     - name: All unit tests
       env:
