@@ -61,53 +61,53 @@ class FaissRetriever(pt.Indexer):
 
 
 def _faiss_flat_retriever(self, gpu=False, qbatch=64):
-        pyterrier_dr.util.assert_faiss()
-        import faiss
-        if 'faiss_flat' not in self._cache:
-            meta, = self.payload(return_dvecs=False, return_docnos=False)
-            with tempfile.TemporaryDirectory() as tmp, logger.duration('reading faiss flat'):
-                DUMMY = b'\x00\x00\x10\x00\x00\x00\x00\x00'
-                #       [ type ]                                                                             [ train ]  [ metric (dot)     ]
-                header = b'IxFI'  + struct.pack('<IQ', meta['vec_size'], meta['doc_count']) + DUMMY + DUMMY  + b'\x00' + b'\x00\x00\x00\x00' + struct.pack('<Q', meta['doc_count'] * meta['vec_size'])
-                with open(os.path.join(tmp, 'tmp'), 'wb') as fout:
-                    fout.write(b' ' + header)
-                reader = faiss.BufferedIOReader(faiss.FileIOReader(os.path.join(tmp, 'tmp')))
-                reader.read_bytes(1)
-                reader.reader = faiss.FileIOReader(str(self.index_path/'vecs.f4'))
-                self._cache['faiss_flat'] = faiss.read_index(reader)
-        if gpu:
-            if 'faiss_flat_gpu' not in self._cache:
-                co = faiss.GpuMultipleClonerOptions()
-                co.shard = True
-                self._cache['faiss_flat_gpu'] = faiss.index_cpu_to_all_gpus(self._faiss_flat, co=co)
-            return FaissRetriever(self, self._cache['faiss_flat_gpu'])
-        return FaissRetriever(self, self._cache['faiss_flat'], qbatch=qbatch)
+    pyterrier_dr.util.assert_faiss()
+    import faiss
+    if 'faiss_flat' not in self._cache:
+        meta, = self.payload(return_dvecs=False, return_docnos=False)
+        with tempfile.TemporaryDirectory() as tmp, logger.duration('reading faiss flat'):
+            DUMMY = b'\x00\x00\x10\x00\x00\x00\x00\x00'
+            #       [ type ]                                                                             [ train ]  [ metric (dot)     ]
+            header = b'IxFI'  + struct.pack('<IQ', meta['vec_size'], meta['doc_count']) + DUMMY + DUMMY  + b'\x00' + b'\x00\x00\x00\x00' + struct.pack('<Q', meta['doc_count'] * meta['vec_size'])
+            with open(os.path.join(tmp, 'tmp'), 'wb') as fout:
+                fout.write(b' ' + header)
+            reader = faiss.BufferedIOReader(faiss.FileIOReader(os.path.join(tmp, 'tmp')))
+            reader.read_bytes(1)
+            reader.reader = faiss.FileIOReader(str(self.index_path/'vecs.f4'))
+            self._cache['faiss_flat'] = faiss.read_index(reader)
+    if gpu:
+        if 'faiss_flat_gpu' not in self._cache:
+            co = faiss.GpuMultipleClonerOptions()
+            co.shard = True
+            self._cache['faiss_flat_gpu'] = faiss.index_cpu_to_all_gpus(self._faiss_flat, co=co)
+        return FaissRetriever(self, self._cache['faiss_flat_gpu'])
+    return FaissRetriever(self, self._cache['faiss_flat'], qbatch=qbatch)
 FlexIndex.faiss_flat_retriever = _faiss_flat_retriever
 
 
 def _faiss_hnsw_retriever(self, neighbours=32, ef_construction=40, ef_search=16, cache=True, search_bounded_queue=True, qbatch=64):
-        pyterrier_dr.util.assert_faiss()
-        import faiss
-        meta, = self.payload(return_dvecs=False, return_docnos=False)
+    pyterrier_dr.util.assert_faiss()
+    import faiss
+    meta, = self.payload(return_dvecs=False, return_docnos=False)
 
-        key = ('faiss_hnsw', neighbours, ef_construction)
-        index_name = f'hnsw_n-{neighbours}_ef-{ef_construction}.faiss'
-        if key not in self._cache:
-            dvecs, meta = self.payload(return_docnos=False)
-            if not os.path.exists(self.index_path/index_name):
-                idx = faiss.IndexHNSWFlat(meta['vec_size'], neighbours, faiss.METRIC_INNER_PRODUCT)
-                for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
-                    idx.add(np.array(dvecs[start_idx:start_idx+4096]))
-                idx.storage = faiss.IndexFlatIP(meta['vec_size']) # clear storage ; we can use faiss_flat here instead so we don't keep an extra copy
-                if cache:
-                    with logger.duration('caching index'):
-                        faiss.write_index(idx, str(self.index_path/index_name))
-                self._cache[key] = idx
-            else:
-                with logger.duration('reading hnsw table'):
-                    self._cache[key] = faiss.read_index(str(self.index_path/index_name))
-            self._cache[key].storage = self.faiss_flat_retriever().faiss_index
-        return FaissRetriever(self, self._cache[key], ef_search=ef_search, search_bounded_queue=search_bounded_queue, qbatch=qbatch)
+    key = ('faiss_hnsw', neighbours, ef_construction)
+    index_name = f'hnsw_n-{neighbours}_ef-{ef_construction}.faiss'
+    if key not in self._cache:
+        dvecs, meta = self.payload(return_docnos=False)
+        if not os.path.exists(self.index_path/index_name):
+            idx = faiss.IndexHNSWFlat(meta['vec_size'], neighbours, faiss.METRIC_INNER_PRODUCT)
+            for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
+                idx.add(np.array(dvecs[start_idx:start_idx+4096]))
+            idx.storage = faiss.IndexFlatIP(meta['vec_size']) # clear storage ; we can use faiss_flat here instead so we don't keep an extra copy
+            if cache:
+                with logger.duration('caching index'):
+                    faiss.write_index(idx, str(self.index_path/index_name))
+            self._cache[key] = idx
+        else:
+            with logger.duration('reading hnsw table'):
+                self._cache[key] = faiss.read_index(str(self.index_path/index_name))
+        self._cache[key].storage = self.faiss_flat_retriever().faiss_index
+    return FaissRetriever(self, self._cache[key], ef_search=ef_search, search_bounded_queue=search_bounded_queue, qbatch=qbatch)
 FlexIndex.faiss_hnsw_retriever = _faiss_hnsw_retriever
 
 
@@ -155,45 +155,45 @@ def _sample_train(index, count=None):
     return dvecs[idxs]
 
 def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_probe=1):
-        pyterrier_dr.util.assert_faiss()
-        import faiss
-        meta, = self.payload(return_dvecs=False, return_docnos=False)
+    pyterrier_dr.util.assert_faiss()
+    import faiss
+    meta, = self.payload(return_dvecs=False, return_docnos=False)
 
-        if n_list is None:
-            if train_sample is None:
-                n_list = math.ceil(math.sqrt(meta['doc_count']))
-                # we'll shift it to the nearest power of 2
-                n_list = int(1 << math.ceil(math.log2(n_list)))
-            else:
-                n_list = math.floor(train_sample / 39)
-            n_list = max(n_list, 4)
-
+    if n_list is None:
         if train_sample is None:
-            train_sample = n_list * 39
-        elif 0 < train_sample < 1:
-            train_sample = math.ceil(train_sample * meta['doc_count'])
+            n_list = math.ceil(math.sqrt(meta['doc_count']))
+            # we'll shift it to the nearest power of 2
+            n_list = int(1 << math.ceil(math.log2(n_list)))
+        else:
+            n_list = math.floor(train_sample / 39)
+        n_list = max(n_list, 4)
 
-        key = ('faiss_ivf', n_list, train_sample)
-        index_name = f'ivf_nlist-{n_list}_train-{train_sample}.faiss'
-        if key not in self._cache:
-            dvecs, meta = self.payload(return_docnos=False)
-            if not os.path.exists(self.index_path/index_name):
-                quantizer = faiss.IndexFlatIP(meta['vec_size'])
-                quantizer = faiss.index_cpu_to_all_gpus(quantizer)
-                idx = faiss.IndexIVFFlat(quantizer, meta['vec_size'], n_list, faiss.METRIC_INNER_PRODUCT)
-                with logger.duration(f'loading {train_sample} train samples'):
-                    train = _sample_train(self, train_sample)
-                with logger.duration(f'training ivf with {n_list} posting lists'):
-                    idx.train(train)
-                for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
-                    idx.add(np.array(dvecs[start_idx:start_idx+4096]))
-                if cache:
-                    with logger.duration('caching index'):
-                        idx.quantizer = faiss.index_gpu_to_cpu(idx.quantizer)
-                        faiss.write_index(idx, str(self.index_path/index_name))
-                self._cache[key] = idx
-            else:
-                with logger.duration('reading index'):
-                    self._cache[key] = faiss.read_index(str(self.index_path/index_name))
-        return FaissRetriever(self, self._cache[key], n_probe=n_probe)
+    if train_sample is None:
+        train_sample = n_list * 39
+    elif 0 < train_sample < 1:
+        train_sample = math.ceil(train_sample * meta['doc_count'])
+
+    key = ('faiss_ivf', n_list, train_sample)
+    index_name = f'ivf_nlist-{n_list}_train-{train_sample}.faiss'
+    if key not in self._cache:
+        dvecs, meta = self.payload(return_docnos=False)
+        if not os.path.exists(self.index_path/index_name):
+            quantizer = faiss.IndexFlatIP(meta['vec_size'])
+            quantizer = faiss.index_cpu_to_all_gpus(quantizer)
+            idx = faiss.IndexIVFFlat(quantizer, meta['vec_size'], n_list, faiss.METRIC_INNER_PRODUCT)
+            with logger.duration(f'loading {train_sample} train samples'):
+                train = _sample_train(self, train_sample)
+            with logger.duration(f'training ivf with {n_list} posting lists'):
+                idx.train(train)
+            for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
+                idx.add(np.array(dvecs[start_idx:start_idx+4096]))
+            if cache:
+                with logger.duration('caching index'):
+                    idx.quantizer = faiss.index_gpu_to_cpu(idx.quantizer)
+                    faiss.write_index(idx, str(self.index_path/index_name))
+            self._cache[key] = idx
+        else:
+            with logger.duration('reading index'):
+                self._cache[key] = faiss.read_index(str(self.index_path/index_name))
+    return FaissRetriever(self, self._cache[key], n_probe=n_probe)
 FlexIndex.faiss_ivf_retriever = _faiss_ivf_retriever
