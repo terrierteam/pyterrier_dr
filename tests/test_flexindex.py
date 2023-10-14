@@ -140,6 +140,8 @@ class TestFlexIndex(unittest.TestCase):
             res = vec_loader(pd.DataFrame({
                 'docid': [5, 1, 100, 198],
             }))
+            self.assertTrue(all(c in res.columns) for c in ['docid', 'doc_vec'])
+            self.assertEqual(len(res), 4)
             self.assertTrue((res.iloc[0]['doc_vec'] == dataset[5]['doc_vec']).all())
             self.assertTrue((res.iloc[1]['doc_vec'] == dataset[1]['doc_vec']).all())
             self.assertTrue((res.iloc[2]['doc_vec'] == dataset[100]['doc_vec']).all())
@@ -147,7 +149,10 @@ class TestFlexIndex(unittest.TestCase):
         with self.subTest('docno'):
             res = vec_loader(pd.DataFrame({
                 'docno': ['20', '0', '100', '198'],
+                'query': 'ignored',
             }))
+            self.assertTrue(all(c in res.columns) for c in ['docno', 'doc_vec', 'query'])
+            self.assertEqual(len(res), 4)
             self.assertTrue((res.iloc[0]['doc_vec'] == dataset[20]['doc_vec']).all())
             self.assertTrue((res.iloc[1]['doc_vec'] == dataset[0]['doc_vec']).all())
             self.assertTrue((res.iloc[2]['doc_vec'] == dataset[100]['doc_vec']).all())
@@ -158,7 +163,6 @@ class TestFlexIndex(unittest.TestCase):
     #  - ada_ladr
     #  - gar
     #  - np_scorer
-    #  - scann_retriever
     #  - torch_vecs
     #  - torch_scorer
 
