@@ -58,11 +58,15 @@ class TorchRetriever(pt.Transformer):
                 scores = batch @ self.torch_vecs.T
             else:
                 raise ValueError(f'{self.flex_index.sim_fn} not supported')
-            scores, docids = scores.topk(self.num_results, dim=1)
+            if scores.shape[1] > self.num_results:
+                scores, docids = scores.topk(self.num_results, dim=1)
+            else:
+                docids = scores.argsort(descending=True, dim=1)
+                scores = torch.gather(scores, dim=1, index=docids)
             res_scores.append(scores.cpu().numpy().reshape(-1))
             res_docids.append(docids.cpu().numpy().reshape(-1))
-            res_idxs.append(np.arange(start_idx, start_idx+batch.shape[0]).reshape(-1, 1).repeat(self.num_results, axis=1).reshape(-1))
-            res_ranks.append(np.arange(self.num_results).reshape(1, -1).repeat(batch.shape[0], axis=0).reshape(-1))
+            res_idxs.append(np.arange(start_idx, start_idx+batch.shape[0]).reshape(-1, 1).repeat(scores.shape[1], axis=1).reshape(-1))
+            res_ranks.append(np.arange(scores.shape[1]).reshape(1, -1).repeat(batch.shape[0], axis=0).reshape(-1) + 1)
         res_idxs = np.concatenate(res_idxs)
         res = {k: inp[k][res_idxs] for k in inp.columns if k not in ['docid', 'docno', 'rank', 'score']}
         res['score'] = np.concatenate(res_scores)

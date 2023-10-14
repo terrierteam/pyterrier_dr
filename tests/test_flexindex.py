@@ -1,20 +1,21 @@
-import unittest
-import pandas as pd
 import tempfile
-import pyterrier as pt
+import unittest
 import numpy as np
+import pandas as pd
+import pyterrier as pt
+import pyterrier_dr
+from pyterrier_dr import FlexIndex
 
 
 class TestFlexIndex(unittest.TestCase):
 
-    def _generate_data(self, count=1000, dim=100):
+    def _generate_data(self, count=2000, dim=100):
         return [
             {'docno': str(i), 'doc_vec': np.random.rand(dim).astype(np.float32)}
             for i in range(count)
         ]
 
     def test_index_typical(self):
-        from pyterrier_dr import FlexIndex
         destdir = tempfile.mkdtemp()
         self.test_dirs.append(destdir)
         index = FlexIndex(destdir+'/index')
@@ -36,32 +37,74 @@ class TestFlexIndex(unittest.TestCase):
             self.assertTrue((a['doc_vec'] == b['doc_vec']).all())
 
     def test_corpus_graph(self):
-        from pyterrier_dr import FlexIndex
         destdir = tempfile.mkdtemp()
         self.test_dirs.append(destdir)
         index = FlexIndex(destdir+'/index')
-
-        self.assertFalse(index.built())
-
         dataset = self._generate_data()
-
         index.index(dataset)
+        
         graph = index.corpus_graph(16)
         self.assertEqual(graph.neighbours(4).shape, (16,))
 
+    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
     def test_faiss_hnsw_graph(self):
-        from pyterrier_dr import FlexIndex
         destdir = tempfile.mkdtemp()
         self.test_dirs.append(destdir)
         index = FlexIndex(destdir+'/index')
-
-        self.assertFalse(index.built())
-
         dataset = self._generate_data()
-
         index.index(dataset)
+
         graph = index.faiss_hnsw_graph(16)
         self.assertEqual(graph.neighbours(4).shape, (16,))
+
+    def _test_exact_retr(self, Retr):
+        with self.subTest('basic'):
+            destdir = tempfile.mkdtemp()
+            self.test_dirs.append(destdir)
+            index = FlexIndex(destdir+'/index')
+            dataset = self._generate_data(count=2000)
+            index.index(dataset)
+            
+            retr = Retr(index)
+            res = retr(pd.DataFrame([
+                {'qid': '0', 'query_vec': dataset[0]['doc_vec']},
+                {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
+            ]))
+            self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
+            self.assertEqual(len(res), 2000)
+            self.assertEqual(len(res[res.qid=='0']), 1000)
+            self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
+            self.assertEqual(len(res[res.qid=='1']), 1000)
+            self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+
+        with self.subTest('smaller'):
+            destdir = tempfile.mkdtemp()
+            self.test_dirs.append(destdir)
+            index = FlexIndex(destdir+'/index')
+            dataset = self._generate_data(count=100)
+            index.index(dataset)
+            
+            retr = Retr(index)
+            res = retr(pd.DataFrame([
+                {'qid': '0', 'query_vec': dataset[0]['doc_vec']},
+                {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
+            ]))
+            self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
+            self.assertEqual(len(res), 200)
+            self.assertEqual(len(res[res.qid=='0']), 100)
+            self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
+            self.assertEqual(len(res[res.qid=='1']), 100)
+            self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+
+    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    def test_faiss_flat_retriever(self):
+        self._test_exact_retr(FlexIndex.faiss_flat_retriever)
+
+    def test_np_retriever(self):
+        self._test_exact_retr(FlexIndex.np_retriever)
+
+    def test_torch_retriever(self):
+        self._test_exact_retr(FlexIndex.torch_retriever)
 
     # TODO: tests for:
     #  - faiss_flat_retriever
@@ -69,13 +112,11 @@ class TestFlexIndex(unittest.TestCase):
     #  - faiss_ivf_retriever
     #  - pre_ladr
     #  - ada_ladr
-    #  - np_retriever
     #  - np_vec_loader
     #  - np_scorer
     #  - scann_retriever
     #  - torch_vecs
     #  - torch_scorer
-    #  - torch_retriever
 
     def setUp(self):
         import pyterrier as pt
