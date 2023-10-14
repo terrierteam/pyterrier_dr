@@ -57,7 +57,7 @@ class TestFlexIndex(unittest.TestCase):
         graph = index.faiss_hnsw_graph(16)
         self.assertEqual(graph.neighbours(4).shape, (16,))
 
-    def _test_exact_retr(self, Retr):
+    def _test_retr(self, Retr, exact=True):
         with self.subTest('basic'):
             destdir = tempfile.mkdtemp()
             self.test_dirs.append(destdir)
@@ -71,11 +71,16 @@ class TestFlexIndex(unittest.TestCase):
                 {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
             ]))
             self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
-            self.assertEqual(len(res), 2000)
-            self.assertEqual(len(res[res.qid=='0']), 1000)
-            self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
-            self.assertEqual(len(res[res.qid=='1']), 1000)
-            self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+            if exact:
+                self.assertEqual(len(res), 2000)
+                self.assertEqual(len(res[res.qid=='0']), 1000)
+                self.assertEqual(len(res[res.qid=='1']), 1000)
+                self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
+                self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+            else:
+                self.assertTrue(len(res) <= 2000)
+                self.assertTrue(len(res[res.qid=='0']) <= 1000)
+                self.assertTrue(len(res[res.qid=='1']) <= 1000)
 
         with self.subTest('smaller'):
             destdir = tempfile.mkdtemp()
@@ -90,29 +95,64 @@ class TestFlexIndex(unittest.TestCase):
                 {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
             ]))
             self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
-            self.assertEqual(len(res), 200)
-            self.assertEqual(len(res[res.qid=='0']), 100)
-            self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
-            self.assertEqual(len(res[res.qid=='1']), 100)
-            self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+            if exact:
+                self.assertEqual(len(res), 200)
+                self.assertEqual(len(res[res.qid=='0']), 100)
+                self.assertEqual(len(res[res.qid=='1']), 100)
+                self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
+                self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+            else:
+                self.assertTrue(len(res) <= 200)
+                self.assertTrue(len(res[res.qid=='0']) <= 100)
+                self.assertTrue(len(res[res.qid=='1']) <= 100)
 
     @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
     def test_faiss_flat_retriever(self):
-        self._test_exact_retr(FlexIndex.faiss_flat_retriever)
+        self._test_retr(FlexIndex.faiss_flat_retriever)
+
+    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    def test_faiss_hnsw_retriever(self):
+        self._test_retr(FlexIndex.faiss_hnsw_retriever, exact=False)
+
+    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    def test_faiss_ivf_retriever(self):
+        self._test_retr(FlexIndex.faiss_ivf_retriever, exact=False)
 
     def test_np_retriever(self):
-        self._test_exact_retr(FlexIndex.np_retriever)
+        self._test_retr(FlexIndex.np_retriever)
 
     def test_torch_retriever(self):
-        self._test_exact_retr(FlexIndex.torch_retriever)
+        self._test_retr(FlexIndex.torch_retriever)
+
+    def test_np_vec_loader(self):
+        destdir = tempfile.mkdtemp()
+        self.test_dirs.append(destdir)
+        index = FlexIndex(destdir+'/index')
+        dataset = self._generate_data()
+        index.index(dataset)
+        
+        vec_loader = index.np_vec_loader()
+        with self.subTest('docid'):
+            res = vec_loader(pd.DataFrame({
+                'docid': [5, 1, 100, 198],
+            }))
+            self.assertTrue((res.iloc[0]['doc_vec'] == dataset[5]['doc_vec']).all())
+            self.assertTrue((res.iloc[1]['doc_vec'] == dataset[1]['doc_vec']).all())
+            self.assertTrue((res.iloc[2]['doc_vec'] == dataset[100]['doc_vec']).all())
+            self.assertTrue((res.iloc[3]['doc_vec'] == dataset[198]['doc_vec']).all())
+        with self.subTest('docno'):
+            res = vec_loader(pd.DataFrame({
+                'docno': ['20', '0', '100', '198'],
+            }))
+            self.assertTrue((res.iloc[0]['doc_vec'] == dataset[20]['doc_vec']).all())
+            self.assertTrue((res.iloc[1]['doc_vec'] == dataset[0]['doc_vec']).all())
+            self.assertTrue((res.iloc[2]['doc_vec'] == dataset[100]['doc_vec']).all())
+            self.assertTrue((res.iloc[3]['doc_vec'] == dataset[198]['doc_vec']).all())
 
     # TODO: tests for:
-    #  - faiss_flat_retriever
-    #  - faiss_hnsw_retriever
-    #  - faiss_ivf_retriever
     #  - pre_ladr
     #  - ada_ladr
-    #  - np_vec_loader
+    #  - gar
     #  - np_scorer
     #  - scann_retriever
     #  - torch_vecs

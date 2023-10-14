@@ -145,6 +145,11 @@ def _build_hnsw_graph(hnsw, out_dir):
             'k': lvl_0_size,
         }, fout)
 
+def _sample_train(index, count=None):
+    dvecs, meta = index.payload(return_docnos=False)
+    count = min(count or 10_000, dvecs.shape[0])
+    idxs = np.random.RandomState(0).choice(dvecs.shape[0], size=count, replace=False)
+    return dvecs[idxs]
 
 def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_probe=1):
         import faiss
@@ -173,7 +178,7 @@ def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_pro
                 quantizer = faiss.index_cpu_to_all_gpus(quantizer)
                 idx = faiss.IndexIVFFlat(quantizer, meta['vec_size'], n_list, faiss.METRIC_INNER_PRODUCT)
                 with logger.duration(f'loading {train_sample} train samples'):
-                    train = self._sample_train(train_sample)
+                    train = _sample_train(self, train_sample)
                 with logger.duration(f'training ivf with {n_list} posting lists'):
                     idx.train(train)
                 for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
