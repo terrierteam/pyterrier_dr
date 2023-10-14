@@ -50,7 +50,7 @@ class FaissRetriever(pt.Indexer):
                 s = s[mask]
                 res['docid'].append(d)
                 res['score'].append(s)
-                res['rank'].append(np.arange(d.shape[0])+1)
+                res['rank'].append(np.arange(d.shape[0]))
                 idxs.extend(itertools.repeat(qidx+i, d.shape[0]))
         res = {k: np.concatenate(v) for k, v in res.items()}
         res['docno'] = docnos.fwd[res['docid']]

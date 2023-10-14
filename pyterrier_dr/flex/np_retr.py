@@ -43,7 +43,7 @@ class NumpyRetriever(pt.Transformer):
             'score': np.concatenate(result_scores),
             'docno': np.concatenate(result_docnos),
             'docid': np.concatenate(result_dids),
-            'rank': np.concatenate([np.arange(len(scores))+1 for scores in result_scores]),
+            'rank': np.concatenate([np.arange(len(scores)) for scores in result_scores]),
         }
         idxs = list(itertools.chain(*(itertools.repeat(i, len(scores)) for i, scores in enumerate(result_scores))))
         for col in inp.columns:

@@ -66,7 +66,7 @@ class TorchRetriever(pt.Transformer):
             res_scores.append(scores.cpu().numpy().reshape(-1))
             res_docids.append(docids.cpu().numpy().reshape(-1))
             res_idxs.append(np.arange(start_idx, start_idx+batch.shape[0]).reshape(-1, 1).repeat(scores.shape[1], axis=1).reshape(-1))
-            res_ranks.append(np.arange(scores.shape[1]).reshape(1, -1).repeat(batch.shape[0], axis=0).reshape(-1) + 1)
+            res_ranks.append(np.arange(scores.shape[1]).reshape(1, -1).repeat(batch.shape[0], axis=0).reshape(-1))
         res_idxs = np.concatenate(res_idxs)
         res = {k: inp[k][res_idxs] for k in inp.columns if k not in ['docid', 'docno', 'rank', 'score']}
         res['score'] = np.concatenate(res_scores)

@@ -10,8 +10,11 @@ from pyterrier_dr import FlexIndex
 class TestFlexIndex(unittest.TestCase):
 
     def _generate_data(self, count=2000, dim=100):
+        def random_unit_vec():
+            v = np.random.rand(dim).astype(np.float32)
+            return v / np.linalg.norm(v)
         return [
-            {'docno': str(i), 'doc_vec': np.random.rand(dim).astype(np.float32)}
+            {'docno': str(i), 'doc_vec': random_unit_vec()}
             for i in range(count)
         ]
 
@@ -75,8 +78,8 @@ class TestFlexIndex(unittest.TestCase):
                 self.assertEqual(len(res), 2000)
                 self.assertEqual(len(res[res.qid=='0']), 1000)
                 self.assertEqual(len(res[res.qid=='1']), 1000)
-                self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
-                self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+                self.assertEqual(res[(res.qid=='0')&((res['rank']==0))].iloc[0]['docno'], '0')
+                self.assertEqual(res[(res.qid=='1')&((res['rank']==0))].iloc[0]['docno'], '1')
             else:
                 self.assertTrue(len(res) <= 2000)
                 self.assertTrue(len(res[res.qid=='0']) <= 1000)
@@ -99,8 +102,8 @@ class TestFlexIndex(unittest.TestCase):
                 self.assertEqual(len(res), 200)
                 self.assertEqual(len(res[res.qid=='0']), 100)
                 self.assertEqual(len(res[res.qid=='1']), 100)
-                self.assertEqual(res[(res.qid=='0')&((res['rank']==1))].iloc[0]['docno'], '0')
-                self.assertEqual(res[(res.qid=='1')&((res['rank']==1))].iloc[0]['docno'], '1')
+                self.assertEqual(res[(res.qid=='0')&((res['rank']==0))].iloc[0]['docno'], '0')
+                self.assertEqual(res[(res.qid=='1')&((res['rank']==0))].iloc[0]['docno'], '1')
             else:
                 self.assertTrue(len(res) <= 200)
                 self.assertTrue(len(res[res.qid=='0']) <= 100)
@@ -158,13 +161,50 @@ class TestFlexIndex(unittest.TestCase):
             self.assertTrue((res.iloc[2]['doc_vec'] == dataset[100]['doc_vec']).all())
             self.assertTrue((res.iloc[3]['doc_vec'] == dataset[198]['doc_vec']).all())
 
+    def _test_reranker(self, Reranker, expands=False):
+        destdir = tempfile.mkdtemp()
+        self.test_dirs.append(destdir)
+        index = FlexIndex(destdir+'/index')
+        dataset = self._generate_data(count=2000)
+        index.index(dataset)
+        
+        retr = Reranker(index)
+        res = retr(pd.DataFrame([
+            {'qid': '0', 'query_vec': dataset[0]['doc_vec'], 'docno': '0', 'score': -100.},
+            {'qid': '0', 'query_vec': dataset[0]['doc_vec'], 'docno': '50', 'score': -100.},
+            {'qid': '1', 'query_vec': dataset[1]['doc_vec'], 'docno': '100', 'score': -100.},
+            {'qid': '1', 'query_vec': dataset[1]['doc_vec'], 'docno': '0', 'score': -100.},
+            {'qid': '1', 'query_vec': dataset[1]['doc_vec'], 'docno': '40', 'score': -100.},
+        ]))
+        self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
+        if expands:
+            self.assertTrue(len(res) >= 5)
+        else:
+            self.assertEqual(len(res), 5)
+        self.assertEqual(res[(res.qid=='0')&((res['rank']==0))].iloc[0]['docno'], '0')
+        self.assertNotEqual(res[(res.qid=='0')&((res.docno=='0'))].iloc[0]['score'], -100.)
+        self.assertNotEqual(res[(res.qid=='0')&((res.docno=='50'))].iloc[0]['score'], -100.)
+        self.assertNotEqual(res[(res.qid=='1')&((res.docno=='100'))].iloc[0]['score'], -100.)
+        self.assertNotEqual(res[(res.qid=='1')&((res.docno=='0'))].iloc[0]['score'], -100.)
+        self.assertNotEqual(res[(res.qid=='1')&((res.docno=='40'))].iloc[0]['score'], -100.)
+
+    def test_np_scorer(self):
+        self._test_reranker(FlexIndex.np_scorer)
+
+    def test_torch_scorer(self):
+        self._test_reranker(FlexIndex.torch_scorer)
+
+    def test_pre_ladr(self):
+        self._test_reranker(FlexIndex.pre_ladr, expands=True)
+
+    def test_ada_ladr(self):
+        self._test_reranker(FlexIndex.ada_ladr, expands=True)
+
+    def test_gar(self):
+        self._test_reranker(FlexIndex.gar, expands=True)
+
     # TODO: tests for:
-    #  - pre_ladr
-    #  - ada_ladr
-    #  - gar
-    #  - np_scorer
     #  - torch_vecs
-    #  - torch_scorer
 
     def setUp(self):
         import pyterrier as pt
