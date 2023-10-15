@@ -182,11 +182,7 @@ class TestFlexIndex(unittest.TestCase):
         else:
             self.assertEqual(len(res), 5)
         self.assertEqual(res[(res.qid=='0')&((res['rank']==0))].iloc[0]['docno'], '0')
-        self.assertNotEqual(res[(res.qid=='0')&((res.docno=='0'))].iloc[0]['score'], -100.)
-        self.assertNotEqual(res[(res.qid=='0')&((res.docno=='50'))].iloc[0]['score'], -100.)
-        self.assertNotEqual(res[(res.qid=='1')&((res.docno=='100'))].iloc[0]['score'], -100.)
-        self.assertNotEqual(res[(res.qid=='1')&((res.docno=='0'))].iloc[0]['score'], -100.)
-        self.assertNotEqual(res[(res.qid=='1')&((res.docno=='40'))].iloc[0]['score'], -100.)
+        self.assertEqual(len(res[res.score==-100.]), 0) # all scores re-assigned
 
     def test_np_scorer(self):
         self._test_reranker(FlexIndex.np_scorer)
