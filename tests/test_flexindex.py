@@ -49,7 +49,7 @@ class TestFlexIndex(unittest.TestCase):
         graph = index.corpus_graph(16)
         self.assertEqual(graph.neighbours(4).shape, (16,))
 
-    @unittest.skipIf(not pyterrier_dr.util.package_available('faiss'), "faiss not available")
+    @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_hnsw_graph(self):
         destdir = tempfile.mkdtemp()
         self.test_dirs.append(destdir)
