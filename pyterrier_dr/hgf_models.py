@@ -23,6 +23,8 @@ class HgfBiEncoder(BiEncoder):
                 inps = {k: v.to(self.device) for k, v in inps.items()}
                 res = self.model(**inps).last_hidden_state[:, 0] # [CLS] embedding
                 results.append(res.cpu().numpy())
+        if not results:
+            return np.empty(shape=(0, 0))
         return np.concatenate(results, axis=0)
 
     def encode_docs(self, texts, batch_size=None):
@@ -33,6 +35,8 @@ class HgfBiEncoder(BiEncoder):
                 inps = {k: v.to(self.device) for k, v in inps.items()}
                 res = self.model(**inps).last_hidden_state[:, 0]
                 results.append(res.cpu().numpy())
+        if not results:
+            return np.empty(shape=(0, 0))
         return np.concatenate(results, axis=0)
 
     @classmethod

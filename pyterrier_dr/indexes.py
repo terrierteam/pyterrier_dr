@@ -7,7 +7,6 @@ from pathlib import Path
 from os.path import commonprefix
 import numpy as np
 import shutil
-import faiss
 import more_itertools
 import pandas as pd
 import pyterrier as pt
@@ -283,6 +282,8 @@ class NumpyIndex(pt.Indexer):
 
 class MemIndex(pt.Indexer):
     def __init__(self, num_results=1000, score_fn='dot', batch_size=4096, verbose=True, dtype='f4', drop_query_vec=True):
+        # check we havent been passed a destination index, as per disk-based indexers
+        assert isinstance(num_results, int)
         self.num_results = num_results
         self.score_fn = score_fn
         self.verbose = verbose
@@ -368,7 +369,7 @@ class MemIndex(pt.Indexer):
 
 
 class RankedLists:
-    def __init__(self, num_results, num_queries):
+    def __init__(self, num_results : int, num_queries : int):
         self.num_results = num_results
         self.num_queries = num_queries
         self.scores = np.empty((num_queries, 0), dtype='f4')
@@ -434,6 +435,7 @@ class FaissFlat(pt.Indexer):
         self._shards = list(self.iter_shards())
 
     def iter_shards(self):
+        import faiss
         if self.cuda:
             res = faiss.StandardGpuResources()
         if self._shards is None:
@@ -500,6 +502,7 @@ class FaissFlat(pt.Indexer):
         return res
 
     def index(self, inp):
+        import faiss
         if isinstance(inp, pd.DataFrame):
             inp = inp.to_dict(orient="records")
         path = Path(self.index_path)
@@ -550,6 +553,7 @@ class FaissHnsw(pt.Indexer):
             return iter(self._shards)
 
     def _iter_shards(self):
+        import faiss
         for shardid in itertools.count():
             if not (self.index_path/f'{shardid}.faiss').exists():
                 break
@@ -597,6 +601,7 @@ class FaissHnsw(pt.Indexer):
         return res
 
     def index(self, inp):
+        import faiss
         if isinstance(inp, pd.DataFrame):
             inp = inp.to_dict(orient="records")
         path = Path(self.index_path)

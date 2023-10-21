@@ -1,15 +1,9 @@
-import re
-import math
-import os
 import shutil
-import threading
-import struct
-import tempfile
 import itertools
 import json
 from pathlib import Path
+from warnings import warn
 import numpy as np
-import shutil
 import more_itertools
 import pandas as pd
 import pyterrier as pt
@@ -17,7 +11,7 @@ from pyterrier.model import add_ranks
 from npids import Lookup
 from enum import Enum
 from .. import SimFn
-from ..indexes import RankedLists, TorchRankedLists
+from ..indexes import RankedLists
 import ir_datasets
 import torch
 
@@ -90,6 +84,20 @@ class FlexIndex(pt.Indexer):
                 count += 1
         with open(path/'pt_meta.json', 'wt') as f_meta:
             json.dump({"type": "dense_index", "format": "flex", "vec_size": vec_size, "doc_count": count}, f_meta)
+
+    def transform(self, inp):
+        columns = set(inp.columns)
+        modes = [
+            (['qid', 'query_vec'], self.np_retriever, "performing exhaustive saerch with FlexIndex.np_retriever -- note that other FlexIndex retrievers may be faster"),
+        ]
+        for fields, fn, note in modes:
+            if all(f in columns for f in fields):
+                warn(f'based on input columns {list(columns)}, {note}')
+                return fn()(inp)
+        message = f'Unexpected input with columns: {inp.columns}. Supports:'
+        for fields, fn in modes:
+            message += f'\n - {fn.__doc__.strip()}: {fields}'
+        raise RuntimeError(message)
 
     def get_corpus_iter(self, start_idx=None, stop_idx=None, verbose=True):
         docnos, dvecs, meta = self.payload()

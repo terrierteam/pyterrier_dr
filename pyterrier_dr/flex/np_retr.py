@@ -26,7 +26,6 @@ class NumpyRetriever(pt.Transformer):
         else:
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
         num_q = query_vecs.shape[0]
-        res = []
         ranked_lists = RankedLists(self.num_results, num_q)
         batch_it = range(0, dvecs.shape[0], self.batch_size)
         if self.flex_index.verbose:

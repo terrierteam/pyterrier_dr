@@ -54,6 +54,6 @@ class FlexGar(pt.Transformer):
 
 
 
-def _gar(self, k, batch_size=128, num_results=1000):
+def _gar(self, k=16, batch_size=128, num_results=1000):
     return FlexGar(self, self.corpus_graph(k), SimFn.dot, batch_size=batch_size, num_results=num_results)
 FlexIndex.gar = _gar

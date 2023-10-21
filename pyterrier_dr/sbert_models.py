@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import pyterrier as pt
 from transformers import AutoConfig
-from sentence_transformers import SentenceTransformer
 from .biencoder import BiEncoder, BiQueryEncoder
 from .util import Variants
 from tqdm import tqdm
@@ -23,6 +22,7 @@ class SBertBiEncoder(BiEncoder):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
+        from sentence_transformers import SentenceTransformer
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
@@ -66,6 +66,7 @@ class Query2Query(pt.Transformer):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
+        from sentence_transformers import SentenceTransformer
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.batch_size = batch_size
         self.verbose = verbose

@@ -4,6 +4,7 @@ import json
 import ir_datasets
 import torch
 import numpy as np
+import pyterrier_dr
 from ..indexes import TorchRankedLists
 from . import FlexIndex
 
@@ -40,20 +41,22 @@ def _build_corpus_graph(flex_index, k, out_dir, batch_size):
     out_dir.mkdir(parents=True, exist_ok=True)
     edges_path = out_dir/'edges.u32.np'
     weights_path = out_dir/'weights.f16.np'
+    device = pyterrier_dr.util.infer_device()
+    dtype = torch.half if device.type == 'cuda' else torch.float
     with logger.pbar_raw(total=int((num_chunks+1)*num_chunks/2), unit='chunk', smoothing=1) as pbar, \
         ir_datasets.util.finialized_file(str(edges_path), 'wb') as fe, \
         ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
         for i in range(num_chunks):
-            left = torch.from_numpy(vectors[i*S:(i+1)*S]).cuda().half()
-            left /= left.norm(dim=1, keepdim=True)
+            left = torch.from_numpy(vectors[i*S:(i+1)*S]).to(device).to(dtype)
+            left = left / left.norm(dim=1, keepdim=True)
             scores = left @ left.T
-            scores[torch.eye(left.shape[0], dtype=bool, device='cuda')] = float('-inf')
+            scores[torch.eye(left.shape[0], dtype=bool, device=device)] = float('-inf')
             i_scores, i_dids = scores.topk(k, sorted=True, dim=1)
             rankings[i].update(i_scores, (i_dids + i*S))
             pbar.update()
             for j in range(i+1, num_chunks):
-                right = torch.from_numpy(vectors[j*S:(j+1)*S]).cuda().half()
-                right /= right.norm(dim=1, keepdim=True)
+                right = torch.from_numpy(vectors[j*S:(j+1)*S]).to(device).to(dtype)
+                right = right / right.norm(dim=1, keepdim=True)
                 scores = left @ right.T
                 i_scores, i_dids = scores.topk(min(k, right.shape[0]), sorted=True, dim=1)
                 j_scores, j_dids = scores.topk(min(k, left.shape[0]), sorted=True, dim=0)
