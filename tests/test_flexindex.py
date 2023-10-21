@@ -60,7 +60,7 @@ class TestFlexIndex(unittest.TestCase):
         graph = index.faiss_hnsw_graph(16)
         self.assertEqual(graph.neighbours(4).shape, (16,))
 
-    def _test_retr(self, Retr, exact=True):
+    def _test_retr(self, Retr, exact=True, test_smaller=True):
         with self.subTest('basic'):
             destdir = tempfile.mkdtemp()
             self.test_dirs.append(destdir)
@@ -85,29 +85,30 @@ class TestFlexIndex(unittest.TestCase):
                 self.assertTrue(len(res[res.qid=='0']) <= 1000)
                 self.assertTrue(len(res[res.qid=='1']) <= 1000)
 
-        with self.subTest('smaller'):
-            destdir = tempfile.mkdtemp()
-            self.test_dirs.append(destdir)
-            index = FlexIndex(destdir+'/index')
-            dataset = self._generate_data(count=100)
-            index.index(dataset)
-            
-            retr = Retr(index)
-            res = retr(pd.DataFrame([
-                {'qid': '0', 'query_vec': dataset[0]['doc_vec']},
-                {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
-            ]))
-            self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
-            if exact:
-                self.assertEqual(len(res), 200)
-                self.assertEqual(len(res[res.qid=='0']), 100)
-                self.assertEqual(len(res[res.qid=='1']), 100)
-                self.assertEqual(res[(res.qid=='0')&((res['rank']==0))].iloc[0]['docno'], '0')
-                self.assertEqual(res[(res.qid=='1')&((res['rank']==0))].iloc[0]['docno'], '1')
-            else:
-                self.assertTrue(len(res) <= 200)
-                self.assertTrue(len(res[res.qid=='0']) <= 100)
-                self.assertTrue(len(res[res.qid=='1']) <= 100)
+        if test_smaller:
+            with self.subTest('smaller'):
+                destdir = tempfile.mkdtemp()
+                self.test_dirs.append(destdir)
+                index = FlexIndex(destdir+'/index')
+                dataset = self._generate_data(count=100)
+                index.index(dataset)
+                
+                retr = Retr(index)
+                res = retr(pd.DataFrame([
+                    {'qid': '0', 'query_vec': dataset[0]['doc_vec']},
+                    {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
+                ]))
+                self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
+                if exact:
+                    self.assertEqual(len(res), 200)
+                    self.assertEqual(len(res[res.qid=='0']), 100)
+                    self.assertEqual(len(res[res.qid=='1']), 100)
+                    self.assertEqual(res[(res.qid=='0')&((res['rank']==0))].iloc[0]['docno'], '0')
+                    self.assertEqual(res[(res.qid=='1')&((res['rank']==0))].iloc[0]['docno'], '1')
+                else:
+                    self.assertTrue(len(res) <= 200)
+                    self.assertTrue(len(res[res.qid=='0']) <= 100)
+                    self.assertTrue(len(res[res.qid=='1']) <= 100)
 
     @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_flat_retriever(self):
@@ -130,6 +131,11 @@ class TestFlexIndex(unittest.TestCase):
 
     def test_torch_retriever(self):
         self._test_retr(FlexIndex.torch_retriever)
+
+    def test_voyager_retriever(self):
+        # Voyager doesn't support requesting more results than are availabe in the index
+        # (the "smaller" case), so disable that test case here.
+        self._test_retr(FlexIndex.voyager_retriever, exact=False, test_smaller=False)
 
     def test_np_vec_loader(self):
         destdir = tempfile.mkdtemp()
