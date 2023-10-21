@@ -50,3 +50,11 @@ def scann_available():
 
 def assert_scann():
     assert scann_available(), "scann==1.0.0 required; install from wheel here: <https://github.com/google-research/google-research/blob/master/scann/docs/releases.md#scann-wheel-archive>"
+
+
+def voyager_available():
+    return package_available('voyager')
+
+
+def assert_voyager():
+    assert voyager_available(), "voyager required; install with `pip install voyager`"

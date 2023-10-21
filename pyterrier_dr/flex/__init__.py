@@ -6,3 +6,4 @@ from .faiss_retr import *
 from .scann_retr import *
 from .ladr import *
 from .gar import *
+from .voyager_retr import *
