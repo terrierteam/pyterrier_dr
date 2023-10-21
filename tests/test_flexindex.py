@@ -199,8 +199,15 @@ class TestFlexIndex(unittest.TestCase):
     def test_gar(self):
         self._test_reranker(FlexIndex.gar, expands=True)
 
-    # TODO: tests for:
-    #  - torch_vecs
+    def test_torch_vecs(self):
+        destdir = tempfile.mkdtemp()
+        self.test_dirs.append(destdir)
+        index = FlexIndex(destdir+'/index')
+        dataset = self._generate_data()
+        index.index(dataset)
+        
+        torch_vecs = index.torch_vecs()
+        self.assertEqual(torch_vecs.shape, (2000, 100))
 
     def setUp(self):
         import pyterrier as pt
