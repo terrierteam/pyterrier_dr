@@ -132,6 +132,7 @@ class TestFlexIndex(unittest.TestCase):
     def test_torch_retriever(self):
         self._test_retr(FlexIndex.torch_retriever)
 
+    @unittest.skipIf(not pyterrier_dr.util.voyager_available(), "voyager not available")
     def test_voyager_retriever(self):
         # Voyager doesn't support requesting more results than are availabe in the index
         # (the "smaller" case), so disable that test case here.
