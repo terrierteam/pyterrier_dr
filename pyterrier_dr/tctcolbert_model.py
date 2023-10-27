@@ -8,7 +8,7 @@ from . import BiEncoder
 
 class TctColBert(BiEncoder):
     def __init__(self, model_name='castorini/tct_colbert-msmarco', batch_size=32, text_field='text', verbose=False, device=None):
-        super().__init__(batch_size=32, text_field='text', verbose=False)
+        super().__init__(batch_size=32, text_field=text_field, verbose=False)
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         if device is None:
