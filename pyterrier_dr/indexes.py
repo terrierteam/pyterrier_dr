@@ -121,7 +121,7 @@ class NilIndex(pt.Indexer):
 
 
 class NumpyIndex(pt.Indexer):
-    def __init__(self, index_path=None, num_results=1000, score_fn='dot', overwrite=False, batch_size=4096, verbose=False, dtype='f4', drop_query_vec=True, inmem=False, cuda=False):
+    def __init__(self, index_path=None, num_results=1000, score_fn='dot', overwrite=False, batch_size=4096, verbose=False, dtype='f4', drop_query_vec=True, inmem=False, cuda=False, docids=False):
         self.index_path = Path(index_path)
         self.num_results = num_results
         self.score_fn = score_fn
@@ -134,6 +134,7 @@ class NumpyIndex(pt.Indexer):
         self._data = None
         self.inmem = inmem
         self.cuda = cuda
+        self.docids = docids
 
     def docnos_and_data(self):
         if self._data is None:
@@ -201,12 +202,17 @@ class NumpyIndex(pt.Indexer):
         unique_dids, unique_inverse = np.unique(result_dids, return_inverse=True)
         unique_docnos = docnos[unique_dids]
         result_docnos = unique_docnos[unique_inverse].reshape(num_q, -1)
-        for query, scores, docnos in zip(inp.itertuples(index=False), result_scores, result_docnos):
+        result_docids = unique_dids[unique_inverse].reshape(num_q, -1)
+        for query, scores, docnos, docids in zip(inp.itertuples(index=False), result_scores, result_docnos, result_docids):
             if self.drop_query_vec:
                 query = query._replace(query_vec=None)
-            for score, docno in zip(scores, docnos):
-                res.append((*query, docno, score))
-        res = pd.DataFrame(res, columns=list(query._fields) + ['docno', 'score'])
+            if self.docids:
+                for score, docno, docid in zip(scores, docnos, docids):
+                    res.append((*query, docno, score, docid))
+            else:
+                for score, docno in zip(scores, docnos):
+                    res.append((*query, docno, score))
+        res = pd.DataFrame(res, columns=list(query._fields) + ['docno', 'score'] + (['docid'] if self.docids else []))
         if self.drop_query_vec:
             res = res.drop(columns=['query_vec'])
         res = res[~res.score.isna()]
@@ -653,6 +659,7 @@ class TorchIndex(NumpyIndex):
                  batch_size=4096,
                  verbose=False,
                  dtype='f4',
+                 docids=False,
                  drop_query_vec=True,
                  half=False,
                  idx_mem=500000000):
@@ -665,6 +672,7 @@ class TorchIndex(NumpyIndex):
         self._docnos = None
         self._did_start = None
         self._cuda_slice = None
+        self.docids=docids
 
     def docnos_and_data(self):
         if self._meta is None:
@@ -729,13 +737,18 @@ class TorchIndex(NumpyIndex):
         unique_dids, unique_inverse = np.unique(result_dids, return_inverse=True)
         unique_docnos = self._docnos[unique_dids]
         result_docnos = unique_docnos[unique_inverse].reshape(query_vecs.shape[0], -1)
+        result_docids = unique_dids[unique_inverse].reshape(query_vecs.shape[0], -1)
         res = []
-        for query, scores, docnos in zip(inp.itertuples(index=False), result_scores, result_docnos):
+        for query, scores, docids, docnos in zip(inp.itertuples(index=False), result_scores, result_docids, result_docnos):
             if self.drop_query_vec:
                 query = query._replace(query_vec=None)
-            for score, docno in zip(scores, docnos):
-                res.append((*query, docno, score))
-        res = pd.DataFrame(res, columns=list(query._fields) + ['docno', 'score'])
+            if self.docids:
+                for score, docid, docno in zip(scores, docids, docnos):
+                    res.append((*query, docno, score, docid))
+            else:
+                for score, docno in zip(scores, docnos):
+                    res.append((*query, docno, score))
+        res = pd.DataFrame(res, columns=list(query._fields) + ['docno', 'score'] + (['docid'] if self.docids else []))
         if self.drop_query_vec:
             res = res.drop(columns=['query_vec'])
         res = res[~res.score.isna()]
