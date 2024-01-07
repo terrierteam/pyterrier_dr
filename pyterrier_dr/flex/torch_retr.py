@@ -38,7 +38,7 @@ class TorchRetriever(pt.Transformer):
         self.qbatch = qbatch
         self.index_select = None
         if index_select:
-            self.index_select = torch.tensor(index_select, dtype=torch.long, device=torch_vecs.device)
+            self.index_select = torch.tensor(index_select, dtype=torch.long, device=torch_vecs.device).flatten()
 
     def transform(self, inp):
         assert 'query_vec' in inp.columns
