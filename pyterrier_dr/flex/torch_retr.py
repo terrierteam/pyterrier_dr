@@ -54,11 +54,15 @@ class TorchRetriever(pt.Transformer):
         res_docids = []
         res_idxs = []
         res_ranks = []
+        if self.index_select is not None:
+            tv = self.torch_vecs[self.index_select].T
+        else:
+            tv = self.torch_vecs.T
         for start_idx in it:
             end_idx = start_idx + self.qbatch
             batch = query_vecs[start_idx:end_idx]
             if self.flex_index.sim_fn == SimFn.dot:
-                scores = batch @ self.torch_vecs[self.index_select].T
+                scores = batch @ tv
             else:
                 raise ValueError(f'{self.flex_index.sim_fn} not supported')
             if scores.shape[1] > self.num_results:
@@ -76,7 +80,7 @@ class TorchRetriever(pt.Transformer):
         res['docid'] = np.concatenate(res_docids)
         # the "docid" values are wrong when using index_select --- they actually refer
         # to the docid at the index in index_select. So this corrects for that.
-        if self.index_select:
+        if self.index_select is not None:
             res['docid'] = self.index_select.cpu()[res['docid']].numpy()
         res['docno'] = self.docnos.fwd[res['docid']]
         res['rank'] = np.concatenate(res_ranks)
