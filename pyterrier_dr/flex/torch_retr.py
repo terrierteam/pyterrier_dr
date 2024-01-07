@@ -30,12 +30,15 @@ class TorchScorer(NumpyScorer):
 
 
 class TorchRetriever(pt.Transformer):
-    def __init__(self, flex_index, torch_vecs, num_results=None, qbatch=64):
+    def __init__(self, flex_index, torch_vecs, num_results=None, qbatch=64, index_select=None):
         self.flex_index = flex_index
         self.torch_vecs = torch_vecs
         self.num_results = num_results or 1000
         self.docnos, meta = flex_index.payload(return_dvecs=False)
         self.qbatch = qbatch
+        self.index_select = None
+        if index_select:
+            self.index_select = torch.tensor(index_select, dtype=torch.long, device=torch_vecs.device)
 
     def transform(self, inp):
         assert 'query_vec' in inp.columns
@@ -55,7 +58,7 @@ class TorchRetriever(pt.Transformer):
             end_idx = start_idx + self.qbatch
             batch = query_vecs[start_idx:end_idx]
             if self.flex_index.sim_fn == SimFn.dot:
-                scores = batch @ self.torch_vecs.T
+                scores = batch @ self.torch_vecs[self.index_select].T
             else:
                 raise ValueError(f'{self.flex_index.sim_fn} not supported')
             if scores.shape[1] > self.num_results:
@@ -71,6 +74,10 @@ class TorchRetriever(pt.Transformer):
         res = {k: inp[k][res_idxs] for k in inp.columns if k not in ['docid', 'docno', 'rank', 'score']}
         res['score'] = np.concatenate(res_scores)
         res['docid'] = np.concatenate(res_docids)
+        # the "docid" values are wrong when using index_select --- they actually refer
+        # to the docid at the index in index_select. So this corrects for that.
+        if self.index_select:
+            res['docid'] = self.index_select.cpu()[res['docid']].numpy()
         res['docno'] = self.docnos.fwd[res['docid']]
         res['rank'] = np.concatenate(res_ranks)
         return pd.DataFrame(res)
@@ -94,6 +101,6 @@ def _torch_scorer(self, num_results=None, device=None, fp16=False):
 FlexIndex.torch_scorer = _torch_scorer
 
 
-def _torch_retriever(self, num_results=None, device=None, fp16=False, qbatch=64):
-    return TorchRetriever(self, self.torch_vecs(device=device, fp16=fp16), num_results=num_results, qbatch=qbatch)
+def _torch_retriever(self, num_results=None, device=None, fp16=False, qbatch=64, index_select=None):
+    return TorchRetriever(self, self.torch_vecs(device=device, fp16=fp16), num_results=num_results, qbatch=qbatch, index_select=index_select)
 FlexIndex.torch_retriever = _torch_retriever
