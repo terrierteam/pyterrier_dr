@@ -2,8 +2,10 @@
 
 This provides various Dense Retrieval functionality for [PyTerrier](https://github.com/terrier-org/pyterrier).
 
+The package supports both encoding using various dense retrieval models
+and indexing/retrival using state-of-the-art algorithms and implementations.
 
-## Installation
+## Getting Started
 
 This repostory can be installed using pip.
 
@@ -11,21 +13,8 @@ This repostory can be installed using pip.
 pip install --upgrade git+https://github.com/terrierteam/pyterrier_dr.git
 ```
 
-You'll also need to install FAISS.
-
-On Colab:
-
-    !pip install faiss-cpu 
-    
-On Anaconda:
-
-    # CPU-only version
-    $ conda install -c pytorch faiss-cpu
-
-    # GPU(+CPU) version
-    $ conda install -c pytorch faiss-gpu
-
-You can then import the package in Python after importing pyterrier:
+Note: Some indexing/retrieval methods require other (optional) packages to be
+installed. These are listed below.
 
 ```python
 import pyterrier as pt
@@ -35,7 +24,7 @@ import pyterrier_dr
 
 ## Built-in Models
 
-| Model | `.query_encoder()` | `.doc_encoder()` | `.scorer()` |
+| Model | `model.query_encoder()` | `model.doc_encoder()` | `model.scorer()` |
 |-------|:---------------:|:-------------:|:--------:|
 | [`TctColBert`](https://arxiv.org/abs/2010.11386) | ✅ | ✅ | ✅ |
 | [`TasB`](https://arxiv.org/abs/2104.06967) | ✅ | ✅ | ✅ |

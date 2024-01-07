@@ -10,6 +10,7 @@ import pyterrier as pt
 from pyterrier.model import add_ranks
 from npids import Lookup
 from enum import Enum
+from pyterrier_dr import Artefact
 from .. import SimFn
 from ..indexes import RankedLists
 import ir_datasets
@@ -23,7 +24,7 @@ class IndexingMode(Enum):
     # append???
 
 
-class FlexIndex(pt.Indexer):
+class FlexIndex(pt.Indexer, Artefact):
     def __init__(self, index_path, num_results=1000, sim_fn=SimFn.dot, indexing_mode=IndexingMode.create, verbose=True):
         self.index_path = Path(index_path)
         self.num_results = num_results
