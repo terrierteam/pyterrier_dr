@@ -44,7 +44,7 @@ class NumpyRetriever(pt.Transformer):
         result_docnos = docnos.fwd[result_dids.flatten()]
         cols = {
             'score': np.concatenate(result_scores),
-            'docno': np.concatenate(result_docnos),
+            'docno': result_docnos,
             'docid': np.concatenate(result_dids),
             'rank': np.concatenate([np.arange(len(scores)) for scores in result_scores]),
         }
