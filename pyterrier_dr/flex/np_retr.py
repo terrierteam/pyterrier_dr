@@ -111,8 +111,8 @@ class NumpyScorer(pt.Transformer):
         return res
 
 
-def _np_retriever(self, num_results=1000, batch_size=None):
-        return NumpyRetriever(self, num_results=num_results, batch_size=batch_size)
+def _np_retriever(self, num_results=1000, batch_size=None, mask=None):
+        return NumpyRetriever(self, num_results=num_results, batch_size=batch_size, mask=mask)
 FlexIndex.np_retriever = _np_retriever
 
 
