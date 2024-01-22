@@ -10,10 +10,11 @@ import ir_datasets
 logger = ir_datasets.log.easy()
 
 class NumpyRetriever(pt.Transformer):
-    def __init__(self, flex_index, num_results=1000, batch_size=None):
+    def __init__(self, flex_index, num_results=1000, batch_size=None, mask=None):
         self.flex_index = flex_index
         self.num_results = num_results
         self.batch_size = batch_size or 4096
+        self.mask = mask
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         inp = inp.reset_index(drop=True)
@@ -35,6 +36,8 @@ class NumpyRetriever(pt.Transformer):
             if self.flex_index.sim_fn == SimFn.cos:
                 doc_batch = doc_batch / np.linalg.norm(doc_batch, axis=0, keepdims=True)
             scores = query_vecs @ doc_batch
+            if self.mask is not None:
+                scores = self.mask[idx_start:idx_start+self.batch_size].reshape(1, -1) * scores
             dids = np.arange(idx_start, idx_start+doc_batch.shape[1], dtype='i4').reshape(1, -1).repeat(num_q, axis=0)
             ranked_lists.update(scores, dids)
         result_scores, result_dids = ranked_lists.results()
