@@ -41,7 +41,7 @@ class NumpyRetriever(pt.Transformer):
             dids = np.arange(idx_start, idx_start+doc_batch.shape[1], dtype='i4').reshape(1, -1).repeat(num_q, axis=0)
             ranked_lists.update(scores, dids)
         result_scores, result_dids = ranked_lists.results()
-        result_docnos = docnos.fwd[result_dids]
+        result_docnos = docnos.fwd[result_dids.flatten()]
         cols = {
             'score': np.concatenate(result_scores),
             'docno': np.concatenate(result_docnos),
