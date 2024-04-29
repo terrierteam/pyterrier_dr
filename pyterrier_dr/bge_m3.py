@@ -17,8 +17,7 @@ class BGEM3Factory(BiEncoder):
         self.device = torch.device(device)
 
         from FlagEmbedding import BGEM3FlagModel
-        model = BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16, device=self.device)
-        self.model = model
+        self.model = BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16, device=self.device)
 
 
     def __repr__(self):
@@ -26,15 +25,15 @@ class BGEM3Factory(BiEncoder):
     
     def dense_encoder(self, verbose=None, batch_size=None) -> pt.Transformer:
         '''
-        Encoding using single-vector Dense Embeddings
+        Encoding using Single-Vector Dense Embeddings
         '''
         return BGEM3DenseEncoder(self, verbose=verbose, batch_size=batch_size)
     
-    def sparse_encoder(self, verbose=None, batch_size=None) -> pt.Transformer:
+    def sparse_encoder(self, verbose=None, batch_size=None, token_mode=None) -> pt.Transformer:
         '''
-        Encoding using Sparse Embedding (Lexical Weight)
+        Encoding using Sparse Embedding (Lexical Weights)
         '''
-        return BGEM3SparseEncoder(self, verbose=verbose, batch_size=batch_size)
+        return BGEM3SparseEncoder(self, verbose=verbose, batch_size=batch_size, token_mode=token_mode)
     
     def multivec_encoder(self, verbose=None, batch_size=None) -> pt.Transformer:
         '''
@@ -72,15 +71,20 @@ class BGEM3DenseEncoder(pt.Transformer):
         return f'{repr(self.bge_factory)}.dense_encoder()'
 
 class BGEM3SparseEncoder(pt.Transformer):
-    def __init__(self, bge_factory: BGEM3Factory, verbose=None, batch_size=None, max_length=None):
+    def __init__(self, bge_factory: BGEM3Factory, verbose=None, batch_size=None, max_length=None, token_mode=None):
         self.bge_factory = bge_factory
         self.verbose = verbose if verbose is not None else bge_factory.verbose
         self.batch_size = batch_size if batch_size is not None else bge_factory.batch_size
         self.max_length = max_length if max_length is not None else bge_factory.max_length
+        self.token_mode = token_mode # if set to True will convert token ids to tokens text
 
     def encode(self, texts) -> np.array:
-        return self.bge_factory.model.encode(list(texts), batch_size=self.batch_size, max_length=self.max_length,
+        lexical_weights = self.bge_factory.model.encode(list(texts), batch_size=self.batch_size, max_length=self.max_length,
                              return_dense=False, return_sparse=True, return_colbert_vecs=False)['lexical_weights']
+        if self.token_mode:
+            return self.bge_factory.model.convert_id_to_token(lexical_weights)
+        else:
+            return lexical_weights
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         if 'query' in inp.columns:
