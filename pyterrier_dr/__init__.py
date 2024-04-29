@@ -6,4 +6,4 @@ from .hgf_models import HgfBiEncoder, TasB, RetroMAE
 from .sbert_models import SBertBiEncoder, Ance, Query2Query, GTR
 from .tctcolbert_model import TctColBert
 from .electra import ElectraScorer
-from .bge_m3 import BGEM3Encoder
+from .bge_m3 import BGEM3Factory
