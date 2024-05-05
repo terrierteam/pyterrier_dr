@@ -25,4 +25,9 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires=requirements,
     python_requires='>=3.6',
+    entry_points={
+        'pyterrier.artifact': [
+            'dense_index.flex = pyterrier_dr:FlexIndex',
+        ],
+    },
 )
