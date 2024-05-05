@@ -113,7 +113,7 @@ idx_pipeline(pd.DataFrame([
 
 ## FLEX Index
 
-A FLexible Embedding eXecution (FLEX) Index is a dense index format that allows for a variety of retrieval implementations (NumPy,
+A FLexible EXecution (FLEX) Index is a dense index format that allows for a variety of retrieval implementations (NumPy,
 FAISS, etc.) and algorithms (exhaustive, HNSW, etc.) to be tested. In many cases, the same vector storage can be used across
 implementations and algorithms, saving considerably on disk space.
 
