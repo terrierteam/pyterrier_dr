@@ -111,29 +111,30 @@ idx_pipeline(pd.DataFrame([
 #  0%p1  published in 1943 and the last in 1961. Set in...  [-0.4286567, 0.2093819, 0.37688383, -0.2590821...
 ```
 
-## Indexing
+## FLEX Index
 
-`NumpyIndex` is a dense indexer that simply stores the results as a numpy blob that can be traversed to score documents.
-It does not require the full index to be in memory, which is beneficial for large collections.
+A FLexible Embedding eXecution (FLEX) Index is a dense index format that allows for a variety of retrieval implementations (NumPy,
+FAISS, etc.) and algorithms (exhaustive, HNSW, etc.) to be tested. In many cases, the same vector storage can be used across
+implementations and algorithms, saving considerably on disk space.
 
 You can use it as part of an indexing pipeline that includes a model to encode documents:
 
 ```python
-index = pyterrier_dr.NumpyIndex('myindex.np')
+index = pyterrier_dr.FlexIndex('myindex.flex')
 idx_pipeline = model >> index
 idx_pipeline.index([
   {'docno': '0', 'text': 'The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children\'s mystery books written by Enid Blyton.'},
   {'docno': '1', 'text': 'City is a 1952 science fiction fix-up novel by American writer Clifford D. Simak.'},
 ])
-# Creates an index in myindex.np:
-# $ ls myindex.np/
-# docnos.npy  index.npy  meta.json
+# Creates an index in myindex.flex:
+# $ ls myindex.flex/
+# docnos.npids  pt_meta.json  vecs.f4
 ```
 
 Normally you'll run this over a standard corpus. You can use those provided by [ir_datasets](https://ir-datasets.com/):
 
 ```python
-index = pyterrier_dr.NumpyIndex('antique.np')
+index = pyterrier_dr.FlexIndex('antique.flex')
 idx_pipeline = model >> index
 idx_pipeline.index(pt.get_dataset('irds:antique').get_corpus_iter())
 ```
@@ -144,7 +145,7 @@ Once built, you can use an index object in a retrieval pipeline too. Be sure to 
 encode the query text first!
 
 ```python
-retr_pipeline = model >> index
+retr_pipeline = model >> index.np_retriever()
 retr_pipeline.search('Hello Terrier')
 # qid          query       docno      score  rank
 #   1  Hello Terrier   3771188_6  68.791359     0
@@ -153,23 +154,19 @@ retr_pipeline.search('Hello Terrier')
 # ...
 ```
 
-`TorchIndex` can be used in place of `NumpyIndex` for retrieval. This will use a CUDA-capable GPU to perform inference,
-which can be much faster. `TorchIndex` uses the same index files as `NumpyIndex`, so there's no need to re-index.
+The above performs an exhaustive (exact) search using numpy. You
+can also use other retrievers from a `FlexIndex`:
 
 ```python
-retr_pipeline = model >> pyterrier_dr.TorchIndex('antique.np')
+retr_pipeline = model >> index.torch_retriever()
 retr_pipeline.search('Hello Terrier')
 # qid          query       docno      score  rank
 #   1  Hello Terrier    723025_2  68.774750     0
 #   1  Hello Terrier   3771188_6  68.774750     1
 #   1  Hello Terrier   1969155_1  68.340683     2
+retr_pipeline = model >> index.faiss_hnsw_retriever()
 # ...
 ```
-
-Note that there can be slight differences between the scores produced by `NumpyIndex` and `TorchIndex` due to differences
-in the order of floating point operations by numpy and torch.
-
-This library also supports FAISS indices. Documentation coming soon.
 
 ## References
 
