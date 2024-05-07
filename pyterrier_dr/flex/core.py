@@ -15,6 +15,13 @@ from ..indexes import RankedLists
 import ir_datasets
 import torch
 
+try:
+    from pyterrier import Artifact
+except ImportError:
+    class Artifact:
+        def __init__(self, path):
+            self.path = path
+
 logger = ir_datasets.log.easy()
 
 class IndexingMode(Enum):
@@ -23,8 +30,9 @@ class IndexingMode(Enum):
     # append???
 
 
-class FlexIndex(pt.Indexer):
+class FlexIndex(Artifact, pt.Indexer):
     def __init__(self, index_path, num_results=1000, sim_fn=SimFn.dot, indexing_mode=IndexingMode.create, verbose=True):
+        super().__init__(index_path)
         self.index_path = Path(index_path)
         self.num_results = num_results
         self.sim_fn = SimFn(sim_fn)
