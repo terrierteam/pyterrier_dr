@@ -14,13 +14,7 @@ from .. import SimFn
 from ..indexes import RankedLists
 import ir_datasets
 import torch
-
-try:
-    from pyterrier import Artifact
-except ImportError:
-    class Artifact:
-        def __init__(self, path):
-            self.path = path
+from pyterrier_alpha import Artifact
 
 logger = ir_datasets.log.easy()
 
