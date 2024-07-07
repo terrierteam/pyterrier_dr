@@ -12,7 +12,10 @@ def _sbert_encode(self, texts, batch_size=None):
     if isinstance(texts, tqdm):
         texts.disable = True
         show_progress = True
-    return self.model.encode(list(texts), batch_size=batch_size or self.batch_size, show_progress_bar=show_progress)
+    texts = list(texts)
+    if len(texts) == 0:
+        return np.empty(shape=(0, 0))
+    return self.model.encode(texts, batch_size=batch_size or self.batch_size, show_progress_bar=show_progress)
 
 
 class SBertBiEncoder(BiEncoder):
