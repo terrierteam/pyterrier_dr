@@ -26,7 +26,7 @@ setuptools.setup(
     name="pyterrier-dr",
     version=get_version('pyterrier_dr/__init__.py'),
     author="Sean MacAvaney",
-    author_email='sean.macavaney{at}glasgow.ac.uk',
+    author_email='sean.macavaney@glasgow.ac.uk',
     description="PyTerrier components for dense retrieval",
     long_description=long_description,
     url='https://github.com/terrierteam/pyterrier_dr',
