@@ -57,30 +57,29 @@ Once you have a bi-encoder transformer, you can use it encode queries, encode do
 on the input.
 
 ```python
-import pandas as pd
 # Compute query vectors
-model(pd.DataFrame([
+model([
   {'qid': '0', 'query': 'Hello Terrier'},
   {'qid': '1', 'query': 'find me some documents'},
-]))
+])
 # qid                   query                                          query_vec
 #   0           Hello Terrier  [-0.044920705, 0.08312888, 0.26291823, -0.0690...
 #   1  find me some documents  [0.09036196, 0.19262837, 0.13174239, 0.0649483...
 
 # Compute document vectors
-model(pd.DataFrame([
+model([
   {'docno': '0', 'text': 'The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children\'s mystery books written by Enid Blyton.'},
   {'docno': '1', 'text': 'City is a 1952 science fiction fix-up novel by American writer Clifford D. Simak.'},
-]))
+])
 # docno                                               text                                            doc_vec
 #     0  The Five Find-Outers and Dog, also known as Th...  [-0.13535342, 0.16328977, 0.16885889, -0.08592...
 #     1  City is a 1952 science fiction fix-up novel by...  [-0.06430543, 0.1267311, 0.13813286, 0.0954021...
 
 # Compute on-they-fly scores
-model(pd.DataFrame([
+model([
   {'qid': '0', 'query': 'Hello Terrier', 'docno': '0', 'text': 'The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children\'s mystery books written by Enid Blyton.'},
   {'qid': '0', 'query': 'Hello Terrier', 'docno': '1', 'text': 'City is a 1952 science fiction fix-up novel by American writer Clifford D. Simak.'},
-]))
+])
 # qid          query docno                                               text      score  rank
 #   0  Hello Terrier     0  The Five Find-Outers and Dog, also known as Th...  66.522240     0
 #   0  Hello Terrier     1  City is a 1952 science fiction fix-up novel by...  64.964241     1
@@ -102,9 +101,9 @@ retr_pipeline.search('Hello Terrier')
 
 # Indexing pipeline: split long documents into passages of length 50 (stride 25)
 idx_pipeline = pt.text.sliding('text', prepend_title=False, length=50, stride=25) >> model
-idx_pipeline(pd.DataFrame([
+idx_pipeline([
   {'docno': '0', 'text': "The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children's mystery books written by Enid Blyton. The first was published in 1943 and the last in 1961. Set in the fictitious village of Peterswood based on Bourne End, close to Marlow, Buckinghamshire, the children Fatty (Frederick Trotteville), who is the leader of the team, Larry (Laurence Daykin), Pip (Philip Hilton), Daisy (Margaret Daykin), Bets (Elizabeth Hilton) and Buster, Fatty's dog, encounter a mystery almost every school holiday, always solving the puzzle before Mr Goon, the unpleasant village policeman, much to his annoyance."},
-]))
+])
 # docno                                               text                                            doc_vec
 #  0%p0  The Five Find-Outers and Dog, also known as Th...  [-0.2607395, 0.21450453, 0.25845605, -0.190567...
 #  0%p1  published in 1943 and the last in 1961. Set in...  [-0.4286567, 0.2093819, 0.37688383, -0.2590821...
