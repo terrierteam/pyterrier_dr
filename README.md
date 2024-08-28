@@ -25,11 +25,10 @@ On Anaconda:
     # GPU(+CPU) version
     $ conda install -c pytorch faiss-gpu
 
-You can then import the package in Python after importing pyterrier:
+You can then import the package and PyTerrier in Python:
 
 ```python
 import pyterrier as pt
-pt.init()
 import pyterrier_dr
 ```
 
