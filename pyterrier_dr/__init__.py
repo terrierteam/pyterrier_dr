@@ -1,3 +1,5 @@
+__version__ = '0.1.0'
+
 from .util import SimFn, infer_device
 from .indexes import DocnoFile, NilIndex, NumpyIndex, RankedLists, FaissFlat, FaissHnsw, MemIndex, TorchIndex
 from .flex import FlexIndex

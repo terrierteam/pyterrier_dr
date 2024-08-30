@@ -25,11 +25,10 @@ On Anaconda:
     # GPU(+CPU) version
     $ conda install -c pytorch faiss-gpu
 
-You can then import the package in Python after importing pyterrier:
+You can then import the package and PyTerrier in Python:
 
 ```python
 import pyterrier as pt
-pt.init()
 import pyterrier_dr
 ```
 
@@ -58,30 +57,29 @@ Once you have a bi-encoder transformer, you can use it encode queries, encode do
 on the input.
 
 ```python
-import pandas as pd
 # Compute query vectors
-model(pd.DataFrame([
+model([
   {'qid': '0', 'query': 'Hello Terrier'},
   {'qid': '1', 'query': 'find me some documents'},
-]))
+])
 # qid                   query                                          query_vec
 #   0           Hello Terrier  [-0.044920705, 0.08312888, 0.26291823, -0.0690...
 #   1  find me some documents  [0.09036196, 0.19262837, 0.13174239, 0.0649483...
 
 # Compute document vectors
-model(pd.DataFrame([
+model([
   {'docno': '0', 'text': 'The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children\'s mystery books written by Enid Blyton.'},
   {'docno': '1', 'text': 'City is a 1952 science fiction fix-up novel by American writer Clifford D. Simak.'},
-]))
+])
 # docno                                               text                                            doc_vec
 #     0  The Five Find-Outers and Dog, also known as Th...  [-0.13535342, 0.16328977, 0.16885889, -0.08592...
 #     1  City is a 1952 science fiction fix-up novel by...  [-0.06430543, 0.1267311, 0.13813286, 0.0954021...
 
 # Compute on-they-fly scores
-model(pd.DataFrame([
+model([
   {'qid': '0', 'query': 'Hello Terrier', 'docno': '0', 'text': 'The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children\'s mystery books written by Enid Blyton.'},
   {'qid': '0', 'query': 'Hello Terrier', 'docno': '1', 'text': 'City is a 1952 science fiction fix-up novel by American writer Clifford D. Simak.'},
-]))
+])
 # qid          query docno                                               text      score  rank
 #   0  Hello Terrier     0  The Five Find-Outers and Dog, also known as Th...  66.522240     0
 #   0  Hello Terrier     1  City is a 1952 science fiction fix-up novel by...  64.964241     1
@@ -103,37 +101,38 @@ retr_pipeline.search('Hello Terrier')
 
 # Indexing pipeline: split long documents into passages of length 50 (stride 25)
 idx_pipeline = pt.text.sliding('text', prepend_title=False, length=50, stride=25) >> model
-idx_pipeline(pd.DataFrame([
+idx_pipeline([
   {'docno': '0', 'text': "The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children's mystery books written by Enid Blyton. The first was published in 1943 and the last in 1961. Set in the fictitious village of Peterswood based on Bourne End, close to Marlow, Buckinghamshire, the children Fatty (Frederick Trotteville), who is the leader of the team, Larry (Laurence Daykin), Pip (Philip Hilton), Daisy (Margaret Daykin), Bets (Elizabeth Hilton) and Buster, Fatty's dog, encounter a mystery almost every school holiday, always solving the puzzle before Mr Goon, the unpleasant village policeman, much to his annoyance."},
-]))
+])
 # docno                                               text                                            doc_vec
 #  0%p0  The Five Find-Outers and Dog, also known as Th...  [-0.2607395, 0.21450453, 0.25845605, -0.190567...
 #  0%p1  published in 1943 and the last in 1961. Set in...  [-0.4286567, 0.2093819, 0.37688383, -0.2590821...
 ```
 
-## Indexing
+## FLEX Index
 
-`NumpyIndex` is a dense indexer that simply stores the results as a numpy blob that can be traversed to score documents.
-It does not require the full index to be in memory, which is beneficial for large collections.
+A FLexible EXecution (FLEX) Index is a dense index format that allows for a variety of retrieval implementations (NumPy,
+FAISS, etc.) and algorithms (exhaustive, HNSW, etc.) to be tested. In many cases, the same vector storage can be used across
+implementations and algorithms, saving considerably on disk space.
 
 You can use it as part of an indexing pipeline that includes a model to encode documents:
 
 ```python
-index = pyterrier_dr.NumpyIndex('myindex.np')
+index = pyterrier_dr.FlexIndex('myindex.flex')
 idx_pipeline = model >> index
 idx_pipeline.index([
   {'docno': '0', 'text': 'The Five Find-Outers and Dog, also known as The Five Find-Outers, is a series of children\'s mystery books written by Enid Blyton.'},
   {'docno': '1', 'text': 'City is a 1952 science fiction fix-up novel by American writer Clifford D. Simak.'},
 ])
-# Creates an index in myindex.np:
-# $ ls myindex.np/
-# docnos.npy  index.npy  meta.json
+# Creates an index in myindex.flex:
+# $ ls myindex.flex/
+# docnos.npids  pt_meta.json  vecs.f4
 ```
 
 Normally you'll run this over a standard corpus. You can use those provided by [ir_datasets](https://ir-datasets.com/):
 
 ```python
-index = pyterrier_dr.NumpyIndex('antique.np')
+index = pyterrier_dr.FlexIndex('antique.flex')
 idx_pipeline = model >> index
 idx_pipeline.index(pt.get_dataset('irds:antique').get_corpus_iter())
 ```
@@ -144,7 +143,7 @@ Once built, you can use an index object in a retrieval pipeline too. Be sure to 
 encode the query text first!
 
 ```python
-retr_pipeline = model >> index
+retr_pipeline = model >> index.np_retriever()
 retr_pipeline.search('Hello Terrier')
 # qid          query       docno      score  rank
 #   1  Hello Terrier   3771188_6  68.791359     0
@@ -153,23 +152,19 @@ retr_pipeline.search('Hello Terrier')
 # ...
 ```
 
-`TorchIndex` can be used in place of `NumpyIndex` for retrieval. This will use a CUDA-capable GPU to perform inference,
-which can be much faster. `TorchIndex` uses the same index files as `NumpyIndex`, so there's no need to re-index.
+The above performs an exhaustive (exact) search using numpy. You
+can also use other retrievers from a `FlexIndex`:
 
 ```python
-retr_pipeline = model >> pyterrier_dr.TorchIndex('antique.np')
+retr_pipeline = model >> index.torch_retriever()
 retr_pipeline.search('Hello Terrier')
 # qid          query       docno      score  rank
 #   1  Hello Terrier    723025_2  68.774750     0
 #   1  Hello Terrier   3771188_6  68.774750     1
 #   1  Hello Terrier   1969155_1  68.340683     2
+retr_pipeline = model >> index.faiss_hnsw_retriever()
 # ...
 ```
-
-Note that there can be slight differences between the scores produced by `NumpyIndex` and `TorchIndex` due to differences
-in the order of floating point operations by numpy and torch.
-
-This library also supports FAISS indices. Documentation coming soon.
 
 ## References
 

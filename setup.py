@@ -14,15 +14,29 @@ with open('requirements.txt', 'rt') as f:
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+def get_version(rel_path):
+    for line in open(rel_path):
+        if line.startswith('__version__'):
+            delim = '"' if '"' in line else "'"
+            return line.split(delim)[1]
+    else:
+        raise RuntimeError("Unable to find version string.")
+
 setuptools.setup(
     name="pyterrier-dr",
-    version="0.0.1",
+    version=get_version('pyterrier_dr/__init__.py'),
     author="Sean MacAvaney",
-    author_email='sean.macavaney{at}glasgow.ac.uk',
+    author_email='sean.macavaney@glasgow.ac.uk',
     description="PyTerrier components for dense retrieval",
     long_description=long_description,
+    url='https://github.com/terrierteam/pyterrier_dr',
     long_description_content_type="text/markdown",
     packages=setuptools.find_packages(),
     install_requires=requirements,
     python_requires='>=3.6',
+    entry_points={
+        'pyterrier.artifact': [
+            'dense_index.flex = pyterrier_dr:FlexIndex',
+        ],
+    },
 )
