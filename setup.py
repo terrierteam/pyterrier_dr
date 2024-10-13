@@ -37,6 +37,7 @@ setuptools.setup(
     entry_points={
         'pyterrier.artifact': [
             'dense_index.flex = pyterrier_dr:FlexIndex',
+            'cde_cache.np_pickle = pyterrier_dr:CDECache',
         ],
     },
 )
