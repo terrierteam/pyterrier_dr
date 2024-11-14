@@ -1,4 +1,4 @@
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 from .util import SimFn, infer_device
 from .indexes import DocnoFile, NilIndex, NumpyIndex, RankedLists, FaissFlat, FaissHnsw, MemIndex, TorchIndex
@@ -9,3 +9,4 @@ from .sbert_models import SBertBiEncoder, Ance, Query2Query, GTR
 from .tctcolbert_model import TctColBert
 from .electra import ElectraScorer
 from .bge_m3 import BGEM3Factory
+from .cde import CDE, CDECache
