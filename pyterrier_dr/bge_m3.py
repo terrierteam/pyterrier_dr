@@ -8,7 +8,7 @@ import torch
 from .biencoder import BiEncoder
 
 
-class BGEM3Factory(BiEncoder):
+class BGEM3(BiEncoder):
     def __init__(self, model_name='BAAI/bge-m3', batch_size=32, max_length=8192, text_field='text', verbose=False, device=None, use_fp16=False):
         super().__init__(batch_size, text_field, verbose)
         self.model_name = model_name
@@ -22,7 +22,7 @@ class BGEM3Factory(BiEncoder):
 
 
     def __repr__(self):
-        return f'BGEM3Factory({repr(self.model_name)})'
+        return f'BGEM3({repr(self.model_name)})'
     
     def encoder(self, verbose=None, batch_size=None, max_length=None) -> pt.Transformer:
         '''
@@ -31,7 +31,7 @@ class BGEM3Factory(BiEncoder):
         return BGEM3Encoder(self, verbose=verbose, batch_size=batch_size, max_length=max_length)
 
 class BGEM3Encoder(pt.Transformer):
-    def __init__(self, bge_factory: BGEM3Factory, verbose=None, batch_size=None, max_length=None):
+    def __init__(self, bge_factory: BGEM3, verbose=None, batch_size=None, max_length=None):
         self.bge_factory = bge_factory
         self.verbose = verbose if verbose is not None else bge_factory.verbose
         self.batch_size = batch_size if batch_size is not None else bge_factory.batch_size
