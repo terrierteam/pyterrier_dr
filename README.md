@@ -40,7 +40,8 @@ import pyterrier_dr
 | [`TasB`](https://arxiv.org/abs/2104.06967) | ✅ | ✅ | ✅ |
 | [`Ance`](https://arxiv.org/abs/2007.00808) | ✅ | ✅ | ✅ |
 | [`Query2Query`](https://neeva.com/blog/state-of-the-art-query2query-similarity) | ✅ | | |
-| [`BGE-M3`](https://arxiv.org/abs/2402.03216) | ✅ | ✅ ||
+| [`BGE-M3`](https://arxiv.org/abs/2402.03216) | ✅ | ✅ | ✅|
+
 ## Inference
 
 Bi-encoder models are represented as PyTerrier transformers. For instance,
@@ -165,19 +166,31 @@ retr_pipeline.search('Hello Terrier')
 retr_pipeline = model >> index.faiss_hnsw_retriever()
 # ...
 ```
+
 ## BGE-M3 Encoder
 
-`pyterrier_dr` also supports using BGE-M3 for indexing and retrieval. 
+`pyterrier_dr` also supports using BGE-M3 for indexing and retrieval with the following encoders:
+  
+  1. `query_encoder()`: Encodes queries into single-vector representations only.
+  2. `doc_encoder()`: Encodes documents into single-vector representations only.
+  3. `query_multi_encoder()`: Allows user to encode queries in dense, sparse or multi-vector representations.
+  4. `doc_multi_encoder()`: Allows user to encode documents in dense, sparse or multi-vector representations.
 
-The encoder, by default, returns all three BGE-M3 embedding modes: 
-1. Dense retrieval (Single-Vector): This is used when running indexing and retrieval in `pyterrier_dr`.
-2.  Multi-Vector Retrieval: These are stored in the `query_multivecs` and `doc_multivecs` columns of the PyTerrier Transformer.
-3.  Lexical (Sparse) Retrieval: These are stored in the `query_sparse` and `doc_sparse` columns of the PyTerrier Transformer.
+What encodings are returned by both `query_multi_encoder()` and `doc_multi_encoder()` can be controlled by the `return_dense`, `return_sparse` and `return_colbert_vecs` parameters. By default, all three are set to `True`.
+
+### Dependencies
+
+The BGE-M3 Encoder requires the [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) library. You can install it using pip:
+
+```python
+  pip install -U FlagEmbedding
+```
 
 ### Indexing
+
 ```python
-factory = BGEM3Factory(batch_size=32, max_length=1024, verbose=True)
-encoder = factory.encoder()
+factory = BGEM3(batch_size=32, max_length=1024, verbose=True)
+encoder = factory.doc_encoder()
 
 index = FlexIndex(f"mmarco/v2/fr_bgem3", verbose=True)
 indexing_pipeline = encoder >> index
@@ -186,9 +199,10 @@ indexing_pipeline.index(pt.get_dataset(f"irds:mmarco/v2/fr").get_corpus_iter())
 ```
 
 ### Retrieval
+
 ```python
-    factory = BGEM3Factory(batch_size=32, max_length=1024)
-    encoder = factory.encoder()
+    factory = BGEM3(batch_size=32, max_length=1024)
+    encoder = factory.doc_encoder()
 
     index = FlexIndex(f"mmarco/v2/fr_bgem3", verbose=True)
 
