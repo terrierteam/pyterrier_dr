@@ -59,7 +59,7 @@ class BGEM3QueryEncoder(pt.Transformer):
         it = inp['query'].values
         it, inv = np.unique(it, return_inverse=True)
         if self.verbose:
-            it = pt.tqdm(it, desc='Encoding Single Vector Embeddings', unit='query')
+            it = pt.tqdm(it, desc='Encoding Queries', unit='query')
         bgem3_results = self.encode(it)
 
         if self.dense:
@@ -98,7 +98,7 @@ class BGEM3DocEncoder(pt.Transformer):
         assert all(c in inp.columns for c in [self.bge_factory.text_field])
         it = inp[self.bge_factory.text_field]
         if self.verbose:
-            it = pt.tqdm(it, desc='Encoding Single Vector Embeddings', unit='doc')
+            it = pt.tqdm(it, desc='Encoding Documents', unit='doc')
         bgem3_results = self.encode(it)
 
         if self.dense:
