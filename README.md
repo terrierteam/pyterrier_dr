@@ -2,28 +2,43 @@
 
 This provides various Dense Retrieval functionality for [PyTerrier](https://github.com/terrier-org/pyterrier).
 
-
 ## Installation
 
 This repository can be installed using pip.
+  
+```bash
+pip install pyterrier-dr
+```
+
+If you want the latest version of `pyterrier_dr`, you can install direct from the Github repo:
 
 ```bash
 pip install --upgrade git+https://github.com/terrierteam/pyterrier_dr.git
 ```
 
+if you want to use the BGE-M3 encoder with `pyterrier_dr`, you can install the package with the `bgem3` dependency:
+
+```bash
+pip install pyterrier-dr[bgem3]
+```
+
+---
 You'll also need to install FAISS.
 
 On Colab:
 
-    !pip install faiss-cpu 
-    
+```bash
+!pip install faiss-cpu 
+```
+
 On Anaconda:
 
-    # CPU-only version
-    $ conda install -c pytorch faiss-cpu
-
-    # GPU(+CPU) version
-    $ conda install -c pytorch faiss-gpu
+```bash
+# CPU-only version
+conda install -c pytorch faiss-cpu
+# GPU(+CPU) version
+conda install -c pytorch faiss-gpu
+```
 
 You can then import the package and PyTerrier in Python:
 
@@ -180,10 +195,10 @@ What encodings are returned by both `query_multi_encoder()` and `doc_multi_encod
 
 ### Dependencies
 
-The BGE-M3 Encoder requires the [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) library. You can install it using pip:
+The BGE-M3 Encoder requires the [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) library. You can install it using pip or install it as part of the `bgem3` dependency of `pyterrier_dr` (see Installation section):
 
-```python
-  pip install -U FlagEmbedding
+```bash
+pip install -U FlagEmbedding
 ```
 
 ### Indexing
@@ -202,7 +217,7 @@ indexing_pipeline.index(pt.get_dataset(f"irds:mmarco/v2/fr").get_corpus_iter())
 
 ```python
     factory = BGEM3(batch_size=32, max_length=1024)
-    encoder = factory.doc_encoder()
+    encoder = factory.query_encoder()
 
     index = FlexIndex(f"mmarco/v2/fr_bgem3", verbose=True)
 
