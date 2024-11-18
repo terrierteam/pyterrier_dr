@@ -62,6 +62,17 @@ class BGEM3QueryEncoder(pt.Transformer):
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         assert all(c in inp.columns for c in ['query'])
+        
+        # check if inp is empty
+        if len(inp) == 0:
+            if self.dense:
+                inp = inp.assign(query_vec=[])
+            if self.sparse:
+                inp = inp.assign(query_toks=[])
+            if self.multivecs:
+                inp = inp.assign(query_embs_toks=[])
+            return inp
+
         it = inp['query'].values
         it, inv = np.unique(it, return_inverse=True)
         if self.verbose:
@@ -73,11 +84,11 @@ class BGEM3QueryEncoder(pt.Transformer):
             inp = inp.assign(query_vec=query_vec)
         if self.sparse:
             # for sparse convert ids to the actual tokens
-            query_toks = {self.bge_factory.model.convert_id_to_token(bgem3_results['lexical_weights'][i]) for i in inv}
+            query_toks = self.bge_factory.model.convert_id_to_token(bgem3_results['lexical_weights'])
             inp = inp.assign(query_toks=query_toks)
         if self.multivecs:
-            query_multivecs = [bgem3_results['colbert_vecs'][i] for i in inv]
-            inp = inp.assign(query_multivecs=query_multivecs)
+            query_embs_toks = [bgem3_results['colbert_vecs'][i] for i in inv]
+            inp = inp.assign(query_embs_toks=query_embs_toks)
 
         return inp
     
@@ -102,6 +113,16 @@ class BGEM3DocEncoder(pt.Transformer):
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         # check if the input dataframe contains the field(s) specified in the text_field
         assert all(c in inp.columns for c in [self.bge_factory.text_field])
+        # check if inp is empty
+        if len(inp) == 0:
+            if self.dense:
+                inp = inp.assign(doc_vec=[])
+            if self.sparse:
+                inp = inp.assign(toks=[])
+            if self.multivecs:
+                inp = inp.assign(doc_embs_toks=[])
+            return inp
+
         it = inp[self.bge_factory.text_field]
         if self.verbose:
             it = pt.tqdm(it, desc='Encoding Documents', unit='doc')
@@ -113,11 +134,11 @@ class BGEM3DocEncoder(pt.Transformer):
         if self.sparse:
             toks = bgem3_results['lexical_weights']
             # for sparse convert ids to the actual tokens
-            toks = {self.bge_factory.model.convert_id_to_token(doc) for doc in list(toks)}
+            toks = self.bge_factory.model.convert_id_to_token(toks)
             inp = inp.assign(toks=toks)
         if self.multivecs:
-            doc_multivecs = bgem3_results['colbert_vecs']
-            inp = inp.assign(doc_multivecs=list(doc_multivecs))
+            doc_embs_toks = bgem3_results['colbert_vecs']
+            inp = inp.assign(doc_embs_toks=list(doc_embs_toks))
 
         return inp
 
