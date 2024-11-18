@@ -1,11 +1,9 @@
-from pyterrier.transformer import Transformer
 from tqdm import tqdm
 import pyterrier as pt
 import pandas as pd
 import numpy as np
 import torch
 from .biencoder import BiEncoder
-
 
 class BGEM3(BiEncoder):
     def __init__(self, model_name='BAAI/bge-m3', batch_size=32, max_length=8192, text_field='text', verbose=False, device=None, use_fp16=False):
@@ -27,6 +25,14 @@ class BGEM3(BiEncoder):
     def __repr__(self):
         return f'BGEM3({repr(self.model_name)})'
     
+    def encode_queries(self, texts, batch_size=None):
+        return self.model.encode(list(texts), batch_size=batch_size, max_length=self.max_length,
+                                  return_dense=True, return_sparse=False, return_colbert_vecs=False)['dense_vecs']
+
+    def encode_docs(self, texts, batch_size=None):
+        return self.model.encode(list(texts), batch_size=batch_size, max_length=self.max_length,
+                                    return_dense=True, return_sparse=False, return_colbert_vecs=False)['dense_vecs']
+
     # Only does single_vec encoding
     def query_encoder(self, verbose=None, batch_size=None):
         return BGEM3QueryEncoder(self, verbose=verbose, batch_size=batch_size)
@@ -67,7 +73,7 @@ class BGEM3QueryEncoder(pt.Transformer):
             inp = inp.assign(query_vec=query_vec)
         if self.sparse:
             # for sparse convert ids to the actual tokens
-            query_toks = [self.bge_factory.model.convert_id_to_token(bgem3_results['lexical_weights'][i]) for i in inv]
+            query_toks = {self.bge_factory.model.convert_id_to_token(bgem3_results['lexical_weights'][i]) for i in inv}
             inp = inp.assign(query_toks=query_toks)
         if self.multivecs:
             query_multivecs = [bgem3_results['colbert_vecs'][i] for i in inv]
@@ -107,7 +113,7 @@ class BGEM3DocEncoder(pt.Transformer):
         if self.sparse:
             toks = bgem3_results['lexical_weights']
             # for sparse convert ids to the actual tokens
-            toks = [self.bge_factory.model.convert_id_to_token(doc) for doc in list(toks)]
+            toks = {self.bge_factory.model.convert_id_to_token(doc) for doc in list(toks)}
             inp = inp.assign(toks=toks)
         if self.multivecs:
             doc_multivecs = bgem3_results['colbert_vecs']
