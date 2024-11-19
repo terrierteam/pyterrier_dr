@@ -195,11 +195,7 @@ What encodings are returned by both `query_multi_encoder()` and `doc_multi_encod
 
 ### Dependencies
 
-The BGE-M3 Encoder requires the [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) library. You can install it using pip or install it as part of the `bgem3` dependency of `pyterrier_dr` (see Installation section):
-
-```bash
-pip install -U FlagEmbedding
-```
+The BGE-M3 Encoder requires the [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) library. You can install it as part of the `bgem3` dependency of `pyterrier_dr` (see Installation section).
 
 ### Indexing
 

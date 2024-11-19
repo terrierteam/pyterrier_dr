@@ -34,7 +34,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires=requirements,
     extras_require={
-        ['bgem3']: ['FlagEmbedding'],
+        'bgem3': ['FlagEmbedding'],
     },
     python_requires='>=3.6',
     entry_points={

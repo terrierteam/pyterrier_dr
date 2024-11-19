@@ -17,7 +17,7 @@ class BGEM3(BiEncoder):
         try:
             from FlagEmbedding import BGEM3FlagModel
         except ImportError as e:
-            raise ImportError("BGE-M3 requires the FlagEmbedding package. You can install it using 'pip install -U FlagEmbedding'")
+            raise ImportError("BGE-M3 requires the FlagEmbedding package. You can install it using 'pip install pyterrier-dr[bgem3]'")
         
         self.model = BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16, device=self.device)
 
@@ -33,13 +33,13 @@ class BGEM3(BiEncoder):
         return self.model.encode(list(texts), batch_size=batch_size, max_length=self.max_length,
                                     return_dense=True, return_sparse=False, return_colbert_vecs=False)['dense_vecs']
 
-    # Only does single_vec encoding
+    # Only does dense (single_vec) encoding
     def query_encoder(self, verbose=None, batch_size=None):
         return BGEM3QueryEncoder(self, verbose=verbose, batch_size=batch_size)
     def doc_encoder(self, verbose=None, batch_size=None):
         return BGEM3DocEncoder(self, verbose=verbose, batch_size=batch_size)
     
-    # Can do dense, sparse and colbert encodings
+    # Does all three BGE-M3 encodings: dense, sparse and colbert(multivec)
     def query_multi_encoder(self, verbose=None, batch_size=None, return_dense=True, return_sparse=True, return_colbert_vecs=True):
         return BGEM3QueryEncoder(self, verbose=verbose, batch_size=batch_size, return_dense=return_dense, return_sparse=return_sparse, return_colbert_vecs=return_colbert_vecs)
     def doc_multi_encoder(self, verbose=None, batch_size=None, return_dense=True, return_sparse=True, return_colbert_vecs=True):
@@ -70,7 +70,7 @@ class BGEM3QueryEncoder(pt.Transformer):
             if self.sparse:
                 inp = inp.assign(query_toks=[])
             if self.multivecs:
-                inp = inp.assign(query_embs_toks=[])
+                inp = inp.assign(query_embs=[])
             return inp
 
         it = inp['query'].values
@@ -80,16 +80,13 @@ class BGEM3QueryEncoder(pt.Transformer):
         bgem3_results = self.encode(it)
 
         if self.dense:
-            query_vec = [bgem3_results['dense_vecs'][i] for i in inv]
-            inp = inp.assign(query_vec=query_vec)
+            inp = inp.assign(query_vec=[bgem3_results['dense_vecs'][i] for i in inv])
         if self.sparse:
             # for sparse convert ids to the actual tokens
             query_toks = self.bge_factory.model.convert_id_to_token(bgem3_results['lexical_weights'])
             inp = inp.assign(query_toks=query_toks)
         if self.multivecs:
-            query_embs_toks = [bgem3_results['colbert_vecs'][i] for i in inv]
-            inp = inp.assign(query_embs_toks=query_embs_toks)
-
+            inp = inp.assign(query_embs=[bgem3_results['colbert_vecs'][i] for i in inv])
         return inp
     
     def __repr__(self):
@@ -120,7 +117,7 @@ class BGEM3DocEncoder(pt.Transformer):
             if self.sparse:
                 inp = inp.assign(toks=[])
             if self.multivecs:
-                inp = inp.assign(doc_embs_toks=[])
+                inp = inp.assign(doc_embs=[])
             return inp
 
         it = inp[self.bge_factory.text_field]
@@ -129,17 +126,14 @@ class BGEM3DocEncoder(pt.Transformer):
         bgem3_results = self.encode(it)
 
         if self.dense:
-            doc_vec = bgem3_results['dense_vecs']
-            inp = inp.assign(doc_vec=list(doc_vec))
+            inp = inp.assign(doc_vec=list(bgem3_results['dense_vecs']))
         if self.sparse:
             toks = bgem3_results['lexical_weights']
             # for sparse convert ids to the actual tokens
             toks = self.bge_factory.model.convert_id_to_token(toks)
             inp = inp.assign(toks=toks)
         if self.multivecs:
-            doc_embs_toks = bgem3_results['colbert_vecs']
-            inp = inp.assign(doc_embs_toks=list(doc_embs_toks))
-
+            inp = inp.assign(doc_embs=list(bgem3_results['colbert_vecs']))
         return inp
 
     def __repr__(self):
