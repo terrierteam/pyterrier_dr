@@ -1,10 +1,9 @@
-import pandas as pd
 import math
 import os
 import pyterrier as pt
-import itertools
 import numpy as np
 import ir_datasets
+import pyterrier_alpha as pta
 import pyterrier_dr
 from . import FlexIndex
 
@@ -12,41 +11,42 @@ logger = ir_datasets.log.easy()
 
 
 class ScannRetriever(pt.Indexer):
-    def __init__(self, flex_index, scann_index, leaves_to_search=None, qbatch=64):
+    def __init__(self, flex_index, scann_index, leaves_to_search=None, qbatch=64, drop_query_vec=False):
         self.flex_index = flex_index
         self.scann_index = scann_index
         self.leaves_to_search = leaves_to_search
         self.qbatch = qbatch
+        self.drop_query_vec = drop_query_vec
 
     def transform(self, inp):
+        pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
-        assert all(f in inp.columns for f in ['qid', 'query_vec'])
         docnos, config = self.flex_index.payload(return_dvecs=False)
         query_vecs = np.stack(inp['query_vec'])
         query_vecs = query_vecs.copy()
-        idxs = []
-        res = {'docid': [], 'score': [], 'rank': []}
+
+        result = pta.DataFrameBuilder(['score', 'docno', 'docid', 'rank'])
         num_q = query_vecs.shape[0]
         QBATCH = self.qbatch
         for qidx in range(0, num_q, QBATCH):
             dids, scores = self.scann_index.search_batched(query_vecs[qidx:qidx+QBATCH], leaves_to_search=self.leaves_to_search, final_num_neighbors=self.flex_index.num_results)
-            for i, (s, d) in enumerate(zip(scores, dids)):
+            for s, d in zip(scores, dids):
                 mask = d != -1
                 d = d[mask]
                 s = s[mask]
-                res['docid'].append(d)
-                res['score'].append(s)
-                res['rank'].append(np.arange(d.shape[0]))
-                idxs.extend(itertools.repeat(qidx+i, d.shape[0]))
-        res = {k: np.concatenate(v) for k, v in res.items()}
-        res['docno'] = docnos.fwd[res['docid']]
-        for col in inp.columns:
-            if col != 'query_vec':
-                res[col] = inp[col][idxs].values
-        return pd.DataFrame(res)
+                result.extend({
+                    'score': s,
+                    'docno': docnos.fwd[d],
+                    'docid': d,
+                    'rank': np.arange(d.shape[0]),
+                })
+
+        if self.drop_query_vec:
+            inp = inp.drop(columns='query_vec')
+        return result.to_df(inp)
 
 
-def _scann_retriever(self, n_leaves=None, leaves_to_search=1, train_sample=None):
+def _scann_retriever(self, n_leaves=None, leaves_to_search=1, train_sample=None, drop_query_vec=False):
     pyterrier_dr.util.assert_scann()
     import scann
     dvecs, meta, = self.payload(return_docnos=False)
@@ -79,5 +79,5 @@ def _scann_retriever(self, n_leaves=None, leaves_to_search=1, train_sample=None)
         else:
             with logger.duration('reading index'):
                 self._cache[key] = scann.scann_ops_pybind.load_searcher(dvecs, str(self.index_path/index_name))
-    return ScannRetriever(self, self._cache[key], leaves_to_search=leaves_to_search)
+    return ScannRetriever(self, self._cache[key], leaves_to_search=leaves_to_search, drop_query_vec=drop_query_vec)
 FlexIndex.scann_retriever = _scann_retriever

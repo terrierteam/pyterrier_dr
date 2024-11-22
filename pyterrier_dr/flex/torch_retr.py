@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import torch
+import pyterrier_alpha as pta
 import pyterrier as pt
 from .. import SimFn, infer_device
 from . import FlexIndex
@@ -30,15 +31,16 @@ class TorchScorer(NumpyScorer):
 
 
 class TorchRetriever(pt.Transformer):
-    def __init__(self, flex_index, torch_vecs, num_results=None, qbatch=64):
+    def __init__(self, flex_index, torch_vecs, num_results=None, qbatch=64, drop_query_vec=False):
         self.flex_index = flex_index
         self.torch_vecs = torch_vecs
         self.num_results = num_results or 1000
         self.docnos, meta = flex_index.payload(return_dvecs=False)
         self.qbatch = qbatch
+        self.drop_query_vec = drop_query_vec
 
     def transform(self, inp):
-        assert 'query_vec' in inp.columns
+        pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
         query_vecs = np.stack(inp['query_vec'])
         query_vecs = torch.from_numpy(query_vecs).to(self.torch_vecs)
@@ -47,10 +49,7 @@ class TorchRetriever(pt.Transformer):
         if self.flex_index.verbose:
             it = pt.tqdm(it, desc='TorchRetriever', unit='qbatch')
 
-        res_scores = []
-        res_docids = []
-        res_idxs = []
-        res_ranks = []
+        result = pta.DataFrameBuilder(['score', 'docno', 'docid', 'rank'])
         for start_idx in it:
             end_idx = start_idx + self.qbatch
             batch = query_vecs[start_idx:end_idx]
@@ -63,17 +62,17 @@ class TorchRetriever(pt.Transformer):
             else:
                 docids = scores.argsort(descending=True, dim=1)
                 scores = torch.gather(scores, dim=1, index=docids)
-            res_scores.append(scores.cpu().numpy().reshape(-1))
-            res_docids.append(docids.cpu().numpy().reshape(-1))
-            res_idxs.append(np.arange(start_idx, start_idx+batch.shape[0]).reshape(-1, 1).repeat(scores.shape[1], axis=1).reshape(-1))
-            res_ranks.append(np.arange(scores.shape[1]).reshape(1, -1).repeat(batch.shape[0], axis=0).reshape(-1))
-        res_idxs = np.concatenate(res_idxs)
-        res = {k: inp[k][res_idxs] for k in inp.columns if k not in ['docid', 'docno', 'rank', 'score']}
-        res['score'] = np.concatenate(res_scores)
-        res['docid'] = np.concatenate(res_docids)
-        res['docno'] = self.docnos.fwd[res['docid']]
-        res['rank'] = np.concatenate(res_ranks)
-        return pd.DataFrame(res)
+            for s, d in zip(scores.cpu().numpy(), docids.cpu().numpy()):
+                result.extend({
+                    'score': s,
+                    'docno': self.docnos[d],
+                    'docid': d,
+                    'rank': np.arange(s.shape[0]),
+                })
+
+        if self.drop_query_vec:
+            inp = inp.drop(columns='query_vec')
+        return result.to_df(inp)
 
 
 def _torch_vecs(self, device=None, fp16=False):
@@ -94,6 +93,6 @@ def _torch_scorer(self, num_results=None, device=None, fp16=False):
 FlexIndex.torch_scorer = _torch_scorer
 
 
-def _torch_retriever(self, num_results=None, device=None, fp16=False, qbatch=64):
-    return TorchRetriever(self, self.torch_vecs(device=device, fp16=fp16), num_results=num_results, qbatch=qbatch)
+def _torch_retriever(self, num_results=None, device=None, fp16=False, qbatch=64, drop_query_vec=False):
+    return TorchRetriever(self, self.torch_vecs(device=device, fp16=fp16), num_results=num_results, qbatch=qbatch, drop_query_vec=drop_query_vec)
 FlexIndex.torch_retriever = _torch_retriever
