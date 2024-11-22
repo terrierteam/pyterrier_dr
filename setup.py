@@ -33,6 +33,9 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     packages=setuptools.find_packages(),
     install_requires=requirements,
+    extras_require={
+        'bgem3': ['FlagEmbedding'],
+    },
     python_requires='>=3.6',
     entry_points={
         'pyterrier.artifact': [

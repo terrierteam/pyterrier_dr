@@ -2,28 +2,43 @@
 
 This provides various Dense Retrieval functionality for [PyTerrier](https://github.com/terrier-org/pyterrier).
 
-
 ## Installation
 
-This repostory can be installed using pip.
+This repository can be installed using pip.
+  
+```bash
+pip install pyterrier-dr
+```
+
+If you want the latest version of `pyterrier_dr`, you can install direct from the Github repo:
 
 ```bash
 pip install --upgrade git+https://github.com/terrierteam/pyterrier_dr.git
 ```
 
+if you want to use the BGE-M3 encoder with `pyterrier_dr`, you can install the package with the `bgem3` dependency:
+
+```bash
+pip install pyterrier-dr[bgem3]
+```
+
+---
 You'll also need to install FAISS.
 
 On Colab:
 
-    !pip install faiss-cpu 
-    
+```bash
+!pip install faiss-cpu 
+```
+
 On Anaconda:
 
-    # CPU-only version
-    $ conda install -c pytorch faiss-cpu
-
-    # GPU(+CPU) version
-    $ conda install -c pytorch faiss-gpu
+```bash
+# CPU-only version
+conda install -c pytorch faiss-cpu
+# GPU(+CPU) version
+conda install -c pytorch faiss-gpu
+```
 
 You can then import the package and PyTerrier in Python:
 
@@ -40,6 +55,7 @@ import pyterrier_dr
 | [`TasB`](https://arxiv.org/abs/2104.06967) | ✅ | ✅ | ✅ |
 | [`Ance`](https://arxiv.org/abs/2007.00808) | ✅ | ✅ | ✅ |
 | [`Query2Query`](https://neeva.com/blog/state-of-the-art-query2query-similarity) | ✅ | | |
+| [`BGE-M3`](https://arxiv.org/abs/2402.03216) | ✅ | ✅ | ✅|
 
 ## Inference
 
@@ -164,6 +180,44 @@ retr_pipeline.search('Hello Terrier')
 #   1  Hello Terrier   1969155_1  68.340683     2
 retr_pipeline = model >> index.faiss_hnsw_retriever()
 # ...
+```
+
+## BGE-M3 Encoder
+
+`pyterrier_dr` also supports using BGE-M3 for indexing and retrieval with the following encoders:
+  
+  1. `query_encoder()`: Encodes queries into single-vector representations only.
+  2. `doc_encoder()`: Encodes documents into single-vector representations only.
+  3. `query_multi_encoder()`: Allows user to encode queries in dense, sparse or multi-vector representations.
+  4. `doc_multi_encoder()`: Allows user to encode documents in dense, sparse or multi-vector representations.
+
+What encodings are returned by both `query_multi_encoder()` and `doc_multi_encoder()` can be controlled by the `return_dense`, `return_sparse` and `return_colbert_vecs` parameters. By default, all three are set to `True`.
+
+### Dependencies
+
+The BGE-M3 Encoder requires the [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) library. You can install it as part of the `bgem3` dependency of `pyterrier_dr` (see Installation section).
+
+### Indexing
+
+```python
+factory = BGEM3(batch_size=32, max_length=1024, verbose=True)
+encoder = factory.doc_encoder()
+
+index = FlexIndex(f"mmarco/v2/fr_bgem3", verbose=True)
+indexing_pipeline = encoder >> index
+
+indexing_pipeline.index(pt.get_dataset(f"irds:mmarco/v2/fr").get_corpus_iter())
+```
+
+### Retrieval
+
+```python
+    factory = BGEM3(batch_size=32, max_length=1024)
+    encoder = factory.query_encoder()
+
+    index = FlexIndex(f"mmarco/v2/fr_bgem3", verbose=True)
+
+    pipeline = encoder >> idx.np_retriever()
 ```
 
 ## References
