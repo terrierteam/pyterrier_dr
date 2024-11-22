@@ -1,3 +1,4 @@
+import functools
 import tempfile
 import unittest
 import numpy as np
@@ -128,6 +129,9 @@ class TestFlexIndex(unittest.TestCase):
 
     def test_np_retriever(self):
         self._test_retr(FlexIndex.np_retriever)
+
+    def test_np_retriever_drop_query_vec(self):
+        self._test_retr(functools.partial(FlexIndex.np_retriever, drop_query_vec=True))
 
     def test_torch_retriever(self):
         self._test_retr(FlexIndex.torch_retriever)
