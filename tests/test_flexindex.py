@@ -113,25 +113,34 @@ class TestFlexIndex(unittest.TestCase):
 
     @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_flat_retriever(self):
-        self._test_retr(FlexIndex.faiss_flat_retriever)
+        with self.subTest('drop_query_vec=True'):
+            self._test_retr(functools.partial(FlexIndex.faiss_flat_retriever, drop_query_vec=True))
+        with self.subTest('drop_query_vec=False'):
+            self._test_retr(functools.partial(FlexIndex.faiss_flat_retriever, drop_query_vec=False))
 
     @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_hnsw_retriever(self):
-        self._test_retr(FlexIndex.faiss_hnsw_retriever, exact=False)
+        with self.subTest('drop_query_vec=True'):
+            self._test_retr(functools.partial(FlexIndex.faiss_hnsw_retriever, drop_query_vec=True))
+        with self.subTest('drop_query_vec=False'):
+            self._test_retr(functools.partial(FlexIndex.faiss_hnsw_retriever, drop_query_vec=False))
 
     @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_ivf_retriever(self):
-        self._test_retr(FlexIndex.faiss_ivf_retriever, exact=False)
+        with self.subTest('drop_query_vec=True'):
+            self._test_retr(functools.partial(FlexIndex.faiss_ivf_retriever, drop_query_vec=True))
+        with self.subTest('drop_query_vec=False'):
+            self._test_retr(functools.partial(FlexIndex.faiss_ivf_retriever, drop_query_vec=False))
 
     @unittest.skipIf(not pyterrier_dr.util.scann_available(), "scann not available")
     def test_scann_retriever(self):
         self._test_retr(FlexIndex.scann_retriever, exact=False)
 
     def test_np_retriever(self):
-        self._test_retr(FlexIndex.np_retriever)
-
-    def test_np_retriever_drop_query_vec(self):
-        self._test_retr(functools.partial(FlexIndex.np_retriever, drop_query_vec=True))
+        with self.subTest('drop_query_vec=True'):
+            self._test_retr(functools.partial(FlexIndex.np_retriever, drop_query_vec=True))
+        with self.subTest('drop_query_vec=False'):
+            self._test_retr(functools.partial(FlexIndex.np_retriever, drop_query_vec=False))
 
     def test_torch_retriever(self):
         self._test_retr(FlexIndex.torch_retriever)

@@ -1,4 +1,3 @@
-import itertools
 import pyterrier as pt
 import numpy as np
 import pandas as pd
