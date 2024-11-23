@@ -72,7 +72,7 @@ class BiQueryEncoder(pt.Transformer):
         return self.bi_encoder_model.encode_queries(texts, batch_size=batch_size or self.batch_size)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.columns(includes=['query'])
+        pta.validate.columns(inp, includes=['query'])
         it = inp['query'].values
         it, inv = np.unique(it, return_inverse=True)
         if self.verbose:
@@ -95,7 +95,7 @@ class BiDocEncoder(pt.Transformer):
         return self.bi_encoder_model.encode_docs(texts, batch_size=batch_size or self.batch_size)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.columns(includes=[self.text_field])
+        pta.validate.columns(inp, includes=[self.text_field])
         it = inp[self.text_field]
         if self.verbose:
             it = pt.tqdm(it, desc='Encoding Docs', unit='doc')
