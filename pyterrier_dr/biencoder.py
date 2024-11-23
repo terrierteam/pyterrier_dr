@@ -1,9 +1,7 @@
-from more_itertools import chunked
 import numpy as np
-import torch
-from torch import nn
 import pyterrier as pt
 import pandas as pd
+import pyterrier_alpha as pta
 from . import SimFn
 
 
@@ -21,22 +19,20 @@ class BiEncoder(pt.Transformer):
         raise NotImplementedError()
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        columns = set(inp.columns)
-        modes = [
-            (['qid', 'query', self.text_field], self.scorer),
-            (['qid', 'query_vec', self.text_field], self.scorer),
-            (['qid', 'query', 'doc_vec'], self.scorer),
-            (['qid', 'query_vec', 'doc_vec'], self.scorer),
-            (['query'], self.query_encoder),
-            ([self.text_field], self.doc_encoder),
-        ]
-        for fields, fn in modes:
-            if all(f in columns for f in fields):
-                return fn()(inp)
-        message = f'Unexpected input with columns: {inp.columns}. Supports:'
-        for fields, fn in modes:
-            message += f'\n - {fn.__doc__.strip()}: {fields}'
-        raise RuntimeError(message)
+        with pta.validate.any(inp) as v:
+            v.columns(includes=['query', self.text_field], mode='scorer')
+            v.columns(includes=['query_vec', self.text_field], mode='scorer')
+            v.columns(includes=['query', 'doc_vec'], mode='scorer')
+            v.columns(includes=['query_vec', 'doc_vec'], mode='scorer')
+            v.columns(includes=['query'], mode='query_encoder')
+            v.columns(includes=[self.text_field], mode='doc_encoder')
+
+        if v.mode == 'scorer':
+            return self.scorer()(inp)
+        elif v.mode == 'query_encoder':
+            return self.query_encoder()(inp)
+        elif v.mode == 'doc_encoder':
+            return self.doc_encoder()(inp)
 
     def query_encoder(self, verbose=None, batch_size=None) -> pt.Transformer:
         """

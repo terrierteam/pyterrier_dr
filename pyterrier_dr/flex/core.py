@@ -14,7 +14,7 @@ from .. import SimFn
 from ..indexes import RankedLists
 import ir_datasets
 import torch
-from pyterrier_alpha import Artifact
+import pyterrier_alpha as pta
 
 logger = ir_datasets.log.easy()
 
@@ -24,7 +24,7 @@ class IndexingMode(Enum):
     # append???
 
 
-class FlexIndex(Artifact, pt.Indexer):
+class FlexIndex(pta.Artifact, pt.Indexer):
     def __init__(self, index_path, num_results=1000, sim_fn=SimFn.dot, indexing_mode=IndexingMode.create, verbose=True):
         super().__init__(index_path)
         self.index_path = Path(index_path)
@@ -88,18 +88,12 @@ class FlexIndex(Artifact, pt.Indexer):
             json.dump({"type": "dense_index", "format": "flex", "vec_size": vec_size, "doc_count": count}, f_meta)
 
     def transform(self, inp):
-        columns = set(inp.columns)
-        modes = [
-            (['qid', 'query_vec'], self.np_retriever, "performing exhaustive saerch with FlexIndex.np_retriever -- note that other FlexIndex retrievers may be faster"),
-        ]
-        for fields, fn, note in modes:
-            if all(f in columns for f in fields):
-                warn(f'based on input columns {list(columns)}, {note}')
-                return fn()(inp)
-        message = f'Unexpected input with columns: {inp.columns}. Supports:'
-        for fields, fn in modes:
-            message += f'\n - {fn.__doc__.strip()}: {fields}'
-        raise RuntimeError(message)
+        with pta.validate.any(inp) as v:
+            v.query_frame(extra_columns=['query_vec'], mode='np_retriever')
+
+        if v.mode == 'np_retriever':
+            warn("performing exhaustive search with FlexIndex.np_retriever -- note that other FlexIndex retrievers may be faster")
+            return self.np_retriever()(inp)
 
     def get_corpus_iter(self, start_idx=None, stop_idx=None, verbose=True):
         docnos, dvecs, meta = self.payload()
