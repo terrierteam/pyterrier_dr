@@ -48,7 +48,7 @@ class TorchRetriever(pt.Transformer):
         if self.flex_index.verbose:
             it = pt.tqdm(it, desc='TorchRetriever', unit='qbatch')
 
-        result = pta.DataFrameBuilder(['score', 'docno', 'docid', 'rank'])
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         for start_idx in it:
             end_idx = start_idx + self.qbatch
             batch = query_vecs[start_idx:end_idx]
@@ -63,9 +63,9 @@ class TorchRetriever(pt.Transformer):
                 scores = torch.gather(scores, dim=1, index=docids)
             for s, d in zip(scores.cpu().numpy(), docids.cpu().numpy()):
                 result.extend({
-                    'score': s,
                     'docno': self.docnos[d],
                     'docid': d,
+                    'score': s,
                     'rank': np.arange(s.shape[0]),
                 })
 

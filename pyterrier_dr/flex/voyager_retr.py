@@ -24,7 +24,7 @@ class VoyagerRetriever(pt.Indexer):
         query_vecs = np.stack(inp['query_vec'])
         query_vecs = query_vecs.copy()
         
-        result = pta.DataFrameBuilder(['score', 'docno', 'docid', 'rank'])
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         num_q = query_vecs.shape[0]
         QBATCH = self.qbatch
         it = range(0, num_q, QBATCH)
@@ -38,9 +38,9 @@ class VoyagerRetriever(pt.Indexer):
                 d = d[mask]
                 s = s[mask]
                 result.extend({
-                    'score': -s,
                     'docno': docnos.fwd[d],
                     'docid': d,
+                    'score': -s,
                     'rank': np.arange(d.shape[0]),
                 })
 

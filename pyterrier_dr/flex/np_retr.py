@@ -40,12 +40,12 @@ class NumpyRetriever(pt.Transformer):
             dids = np.arange(idx_start, idx_start+doc_batch.shape[1], dtype='i4').reshape(1, -1).repeat(num_q, axis=0)
             ranked_lists.update(scores, dids)
 
-        result = pta.DataFrameBuilder(['score', 'docno', 'docid', 'rank'])
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         for scores, dids in zip(*ranked_lists.results()):
             result.extend({
-                'score': scores,
                 'docno': docnos.fwd[dids],
                 'docid': dids,
+                'score': scores,
                 'rank': np.arange(len(scores)),
             })
 

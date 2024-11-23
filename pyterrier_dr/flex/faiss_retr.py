@@ -41,7 +41,7 @@ class FaissRetriever(pt.Indexer):
         if self.flex_index.verbose:
             it = logger.pbar(it, unit='qbatch')
 
-        result = pta.DataFrameBuilder(['score', 'docno', 'docid', 'rank'])
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         for qidx in it:
             scores, dids = self.faiss_index.search(query_vecs[qidx:qidx+QBATCH], self.flex_index.num_results)
             for s, d in zip(scores, dids):
@@ -49,9 +49,9 @@ class FaissRetriever(pt.Indexer):
                 d = d[mask]
                 s = s[mask]
                 result.extend({
-                    'score': s,
                     'docno': docnos.fwd[d],
                     'docid': d,
+                    'score': s,
                     'rank': np.arange(d.shape[0]),
                 })
 
