@@ -29,7 +29,7 @@ class VoyagerRetriever(pt.Indexer):
         QBATCH = self.qbatch
         it = range(0, num_q, QBATCH)
         if self.flex_index.verbose:
-            it = logger.pbar(it, unit='qbatch')
+            it = pt.tqdm(it, unit='qbatch')
         for qidx in it:
             qvec_batch = query_vecs[qidx:qidx+QBATCH]
             neighbor_ids, distances = self.voyager_index.query(qvec_batch, self.flex_index.num_results, self.query_ef)
@@ -74,7 +74,7 @@ def _voyager_retriever(self, neighbours=12, ef_construction=200, random_seed=1, 
             print(index.ef)
             it = range(0, meta['doc_count'], BATCH_SIZE)
             if self.verbose:
-                it = logger.pbar(it, desc='building index', unit='dbatch')
+                it = pt.tqdm(it, desc='building index', unit='dbatch')
             for idx in it:
                 index.add_items(dvecs[idx:idx+BATCH_SIZE])
             with logger.duration('saving index'):

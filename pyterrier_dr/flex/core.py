@@ -10,10 +10,8 @@ import pyterrier as pt
 from npids import Lookup
 from enum import Enum
 from .. import SimFn
-import ir_datasets
 import pyterrier_alpha as pta
 
-logger = ir_datasets.log.easy()
 
 class IndexingMode(Enum):
     create = "create"
