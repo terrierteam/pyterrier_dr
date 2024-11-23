@@ -73,7 +73,7 @@ class TestFlexIndex(unittest.TestCase):
                 {'qid': '0', 'query_vec': dataset[0]['doc_vec']},
                 {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
             ]))
-            self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
+            self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score', 'query_vec'])
             if exact:
                 self.assertEqual(len(res), 2000)
                 self.assertEqual(len(res[res.qid=='0']), 1000)
@@ -84,6 +84,21 @@ class TestFlexIndex(unittest.TestCase):
                 self.assertTrue(len(res) <= 2000)
                 self.assertTrue(len(res[res.qid=='0']) <= 1000)
                 self.assertTrue(len(res[res.qid=='1']) <= 1000)
+
+        with self.subTest('drop_query_vec=True'):
+            destdir = tempfile.mkdtemp()
+            self.test_dirs.append(destdir)
+            index = FlexIndex(destdir+'/index')
+            dataset = self._generate_data(count=2000)
+            index.index(dataset)
+            
+            retr = Retr(index, drop_query_vec=True)
+            res = retr(pd.DataFrame([
+                {'qid': '0', 'query_vec': dataset[0]['doc_vec']},
+                {'qid': '1', 'query_vec': dataset[1]['doc_vec']},
+            ]))
+            self.assertTrue(all(c in res.columns) for c in ['qid', 'docno', 'rank', 'score'])
+            self.assertTrue(all(c not in res.columns) for c in ['query_vec'])
 
         if test_smaller:
             with self.subTest('smaller'):

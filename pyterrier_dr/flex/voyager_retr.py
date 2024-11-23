@@ -1,9 +1,8 @@
-import pandas as pd
 import os
 import pyterrier as pt
-import itertools
 import numpy as np
 import ir_datasets
+import pyterrier_alpha as pta
 import pyterrier_dr
 from . import FlexIndex
 
@@ -11,20 +10,21 @@ logger = ir_datasets.log.easy()
 
 
 class VoyagerRetriever(pt.Indexer):
-    def __init__(self, flex_index, voyager_index, query_ef=None, qbatch=64):
+    def __init__(self, flex_index, voyager_index, query_ef=None, qbatch=64, drop_query_vec=False):
         self.flex_index = flex_index
         self.voyager_index = voyager_index
         self.query_ef = query_ef
         self.qbatch = qbatch
+        self.drop_query_vec = drop_query_vec
 
     def transform(self, inp):
+        pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
-        assert all(f in inp.columns for f in ['qid', 'query_vec'])
         docnos, config = self.flex_index.payload(return_dvecs=False)
         query_vecs = np.stack(inp['query_vec'])
         query_vecs = query_vecs.copy()
-        idxs = []
-        res = {'docid': [], 'score': [], 'rank': []}
+        
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         num_q = query_vecs.shape[0]
         QBATCH = self.qbatch
         it = range(0, num_q, QBATCH)
@@ -33,23 +33,23 @@ class VoyagerRetriever(pt.Indexer):
         for qidx in it:
             qvec_batch = query_vecs[qidx:qidx+QBATCH]
             neighbor_ids, distances = self.voyager_index.query(qvec_batch, self.flex_index.num_results, self.query_ef)
-            for i, (s, d) in enumerate(zip(distances, neighbor_ids)):
+            for s, d in zip(distances, neighbor_ids):
                 mask = d != -1
                 d = d[mask]
                 s = s[mask]
-                res['docid'].append(d)
-                res['score'].append(-s)
-                res['rank'].append(np.arange(d.shape[0]))
-                idxs.extend(itertools.repeat(qidx+i, d.shape[0]))
-        res = {k: np.concatenate(v) for k, v in res.items()}
-        res['docno'] = docnos.fwd[res['docid']]
-        for col in inp.columns:
-            if col != 'query_vec':
-                res[col] = inp[col][idxs].values
-        return pd.DataFrame(res)
+                result.extend({
+                    'docno': docnos.fwd[d],
+                    'docid': d,
+                    'score': -s,
+                    'rank': np.arange(d.shape[0]),
+                })
+
+        if self.drop_query_vec:
+            inp = inp.drop(columns='query_vec')
+        return result.to_df(inp)
 
 
-def _voyager_retriever(self, neighbours=12, ef_construction=200, random_seed=1, storage_data_type='float32', query_ef=10):
+def _voyager_retriever(self, neighbours=12, ef_construction=200, random_seed=1, storage_data_type='float32', query_ef=10, drop_query_vec=False):
     pyterrier_dr.util.assert_voyager()
     import voyager
     meta, = self.payload(return_dvecs=False, return_docnos=False)
@@ -83,5 +83,5 @@ def _voyager_retriever(self, neighbours=12, ef_construction=200, random_seed=1, 
         else:
             with logger.duration('reading index'):
                 self._cache[key] = voyager.Index.load(str(self.index_path/index_name))
-    return VoyagerRetriever(self, self._cache[key], query_ef=query_ef)
+    return VoyagerRetriever(self, self._cache[key], query_ef=query_ef, drop_query_vec=drop_query_vec)
 FlexIndex.voyager_retriever = _voyager_retriever
