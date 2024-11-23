@@ -48,7 +48,7 @@ def average_prf(*, k : int = 3):
 
     Example::
     
-            prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.vector_prf() >> index 
+            prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.average_prf() >> index 
 
     Reference: Hang Li, Ahmed Mourad, Shengyao Zhuang, Bevan Koopman, Guido Zuccon. [Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers: Successes and Pitfalls](https://arxiv.org/pdf/2108.11044.pdf)
     
