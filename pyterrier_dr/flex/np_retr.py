@@ -82,8 +82,9 @@ class NumpyScorer(pt.Transformer):
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
 
     def transform(self, inp):
-        assert 'query_vec' in inp.columns
-        assert 'docno' in inp.columns or 'docid' in inp.columns
+        with pta.validate.any(inp) as v:
+            v.columns(includes=['query_vec', 'docno'])
+            v.columns(includes=['query_vec', 'docid'])
         inp = inp.reset_index(drop=True)
 
         res_idxs = []
