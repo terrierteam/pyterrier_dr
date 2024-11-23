@@ -10,3 +10,4 @@ from .tctcolbert_model import TctColBert
 from .electra import ElectraScorer
 from .bge_m3 import BGEM3, BGEM3QueryEncoder, BGEM3DocEncoder
 from .cde import CDE, CDECache
+from .prf import average_prf, vector_prf
