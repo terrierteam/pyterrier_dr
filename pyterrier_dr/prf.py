@@ -1,4 +1,10 @@
-def vector_prf(alpha : float = 1, beta : float = 0.2, k : int = 3):
+import numpy as np
+import pandas as pd
+import pyterrier as pt
+import pyterrier_alpha as pta
+
+
+def vector_prf(*, alpha : float = 1, beta : float = 0.2, k : int = 3):
     """
     Performs a Rocchio-esque PRF by linearly combining the query_vec column with 
     the doc_vec column of the top k documents.
@@ -8,7 +14,7 @@ def vector_prf(alpha : float = 1, beta : float = 0.2, k : int = 3):
      - beta: weight of doc_vec
      - k: number of pseudo-relevant feedback documents
 
-    Expected Input: ['qid', 'query_vec', 'doc_vec']
+    Expected Input: ['qid', 'query', 'query_vec', 'doc_vec']
     Output: ['qid', 'query', 'query_vec']
 
     Example::
@@ -17,10 +23,8 @@ def vector_prf(alpha : float = 1, beta : float = 0.2, k : int = 3):
 
     Reference: Hang Li, Ahmed Mourad, Shengyao Zhuang, Bevan Koopman, Guido Zuccon. [Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers: Successes and Pitfalls](https://arxiv.org/pdf/2108.11044.pdf)
     """
-    import numpy as np, pandas as pd, pyterrier as pt, pyterrier_alpha as pta
-
     def _vector_prf(inp):
-        pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
+        pta.validate.result_frame(inp, extra_columns=['query', 'query_vec', 'doc_vec'])
 
         # get the docvectors for the top k docs
         doc_vecs = np.stack([ row.doc_vec for row in inp.head(k).itertuples() ])
@@ -31,14 +35,12 @@ def vector_prf(alpha : float = 1, beta : float = 0.2, k : int = 3):
 
     return pt.apply.by_query(_vector_prf, add_ranks=False)
 
-def average_prf(k : int = 3):
+def average_prf(*, k : int = 3):
     """
     Performs Average PRF (as described by Li et al.) by averaging the query_vec column with 
     the doc_vec column of the top k documents.
 
     Arguments:
-     - alpha: weight of original query_vec
-     - beta: weight of doc_vec
      - k: number of pseudo-relevant feedback documents
 
     Expected Input: ['qid', 'query_vec', 'doc_vec']
@@ -51,8 +53,6 @@ def average_prf(k : int = 3):
     Reference: Hang Li, Ahmed Mourad, Shengyao Zhuang, Bevan Koopman, Guido Zuccon. [Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers: Successes and Pitfalls](https://arxiv.org/pdf/2108.11044.pdf)
     
     """
-    import numpy as np, pandas as pd, pyterrier as pt, pyterrier_alpha as pta
-
     def _average_prf(inp):
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
