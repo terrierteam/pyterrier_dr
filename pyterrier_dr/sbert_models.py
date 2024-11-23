@@ -1,4 +1,3 @@
-from more_itertools import chunked
 import numpy as np
 import torch
 import pyterrier as pt

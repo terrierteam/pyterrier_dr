@@ -7,13 +7,10 @@ import numpy as np
 import more_itertools
 import pandas as pd
 import pyterrier as pt
-from pyterrier.model import add_ranks
 from npids import Lookup
 from enum import Enum
 from .. import SimFn
-from ..indexes import RankedLists
 import ir_datasets
-import torch
 import pyterrier_alpha as pta
 
 logger = ir_datasets.log.easy()
