@@ -81,9 +81,9 @@ class TestModels(unittest.TestCase):
                 self.assertTrue('score' in enc_res_empty.columns)
                 self.assertTrue('rank' in enc_res_empty.columns)
 
-        if test_indexer:
-            with self.subTest('indexer'):
-                with tempfile.TemporaryDirectory() as destdir:
+        with tempfile.TemporaryDirectory() as destdir:
+            if test_indexer:
+                with self.subTest('indexer'):
                     # Make sure this model can index properly
                     # More extensive testing of FlexIndex is done in test_flexindex
                     index = FlexIndex(destdir+'/index')
@@ -92,17 +92,17 @@ class TestModels(unittest.TestCase):
                     self.assertTrue(index.built())
                     self.assertEqual(len(index), len(docs))
 
-        if test_retriever:
-            with self.subTest('retriever'):
-                assert test_indexer, "test_retriever requires test_indexer"
-                # Make sure this model can retrieve properly
-                # More extensive testing of FlexIndex is done in test_flexindex
-                retr_res = pipeline(dataset.get_topics())
-                self.assertTrue('qid' in retr_res.columns)
-                self.assertTrue('query' in retr_res.columns)
-                self.assertTrue('docno' in retr_res.columns)
-                self.assertTrue('score' in retr_res.columns)
-                self.assertTrue('rank' in retr_res.columns)
+            if test_retriever:
+                with self.subTest('retriever'):
+                    assert test_indexer, "test_retriever requires test_indexer"
+                    # Make sure this model can retrieve properly
+                    # More extensive testing of FlexIndex is done in test_flexindex
+                    retr_res = pipeline(dataset.get_topics())
+                    self.assertTrue('qid' in retr_res.columns)
+                    self.assertTrue('query' in retr_res.columns)
+                    self.assertTrue('docno' in retr_res.columns)
+                    self.assertTrue('score' in retr_res.columns)
+                    self.assertTrue('rank' in retr_res.columns)
     
     def _test_bgem3_multi(self, model, test_query_multivec_encoder=False, test_doc_multivec_encoder=False):
         dataset = pt.get_dataset('irds:vaswani')
