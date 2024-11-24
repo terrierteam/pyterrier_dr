@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import pyterrier as pt
+from pyterrier_dr import FlexIndex
 
 
 class TestModels(unittest.TestCase):
@@ -80,30 +81,28 @@ class TestModels(unittest.TestCase):
                 self.assertTrue('score' in enc_res_empty.columns)
                 self.assertTrue('rank' in enc_res_empty.columns)
 
-        if test_indexer:
-            with self.subTest('indexer'):
-                # Make sure this model can index properly
-                # More extensive testing of FlexIndex is done in test_flexindex
-                from pyterrier_dr import FlexIndex
-                destdir = tempfile.mkdtemp()
-                self.test_dirs.append(destdir)
-                index = FlexIndex(destdir+'/index')
-                pipeline = model >> index
-                pipeline.index(docs)
-                self.assertTrue(index.built())
-                self.assertEqual(len(index), len(docs))
+        with tempfile.TemporaryDirectory() as destdir:
+            if test_indexer:
+                with self.subTest('indexer'):
+                    # Make sure this model can index properly
+                    # More extensive testing of FlexIndex is done in test_flexindex
+                    index = FlexIndex(destdir+'/index')
+                    pipeline = model >> index
+                    pipeline.index(docs)
+                    self.assertTrue(index.built())
+                    self.assertEqual(len(index), len(docs))
 
-        if test_retriever:
-            with self.subTest('retriever'):
-                assert test_indexer, "test_retriever requires test_indexer"
-                # Make sure this model can retrieve properly
-                # More extensive testing of FlexIndex is done in test_flexindex
-                retr_res = pipeline(dataset.get_topics())
-                self.assertTrue('qid' in retr_res.columns)
-                self.assertTrue('query' in retr_res.columns)
-                self.assertTrue('docno' in retr_res.columns)
-                self.assertTrue('score' in retr_res.columns)
-                self.assertTrue('rank' in retr_res.columns)
+            if test_retriever:
+                with self.subTest('retriever'):
+                    assert test_indexer, "test_retriever requires test_indexer"
+                    # Make sure this model can retrieve properly
+                    # More extensive testing of FlexIndex is done in test_flexindex
+                    retr_res = pipeline(dataset.get_topics())
+                    self.assertTrue('qid' in retr_res.columns)
+                    self.assertTrue('query' in retr_res.columns)
+                    self.assertTrue('docno' in retr_res.columns)
+                    self.assertTrue('score' in retr_res.columns)
+                    self.assertTrue('rank' in retr_res.columns)
     
     def _test_bgem3_multi(self, model, test_query_multivec_encoder=False, test_doc_multivec_encoder=False):
         dataset = pt.get_dataset('irds:vaswani')
@@ -179,19 +178,6 @@ class TestModels(unittest.TestCase):
 
         self._test_bgem3_multi(bgem3.query_multi_encoder(), test_query_multivec_encoder=True)
         self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
-    def setUp(self):
-        import pyterrier as pt
-        if not pt.started():
-            pt.init()
-        self.test_dirs = []
-
-    def tearDown(self):
-        import shutil
-        for d in self.test_dirs: 
-            try:
-                shutil.rmtree(d)
-            except:
-                pass
 
 
 if __name__ == '__main__':

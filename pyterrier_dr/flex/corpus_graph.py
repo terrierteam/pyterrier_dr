@@ -4,11 +4,10 @@ import json
 import ir_datasets
 import torch
 import numpy as np
+import pyterrier as pt
 import pyterrier_dr
 from ..indexes import TorchRankedLists
 from . import FlexIndex
-
-logger = ir_datasets.log.easy()
 
 
 def _corpus_graph(self, k=16, batch_size=8192):
@@ -43,7 +42,7 @@ def _build_corpus_graph(flex_index, k, out_dir, batch_size):
     weights_path = out_dir/'weights.f16.np'
     device = pyterrier_dr.util.infer_device()
     dtype = torch.half if device.type == 'cuda' else torch.float
-    with logger.pbar_raw(total=int((num_chunks+1)*num_chunks/2), unit='chunk', smoothing=1) as pbar, \
+    with pt.tqdm(total=int((num_chunks+1)*num_chunks/2), unit='chunk', smoothing=1) as pbar, \
         ir_datasets.util.finialized_file(str(edges_path), 'wb') as fe, \
         ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
         for i in range(num_chunks):

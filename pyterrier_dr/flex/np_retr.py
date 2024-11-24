@@ -4,10 +4,8 @@ import pandas as pd
 from .. import SimFn
 from ..indexes import RankedLists
 from . import FlexIndex
-import ir_datasets
 import pyterrier_alpha as pta
 
-logger = ir_datasets.log.easy()
 
 class NumpyRetriever(pt.Transformer):
     def __init__(self, flex_index, num_results=1000, batch_size=None, drop_query_vec=False):
@@ -82,14 +80,15 @@ class NumpyScorer(pt.Transformer):
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
 
     def transform(self, inp):
-        assert 'query_vec' in inp.columns
-        assert 'docno' in inp.columns or 'docid' in inp.columns
+        with pta.validate.any(inp) as v:
+            v.columns(includes=['query_vec', 'docno'])
+            v.columns(includes=['query_vec', 'docid'])
         inp = inp.reset_index(drop=True)
 
         res_idxs = []
         res_scores = []
         res_ranks = []
-        for qid, df in logger.pbar(inp.groupby('qid')):
+        for qid, df in pt.tqdm(inp.groupby('qid')):
             docids = self.flex_index._load_docids(df)
             query_vecs = df['query_vec'].iloc[0].reshape(1, -1)
             scores = self.score(query_vecs, docids).reshape(-1)

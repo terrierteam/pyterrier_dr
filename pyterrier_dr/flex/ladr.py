@@ -2,9 +2,7 @@ import numpy as np
 import pyterrier as pt
 import pyterrier_alpha as pta
 from . import FlexIndex
-import ir_datasets
 
-logger = ir_datasets.log.easy()
 
 class LadrPreemptive(pt.Transformer):
     def __init__(self, flex_index, graph, dense_scorer, hops=1, drop_query_vec=False):
@@ -25,7 +23,7 @@ class LadrPreemptive(pt.Transformer):
 
         it = iter(inp.groupby('qid'))
         if self.flex_index.verbose:
-            it = logger.pbar(it)
+            it = pt.tqdm(it)
         for qid, df in it:
             qdata = {col: [df[col].iloc[0]] for col in qcols}
             docids = docnos.inv[df['docno'].values]
@@ -79,7 +77,7 @@ class LadrAdaptive(pt.Transformer):
 
         it = iter(inp.groupby('qid'))
         if self.flex_index.verbose:
-            it = logger.pbar(it)
+            it = pt.tqdm(it)
         for qid, df in it:
             qdata = {col: [df[col].iloc[0]] for col in qcols}
             query_vecs = df['query_vec'].iloc[0].reshape(1, -1)

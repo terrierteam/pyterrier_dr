@@ -39,7 +39,7 @@ class FaissRetriever(pt.Indexer):
             self.faiss_index.hnsw.search_bounded_queue = self.search_bounded_queue
         it = range(0, num_q, QBATCH)
         if self.flex_index.verbose:
-            it = logger.pbar(it, unit='qbatch')
+            it = pt.tqdm(it, unit='qbatch')
 
         result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         for qidx in it:
@@ -96,7 +96,7 @@ def _faiss_hnsw_retriever(self, neighbours=32, ef_construction=40, ef_search=16,
         dvecs, meta = self.payload(return_docnos=False)
         if not os.path.exists(self.index_path/index_name):
             idx = faiss.IndexHNSWFlat(meta['vec_size'], neighbours, faiss.METRIC_INNER_PRODUCT)
-            for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
+            for start_idx in pt.tqdm(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
                 idx.add(np.array(dvecs[start_idx:start_idx+4096]))
             idx.storage = faiss.IndexFlatIP(meta['vec_size']) # clear storage ; we can use faiss_flat here instead so we don't keep an extra copy
             if cache:
@@ -133,7 +133,7 @@ def _build_hnsw_graph(hnsw, out_dir):
     weights_path = out_dir/'weights.f16.np'
     with ir_datasets.util.finialized_file(str(edges_path), 'wb') as fe, \
          ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
-        for did in logger.pbar(range(num_docs), unit='doc', smoothing=1):
+        for did in pt.tqdm(range(num_docs), unit='doc', smoothing=1):
             start = hnsw.offsets.at(did)
             dids = [hnsw.neighbors.at(i) for i in range(start, start+lvl_0_size)]
             dids = [(d if d != -1 else did) for d in dids] # replace with self if missing value
@@ -186,7 +186,7 @@ def _faiss_ivf_retriever(self, train_sample=None, n_list=None, cache=True, n_pro
                 train = _sample_train(self, train_sample)
             with logger.duration(f'training ivf with {n_list} posting lists'):
                 idx.train(train)
-            for start_idx in logger.pbar(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
+            for start_idx in pt.tqdm(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
                 idx.add(np.array(dvecs[start_idx:start_idx+4096]))
             if cache:
                 with logger.duration('caching index'):

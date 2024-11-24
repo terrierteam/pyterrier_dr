@@ -72,7 +72,7 @@ class BiQueryEncoder(pt.Transformer):
         return self.bi_encoder_model.encode_queries(texts, batch_size=batch_size or self.batch_size)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        assert all(c in inp.columns for c in ['query'])
+        pta.validate.columns(inp, includes=['query'])
         it = inp['query'].values
         it, inv = np.unique(it, return_inverse=True)
         if self.verbose:
@@ -95,7 +95,7 @@ class BiDocEncoder(pt.Transformer):
         return self.bi_encoder_model.encode_docs(texts, batch_size=batch_size or self.batch_size)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        assert all(c in inp.columns for c in [self.text_field])
+        pta.validate.columns(inp, includes=[self.text_field])
         it = inp[self.text_field]
         if self.verbose:
             it = pt.tqdm(it, desc='Encoding Docs', unit='doc')
@@ -114,8 +114,11 @@ class BiScorer(pt.Transformer):
         self.sim_fn = sim_fn if sim_fn is not None else bi_encoder_model.sim_fn
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        assert 'query_vec' in inp.columns or 'query' in inp.columns
-        assert 'doc_vec' in inp.columns or self.text_field in inp.columns
+        with pta.validate.any(inp) as v:
+            v.columns(includes=['query_vec', 'doc_vec'])
+            v.columns(includes=['query', 'doc_vec'])
+            v.columns(includes=['query_vec', self.text_field])
+            v.columns(includes=['query', self.text_field])
         if 'query_vec' in inp.columns:
             query_vec = inp['query_vec']
         else:

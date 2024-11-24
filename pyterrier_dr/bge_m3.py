@@ -1,8 +1,8 @@
-from tqdm import tqdm
 import pyterrier as pt
 import pandas as pd
 import numpy as np
 import torch
+import pyterrier_alpha as pta
 from .biencoder import BiEncoder
 
 class BGEM3(BiEncoder):
@@ -61,8 +61,8 @@ class BGEM3QueryEncoder(pt.Transformer):
                              return_dense=self.dense, return_sparse=self.sparse, return_colbert_vecs=self.multivecs)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        assert all(c in inp.columns for c in ['query'])
-        
+        pta.validate.columns(inp, includes=['query'])
+
         # check if inp is empty
         if len(inp) == 0:
             if self.dense:
@@ -102,14 +102,14 @@ class BGEM3DocEncoder(pt.Transformer):
         self.dense = return_dense
         self.sparse = return_sparse
         self.multivecs = return_colbert_vecs
-        
+
     def encode(self, texts):
         return self.bge_factory.model.encode(list(texts), batch_size=self.batch_size, max_length=self.max_length,
                              return_dense=self.dense, return_sparse=self.sparse, return_colbert_vecs=self.multivecs)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         # check if the input dataframe contains the field(s) specified in the text_field
-        assert all(c in inp.columns for c in [self.bge_factory.text_field])
+        pta.validate.columns(inp, includes=[self.bge_factory.text_field])
         # check if inp is empty
         if len(inp) == 0:
             if self.dense:
