@@ -3,3 +3,4 @@ pytest-subtests
 git+https://github.com/terrierteam/pyterrier_adaptive
 voyager
 FlagEmbedding
+faiss-cpu
