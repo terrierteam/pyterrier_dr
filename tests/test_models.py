@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import pyterrier as pt
+from pyterrier_dr import FlexIndex
 
 
 class TestModels(unittest.TestCase):
@@ -82,16 +83,14 @@ class TestModels(unittest.TestCase):
 
         if test_indexer:
             with self.subTest('indexer'):
-                # Make sure this model can index properly
-                # More extensive testing of FlexIndex is done in test_flexindex
-                from pyterrier_dr import FlexIndex
-                destdir = tempfile.mkdtemp()
-                self.test_dirs.append(destdir)
-                index = FlexIndex(destdir+'/index')
-                pipeline = model >> index
-                pipeline.index(docs)
-                self.assertTrue(index.built())
-                self.assertEqual(len(index), len(docs))
+                with tempfile.TemporaryDirectory() as destdir:
+                    # Make sure this model can index properly
+                    # More extensive testing of FlexIndex is done in test_flexindex
+                    index = FlexIndex(destdir+'/index')
+                    pipeline = model >> index
+                    pipeline.index(docs)
+                    self.assertTrue(index.built())
+                    self.assertEqual(len(index), len(docs))
 
         if test_retriever:
             with self.subTest('retriever'):
@@ -179,19 +178,6 @@ class TestModels(unittest.TestCase):
 
         self._test_bgem3_multi(bgem3.query_multi_encoder(), test_query_multivec_encoder=True)
         self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
-    def setUp(self):
-        import pyterrier as pt
-        if not pt.started():
-            pt.init()
-        self.test_dirs = []
-
-    def tearDown(self):
-        import shutil
-        for d in self.test_dirs: 
-            try:
-                shutil.rmtree(d)
-            except:
-                pass
 
 
 if __name__ == '__main__':
