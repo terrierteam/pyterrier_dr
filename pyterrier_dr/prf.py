@@ -4,7 +4,7 @@ import pyterrier as pt
 import pyterrier_alpha as pta
 
 
-def vector_prf(*, alpha : float = 1, beta : float = 0.2, k : int = 3):
+class VectorPrf(pt.Transformer):
     """
     Performs a Rocchio-esque PRF by linearly combining the query_vec column with 
     the doc_vec column of the top k documents.
@@ -23,19 +23,35 @@ def vector_prf(*, alpha : float = 1, beta : float = 0.2, k : int = 3):
 
     Reference: Hang Li, Ahmed Mourad, Shengyao Zhuang, Bevan Koopman, Guido Zuccon. [Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers: Successes and Pitfalls](https://arxiv.org/pdf/2108.11044.pdf)
     """
-    def _vector_prf(inp):
+    def __init__(self,
+        *,
+        alpha: float = 1,
+        beta: float = 0.2,
+        k: int = 3
+    ):
+        self.alpha = alpha
+        self.beta = beta
+        self.k = k
+
+    def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
+        """Transforms the input DataFrame query-by-query."""
+        return pt.apply.by_query(self.transform_by_query, add_ranks=False)(inp)
+
+    def transform_by_query(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.result_frame(inp, extra_columns=['query', 'query_vec', 'doc_vec'])
 
         # get the docvectors for the top k docs
-        doc_vecs = np.stack([ row.doc_vec for row in inp.head(k).itertuples() ])
+        doc_vecs = np.stack([ row.doc_vec for row in inp.head(self.k).itertuples() ])
         # combine their average and add to the query
-        query_vec = alpha * inp.iloc[0]['query_vec'] + beta * np.mean(doc_vecs, axis=0)
+        query_vec = self.alpha * inp.iloc[0]['query_vec'] + self.beta * np.mean(doc_vecs, axis=0)
         # generate new query dataframe with 'qid', 'query', 'query_vec'
-        return pd.DataFrame([[inp.iloc[0]['qid'], inp.iloc[0]['query'], query_vec]], columns=['qid', 'query', 'query_vec'])
+        return pd.DataFrame([[inp['qid'].iloc[0], inp['query'].iloc[0], query_vec]], columns=['qid', 'query', 'query_vec'])
 
-    return pt.apply.by_query(_vector_prf, add_ranks=False)
+    def __repr__(self):
+        return f"VectorPrf(alpha={self.alpha}, beta={self.beta}, k={self.k})"
 
-def average_prf(*, k : int = 3):
+
+class AveragePrf(pt.Transformer):
     """
     Performs Average PRF (as described by Li et al.) by averaging the query_vec column with 
     the doc_vec column of the top k documents.
@@ -51,16 +67,26 @@ def average_prf(*, k : int = 3):
             prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.average_prf() >> index 
 
     Reference: Hang Li, Ahmed Mourad, Shengyao Zhuang, Bevan Koopman, Guido Zuccon. [Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers: Successes and Pitfalls](https://arxiv.org/pdf/2108.11044.pdf)
-    
     """
-    def _average_prf(inp):
+    def __init__(self,
+        *,
+        k: int = 3
+    ):
+        self.k = k
+
+    def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
+        """Transforms the input DataFrame query-by-query."""
+        return pt.apply.by_query(self.transform_by_query, add_ranks=False)(inp)
+
+    def transform_by_query(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         # get the docvectors for the top k docs and the query_vec
-        all_vecs = np.stack([inp.iloc[0]['query_vec']] + [row.doc_vec for row in inp.head(k).itertuples()])
+        all_vecs = np.stack([inp.iloc[0]['query_vec']] + [row.doc_vec for row in inp.head(self.k).itertuples()])
         # combine their average and add to the query
         query_vec = np.mean(all_vecs, axis=0)
         # generate new query dataframe with 'qid', 'query', 'query_vec'
-        return pd.DataFrame([[inp.iloc[0]['qid'], inp.iloc[0]['query'], query_vec]], columns=['qid', 'query', 'query_vec'])
+        return pd.DataFrame([[inp['qid'].iloc[0], inp['query'].iloc[0], query_vec]], columns=['qid', 'query', 'query_vec'])
 
-    return pt.apply.by_query(_average_prf, add_ranks=False)
+    def __repr__(self):
+        return f"AveragePrf(k={self.k})"
