@@ -61,7 +61,7 @@ class BGEM3QueryEncoder(pt.Transformer):
                              return_dense=self.dense, return_sparse=self.sparse, return_colbert_vecs=self.multivecs)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta..columns(includes=['query'])
+        pta.validate.columns(includes=['query'])
 
         # check if inp is empty
         if len(inp) == 0:
