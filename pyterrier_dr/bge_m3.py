@@ -61,7 +61,7 @@ class BGEM3QueryEncoder(pt.Transformer):
                              return_dense=self.dense, return_sparse=self.sparse, return_colbert_vecs=self.multivecs)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.columns(includes=['query'])
+        pta.validate.columns(inp, includes=['query'])
 
         # check if inp is empty
         if len(inp) == 0:
@@ -109,7 +109,7 @@ class BGEM3DocEncoder(pt.Transformer):
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         # check if the input dataframe contains the field(s) specified in the text_field
-        pta.validate.columns(includes=[self.bge_factory.text_field])
+        pta.validate.columns(inp, includes=[self.bge_factory.text_field])
         # check if inp is empty
         if len(inp) == 0:
             if self.dense:
