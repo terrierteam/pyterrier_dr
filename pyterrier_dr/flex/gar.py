@@ -1,24 +1,31 @@
-import pandas as pd
 import pyterrier as pt
 import heapq
+import pyterrier_alpha as pta
 from . import FlexIndex
 import numpy as np
 from pyterrier_dr import SimFn
 
 class FlexGar(pt.Transformer):
-    def __init__(self, flex_index, graph, score_fn, batch_size=128, num_results=1000):
+    def __init__(self, flex_index, graph, score_fn, batch_size=128, num_results=1000, drop_query_vec=False):
         self.flex_index = flex_index
         self.docnos, self.dvecs, _ = flex_index.payload()
         self.score_fn = score_fn
         self.graph = graph
         self.batch_size = batch_size
         self.num_results = num_results
+        self.drop_query_vec = drop_query_vec
 
     def transform(self, inp):
-        assert 'qid' in inp.columns and 'query_vec' in inp.columns and 'docno' in inp.columns and 'score' in inp.columns
-        all_results = []
+        pta.validate.result_frame(inp, extra_columns=['query_vec', 'score'])
+
+        qcols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
+        if not self.drop_query_vec:
+            qcols += ['query_vec']
+        all_results = pta.DataFrameBuilder(qcols + ['docno', 'score', 'rank'])
+
         for qid, inp in inp.groupby('qid'):
             qvec = inp['query_vec'].iloc[0].reshape(1, -1)
+            qdata = {col: [inp[col].iloc[0]] for col in qcols}
             initial_heap = list(zip(-inp['score'], self.docnos.inv[inp['docno']]))
             heapq.heapify(initial_heap)
             results = {}
@@ -47,10 +54,15 @@ class FlexGar(pt.Transformer):
                 for did, score in zip(batch, scores):
                     results[did] = score
                     heapq.heappush(frontier_heap, (-score, did))
-                for rank, (did, score) in enumerate(sorted(results.items(), key=lambda x: (-x[1], x[0]))):
-                    all_results.append({'qid': qid, 'docno': self.docnos.fwd[did], 'score': score, 'rank': rank})
                 i += 1
-        return pd.DataFrame(all_results)
+            d, s = zip(*sorted(results.items(), key=lambda x: (-x[1], x[0])))
+            all_results.extend(dict(
+                **qdata,
+                docno=self.docnos.fwd[d],
+                score=s,
+                rank=np.arange(len(s)),
+            ))
+        return all_results.to_df()
 
 
 

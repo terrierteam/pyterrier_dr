@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyterrier-dr"
+description = "Dense Retrieval for PyTerrier"
+requires-python = ">=3.8"
+authors = [
+  {name = "Sean MacAvaney", email = "sean.macavaney@glasgow.ac.uk"},
+]
+maintainers = [
+  {name = "Sean MacAvaney", email = "sean.macavaney@glasgow.ac.uk"},
+]
+readme = "README.rst"
+classifiers = [
+  "Programming Language :: Python",
+  "Operating System :: OS Independent",
+  "Topic :: Text Processing",
+  "Topic :: Text Processing :: Indexing",
+  "License :: OSI Approved :: MIT License",
+]
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools.dynamic]
+version = {attr = "pyterrier_dr.__version__"}
+dependencies = {file = ["requirements.txt"]}
+
+[project.optional-dependencies]
+bgem3 = [
+  "FlagEmbedding",
+]
+
+[tool.setuptools.packages.find]
+exclude = ["tests"]
+
+[project.urls]
+Repository = "https://github.com/terrierteam/pyterrier_dr"
+"Bug Tracker" = "https://github.com/terrierteam/pyterrier_dr/issues"
+
+[project.entry-points."pyterrier.artifact"]
+"dense_index.flex" = "pyterrier_dr:FlexIndex"
+"cde_cache.np_pickle" = "pyterrier_dr:CDECache"
