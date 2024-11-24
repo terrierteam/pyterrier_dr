@@ -1,5 +1,4 @@
 # Deprecated module
-# flake8: noqa
 import torch
 import itertools
 import math
@@ -263,7 +262,7 @@ class NumpyIndex(pt.Indexer):
                 fout.write(doc_vecs.tobytes())
                 docnos.extend([d['docno'] for d in docs])
                 count += len(docs)
-        DocnoFile.build(docnos, path/f'docnos.npy')
+        DocnoFile.build(docnos, path/'docnos.npy')
         with open(path/'meta.json', 'wt') as f_meta:
             json.dump({'dtype': self.dtype, 'vec_size': vec_size, 'count': count}, f_meta)
 
@@ -470,8 +469,7 @@ class FaissFlat(pt.Indexer):
             query_vecs = query_vecs / np.linalg.norm(query_vecs, axis=1, keepdims=True)
         query_vecs = query_vecs.copy()
         res = []
-        query_heaps = [[] for _ in range(query_vecs.shape[0])]
-        docnos = DocnoFile(self.index_path/f'docnos.npy')
+        docnos = DocnoFile(self.index_path/'docnos.npy')
         num_q = query_vecs.shape[0]
         ranked_lists = RankedLists(self.num_results, num_q)
         dids_offset = 0
@@ -528,7 +526,7 @@ class FaissFlat(pt.Indexer):
                 index.add(doc_vecs)
                 docnos.extend(d['docno'] for d in batch)
             faiss.write_index(index, str(path/f'{shardid}.faiss'))
-        DocnoFile.build(docnos, path/f'docnos.npy')
+        DocnoFile.build(docnos, path/'docnos.npy')
 
 
 class FaissHnsw(pt.Indexer):
@@ -570,8 +568,7 @@ class FaissHnsw(pt.Indexer):
             query_vecs = query_vecs / np.linalg.norm(query_vecs, axis=1, keepdims=True)
         query_vecs = query_vecs.copy()
         res = []
-        query_heaps = [[] for _ in range(query_vecs.shape[0])]
-        docnos = DocnoFile(self.index_path/f'docnos.npy')
+        docnos = DocnoFile(self.index_path/'docnos.npy')
         num_q = query_vecs.shape[0]
         ranked_lists = RankedLists(self.num_results, num_q)
         dids_offset = 0
@@ -631,7 +628,7 @@ class FaissHnsw(pt.Indexer):
                 index.add(doc_vecs)
                 docnos.extend(d['docno'] for d in batch)
             faiss.write_index(index, str(path/f'{shardid}.faiss'))
-        DocnoFile.build(docnos, path/f'docnos.npy')
+        DocnoFile.build(docnos, path/'docnos.npy')
 
 
 
