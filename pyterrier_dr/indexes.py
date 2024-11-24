@@ -1,3 +1,5 @@
+# Deprecated module
+# flake8: noqa
 import threading
 import torch
 import itertools

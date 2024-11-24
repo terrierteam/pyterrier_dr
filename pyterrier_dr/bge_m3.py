@@ -1,4 +1,3 @@
-from tqdm import tqdm
 import pyterrier as pt
 import pandas as pd
 import numpy as np
@@ -16,7 +15,7 @@ class BGEM3(BiEncoder):
         self.device = torch.device(device)
         try:
             from FlagEmbedding import BGEM3FlagModel
-        except ImportError as e:
+        except ImportError:
             raise ImportError("BGE-M3 requires the FlagEmbedding package. You can install it using 'pip install pyterrier-dr[bgem3]'")
         
         self.model = BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16, device=self.device)
