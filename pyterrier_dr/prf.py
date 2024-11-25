@@ -33,11 +33,8 @@ class VectorPrf(pt.Transformer):
         self.beta = beta
         self.k = k
 
+    @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        """Transforms the input DataFrame query-by-query."""
-        return pt.apply.by_query(self.transform_by_query, add_ranks=False)(inp)
-
-    def transform_by_query(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.result_frame(inp, extra_columns=['query', 'query_vec', 'doc_vec'])
 
         # get the docvectors for the top k docs
@@ -74,11 +71,8 @@ class AveragePrf(pt.Transformer):
     ):
         self.k = k
 
+    @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        """Transforms the input DataFrame query-by-query."""
-        return pt.apply.by_query(self.transform_by_query, add_ranks=False)(inp)
-
-    def transform_by_query(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         # get the docvectors for the top k docs and the query_vec
