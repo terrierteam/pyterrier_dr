@@ -34,3 +34,11 @@ Import ``pyterrier_dr``, load a pre-built index and model, and retrieve:
     997  82.551933  10064  10063   997   1  chemical reactions
     998  82.546890   4417   4416   998   1  chemical reactions
     999  82.545776   7120   7119   999   1  chemical reactions
+
+
+.. rubric:: Table of Contents
+
+.. toctree::
+    :maxdepth: 1
+
+    prf

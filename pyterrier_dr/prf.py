@@ -14,8 +14,9 @@ class VectorPrf(pt.Transformer):
      - beta: weight of doc_vec
      - k: number of pseudo-relevant feedback documents
 
-    Expected Input: ['qid', 'query_vec', 'docno', 'doc_vec']
-    Output: ['qid', 'query_vec']
+    Expected Input Columns: ``['qid', 'query_vec', 'docno', 'doc_vec']``
+
+    Output Columns: ``['qid', 'query_vec']`` (Any other query columns from the input are also pulled included in the output.)
 
     Example::
     
@@ -56,6 +57,7 @@ class VectorPrf(pt.Transformer):
 
     @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
+        """Performs Vector PRF on the input dataframe."""
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
@@ -79,8 +81,9 @@ class AveragePrf(pt.Transformer):
     Arguments:
      - k: number of pseudo-relevant feedback documents
 
-    Expected Input: ['qid', 'query_vec', 'docno', 'doc_vec']
-    Output: ['qid', 'query_vec']
+    Expected Input Columns: ``['qid', 'query_vec', 'docno', 'doc_vec']``
+
+    Output Columns: ``['qid', 'query_vec']`` (Any other query columns from the input are also pulled included in the output.)
 
     Example::
     
@@ -117,6 +120,7 @@ class AveragePrf(pt.Transformer):
 
     @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
+        """Performs Average PRF on the input dataframe."""
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
