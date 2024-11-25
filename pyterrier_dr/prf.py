@@ -14,8 +14,8 @@ class VectorPrf(pt.Transformer):
      - beta: weight of doc_vec
      - k: number of pseudo-relevant feedback documents
 
-    Expected Input: ['qid', 'query', 'query_vec', 'doc_vec']
-    Output: ['qid', 'query', 'query_vec']
+    Expected Input: ['qid', 'query_vec', 'docno', 'doc_vec']
+    Output: ['qid', 'query_vec']
 
     Example::
     
@@ -35,14 +35,16 @@ class VectorPrf(pt.Transformer):
 
     @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.result_frame(inp, extra_columns=['query', 'query_vec', 'doc_vec'])
+        pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
+
+        query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
 
         # get the docvectors for the top k docs
         doc_vecs = np.stack([ row.doc_vec for row in inp.head(self.k).itertuples() ])
         # combine their average and add to the query
-        query_vec = self.alpha * inp.iloc[0]['query_vec'] + self.beta * np.mean(doc_vecs, axis=0)
-        # generate new query dataframe with 'qid', 'query', 'query_vec'
-        return pd.DataFrame([[inp['qid'].iloc[0], inp['query'].iloc[0], query_vec]], columns=['qid', 'query', 'query_vec'])
+        query_vec = self.alpha * inp['query_vec'].iloc[0] + self.beta * np.mean(doc_vecs, axis=0)
+        # generate new query dataframe with the existing query columns and the new query_vec
+        return pd.DataFrame([[inp[c].iloc[1] for c in query_cols] + [query_vec]], columns=query_cols + ['query_vec'])
 
     def __repr__(self):
         return f"VectorPrf(alpha={self.alpha}, beta={self.beta}, k={self.k})"
@@ -56,8 +58,8 @@ class AveragePrf(pt.Transformer):
     Arguments:
      - k: number of pseudo-relevant feedback documents
 
-    Expected Input: ['qid', 'query_vec', 'doc_vec']
-    Output: ['qid', 'query', 'query_vec']
+    Expected Input: ['qid', 'query_vec', 'docno', 'doc_vec']
+    Output: ['qid', 'query_vec']
 
     Example::
     
@@ -75,12 +77,14 @@ class AveragePrf(pt.Transformer):
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
+        query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
+
         # get the docvectors for the top k docs and the query_vec
-        all_vecs = np.stack([inp.iloc[0]['query_vec']] + [row.doc_vec for row in inp.head(self.k).itertuples()])
+        all_vecs = np.stack([inp['query_vec'].iloc[0]] + [row.doc_vec for row in inp.head(self.k).itertuples()])
         # combine their average and add to the query
         query_vec = np.mean(all_vecs, axis=0)
-        # generate new query dataframe with 'qid', 'query', 'query_vec'
-        return pd.DataFrame([[inp['qid'].iloc[0], inp['query'].iloc[0], query_vec]], columns=['qid', 'query', 'query_vec'])
+        # generate new query dataframe with the existing query columns and the new query_vec
+        return pd.DataFrame([[inp[c].iloc[1] for c in query_cols] + [query_vec]], columns=query_cols + ['query_vec'])
 
     def __repr__(self):
         return f"AveragePrf(k={self.k})"
