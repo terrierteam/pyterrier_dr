@@ -67,7 +67,7 @@ class VectorPrf(pt.Transformer):
         # combine their average and add to the query
         query_vec = self.alpha * inp['query_vec'].iloc[0] + self.beta * np.mean(doc_vecs, axis=0)
         # generate new query dataframe with the existing query columns and the new query_vec
-        return pd.DataFrame([[inp[c].iloc[1] for c in query_cols] + [query_vec]], columns=query_cols + ['query_vec'])
+        return pd.DataFrame([[inp[c].iloc[0] for c in query_cols] + [query_vec]], columns=query_cols + ['query_vec'])
 
     def __repr__(self):
         return f"VectorPrf(alpha={self.alpha}, beta={self.beta}, k={self.k})"
@@ -130,7 +130,7 @@ class AveragePrf(pt.Transformer):
         # combine their average and add to the query
         query_vec = np.mean(all_vecs, axis=0)
         # generate new query dataframe with the existing query columns and the new query_vec
-        return pd.DataFrame([[inp[c].iloc[1] for c in query_cols] + [query_vec]], columns=query_cols + ['query_vec'])
+        return pd.DataFrame([[inp[c].iloc[0] for c in query_cols] + [query_vec]], columns=query_cols + ['query_vec'])
 
     def __repr__(self):
         return f"AveragePrf(k={self.k})"
