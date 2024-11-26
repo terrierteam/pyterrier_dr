@@ -29,7 +29,7 @@ class NumpyRetriever(pt.Transformer):
         ranked_lists = RankedLists(self.num_results, num_q)
         batch_it = range(0, dvecs.shape[0], self.batch_size)
         if self.flex_index.verbose:
-            batch_it = pt.tqdm(batch_it)
+            batch_it = pt.tqdm(batch_it, desc='NumpyRetriever scoring', unit='docbatch')
         for idx_start in batch_it:
             doc_batch = dvecs[idx_start:idx_start+self.batch_size].T
             if self.flex_index.sim_fn == SimFn.cos:
