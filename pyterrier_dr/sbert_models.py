@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pyterrier as pt
 from transformers import AutoConfig
-from functools import partial
+from functools import partialmethod
 from .biencoder import BiEncoder, BiQueryEncoder
 from .util import Variants
 from tqdm import tqdm
@@ -61,8 +61,8 @@ class Ance(_SBertBiEncoder):
 
 class E5(_SBertBiEncoder):
 
-    encode_queries = partial(_sbert_encode, prompt='query: ', normalize_embeddings=True)
-    encode_docs = partial(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
+    encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
+    encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
 
     VARIANTS = {
         'base' : 'intfloat/e5-base-v2',
