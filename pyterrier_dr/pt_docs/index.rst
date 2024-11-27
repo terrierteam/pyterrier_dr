@@ -42,3 +42,4 @@ Import ``pyterrier_dr``, load a pre-built index and model, and retrieve:
     :maxdepth: 1
 
     prf
+    sbert

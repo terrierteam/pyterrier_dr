@@ -1,7 +1,8 @@
 Using Sentence Transformer models for Dense retrieval in PyTerrier
 ==================================================================
 
-With PyTerrier_DR, its easy to support Sentence Transformer models, e.g. from HuggingFace, for dense retrieval.
+With PyTerrier_DR, its easy to support Sentence Transformer (formerly called SentenceBERT)
+models, e.g. from HuggingFace, for dense retrieval.
 
 The base class is ``SBertBiEncoder('huggingface/path')``;
 
