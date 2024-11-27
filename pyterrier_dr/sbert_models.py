@@ -2,19 +2,26 @@ import numpy as np
 import torch
 import pyterrier as pt
 from transformers import AutoConfig
+from functools import partial
 from .biencoder import BiEncoder, BiQueryEncoder
 from .util import Variants
 from tqdm import tqdm
 
-def _sbert_encode(self, texts, batch_size=None):
+def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embeddings=False):
     show_progress = False
     if isinstance(texts, tqdm):
         texts.disable = True
         show_progress = True
     texts = list(texts)
+    if prompt is not None:
+        texts = [prompt + t for t in texts]
     if len(texts) == 0:
         return np.empty(shape=(0, 0))
-    return self.model.encode(texts, batch_size=batch_size or self.batch_size, show_progress_bar=show_progress)
+    return self.model.encode(texts, 
+                             batch_size=batch_size or self.batch_size, 
+                             show_progress_bar=show_progress,
+                             normalize_embeddings=normalize_embeddings
+                             )
 
 
 class SBertBiEncoder(BiEncoder):
@@ -52,6 +59,15 @@ class Ance(_SBertBiEncoder):
         'firstp': 'sentence-transformers/msmarco-roberta-base-ance-firstp',
     }
 
+class E5(_SBertBiEncoder):
+
+    encode_queries = partial(_sbert_encode, prompt='query: ', normalize_embeddings=True)
+    encode_docs = partial(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
+
+    VARIANTS = {
+        'base' : 'intfloat/e5-base-v2',
+        # TODO add more here
+    }
 
 class GTR(_SBertBiEncoder):
     VARIANTS = {

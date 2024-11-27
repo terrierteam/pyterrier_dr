@@ -152,6 +152,16 @@ class TestModels(unittest.TestCase):
         from pyterrier_dr import Ance
         self._base_test(Ance.firstp())
 
+    def test_e5(self):
+        from pyterrier_dr import E5
+        testmodel = E5.base()
+        self._base_test(testmodel)
+        scorer = testmodel.scorer()
+        self.assertEqual(
+            True,
+            scorer({'qid': 'q1', 'query' : 'chemical reactions', 'docno' : 'd2', 'text' : 'professor proton mixed the chemical'})[0]['score'] >0,
+        )
+
     def test_tasb(self):
         from pyterrier_dr import TasB
         self._base_test(TasB.dot())
