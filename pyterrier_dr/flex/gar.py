@@ -65,7 +65,21 @@ class FlexGar(pt.Transformer):
         return all_results.to_df()
 
 
+def _gar(self,
+    k: int = 16,
+    *,
+    batch_size: int = 128,
+    num_results: int = 1000
+) -> pt.Transformer:
+    """Returns a retriever that uses a corpus graph to search over a FlexIndex.
 
-def _gar(self, k=16, batch_size=128, num_results=1000):
+    Args:
+        k (int): Number of neighbours in the corpus graph. Defaults to 16.
+        batch_size (int): Batch size for retrieval. Defaults to 128.
+        num_results (int): Number of results per query to return. Defaults to 1000.
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A retriever that uses a corpus graph to search over a FlexIndex.
+    """
     return FlexGar(self, self.corpus_graph(k), SimFn.dot, batch_size=batch_size, num_results=num_results)
 FlexIndex.gar = _gar

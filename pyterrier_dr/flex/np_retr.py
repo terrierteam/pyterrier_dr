@@ -1,3 +1,4 @@
+from typing import Optional
 import pyterrier as pt
 import numpy as np
 import pandas as pd
@@ -8,7 +9,13 @@ import pyterrier_alpha as pta
 
 
 class NumpyRetriever(pt.Transformer):
-    def __init__(self, flex_index, num_results=1000, batch_size=None, drop_query_vec=False):
+    def __init__(self,
+        flex_index: FlexIndex,
+        *,
+        num_results: int = 1000,
+        batch_size: Optional[int] = None,
+        drop_query_vec: bool = False
+    ):
         self.flex_index = flex_index
         self.num_results = num_results
         self.batch_size = batch_size or 4096
@@ -53,7 +60,7 @@ class NumpyRetriever(pt.Transformer):
 
 
 class NumpyVectorLoader(pt.Transformer):
-    def __init__(self, flex_index):
+    def __init__(self, flex_index: FlexIndex):
         self.flex_index = flex_index
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
@@ -63,7 +70,7 @@ class NumpyVectorLoader(pt.Transformer):
 
 
 class NumpyScorer(pt.Transformer):
-    def __init__(self, flex_index, num_results=None):
+    def __init__(self, flex_index: FlexIndex, *, num_results: Optional[int] = None):
         self.flex_index = flex_index
         self.num_results = num_results
 
@@ -79,7 +86,7 @@ class NumpyScorer(pt.Transformer):
         else:
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
 
-    def transform(self, inp):
+    def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         with pta.validate.any(inp) as v:
             v.columns(includes=['query_vec', 'docno'])
             v.columns(includes=['query_vec', 'docid'])
@@ -108,19 +115,63 @@ class NumpyScorer(pt.Transformer):
         res = res.assign(score=res_scores, rank=res_ranks)
         return res
 
+def _np_vecs(self) -> np.ndarray:
+    """Return the indexed vectors.
 
-def _np_retriever(self, num_results=1000, batch_size=None, drop_query_vec=False):
+    Returns:
+        :class:`numpy.ndarray`: The indexed vectors as a memory-mapped numpy array.
+    """
+    dvecs, meta = self.payload(return_docnos=False)
+    return dvecs
+FlexIndex.np_vecs = _np_vecs
+
+def _np_retriever(self, *, num_results: int = 1000, batch_size: Optional[int] = None, drop_query_vec: bool = False):
+    """Return a retriever that uses numpy to perform a brute force search over the index.
+
+    The returned transformer expects a DataFrame with columns ``qid`` and ``query_vec``. It outpus
+    a result frame containing the retrieved results.
+
+    Args:
+        num_results: The number of results to return per query.
+        batch_size: The number of documents to score in each batch.
+        drop_query_vec: Whether to drop the query vector from the output.
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A retriever that uses numpy to perform a brute force search.
+    """
     return NumpyRetriever(self, num_results=num_results, batch_size=batch_size, drop_query_vec=drop_query_vec)
 FlexIndex.np_retriever = _np_retriever
+FlexIndex.retriever = _np_retriever # default retriever
 
 
 def _np_vec_loader(self):
+    """Return a transformer that loads indexed vectors.
+
+    The returned transformer expects a DataFrame with columns ``docno``. It outputs a frame that
+    includes a column ``doc_vec``, which contains the indexed vectors.
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A transformer that loads indexed vectors.
+    """
     return NumpyVectorLoader(self)
 FlexIndex.np_vec_loader = _np_vec_loader
 FlexIndex.vec_loader = _np_vec_loader # default vec_loader
 
 
-def _np_scorer(self, num_results=None):
+def _np_scorer(self, *, num_results: Optional[int] = None) -> pt.Transformer:
+    """Return a scorer that uses numpy to score (re-rank) results using indexed vectors.
+
+    The returned transformer expects a DataFrame with columns ``qid``, ``query_vec`` and ``docno``.
+    (If an internal ``docid`` column is provided, this will be used to speed up vector lookups.)
+
+    This method uses memory-mapping to avoid loading the entire index into memory at once.
+
+    Args:
+        num_results: The number of results to return per query. If not provided, all resuls from the original fram are returned.
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A transformer that scores query vectors with numpy.
+    """
     return NumpyScorer(self, num_results)
 FlexIndex.np_scorer = _np_scorer
 FlexIndex.scorer = _np_scorer # default scorer

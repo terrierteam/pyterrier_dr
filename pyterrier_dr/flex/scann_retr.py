@@ -1,3 +1,4 @@
+from typing import Optional
 import math
 import os
 import pyterrier as pt
@@ -11,10 +12,11 @@ logger = ir_datasets.log.easy()
 
 
 class ScannRetriever(pt.Indexer):
-    def __init__(self, flex_index, scann_index, leaves_to_search=None, qbatch=64, drop_query_vec=False):
+    def __init__(self, flex_index, scann_index, num_results=1000, leaves_to_search=None, qbatch=64, drop_query_vec=False):
         self.flex_index = flex_index
         self.scann_index = scann_index
         self.leaves_to_search = leaves_to_search
+        self.num_results = num_results
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
 
@@ -29,7 +31,7 @@ class ScannRetriever(pt.Indexer):
         num_q = query_vecs.shape[0]
         QBATCH = self.qbatch
         for qidx in range(0, num_q, QBATCH):
-            dids, scores = self.scann_index.search_batched(query_vecs[qidx:qidx+QBATCH], leaves_to_search=self.leaves_to_search, final_num_neighbors=self.flex_index.num_results)
+            dids, scores = self.scann_index.search_batched(query_vecs[qidx:qidx+QBATCH], leaves_to_search=self.leaves_to_search, final_num_neighbors=self.num_results)
             for s, d in zip(scores, dids):
                 mask = d != -1
                 d = d[mask]
@@ -46,7 +48,55 @@ class ScannRetriever(pt.Indexer):
         return result.to_df(inp)
 
 
-def _scann_retriever(self, n_leaves=None, leaves_to_search=1, train_sample=None, drop_query_vec=False):
+def _scann_retriever(self,
+    *,
+    n_leaves: Optional[int] = None,
+    leaves_to_search: int = 1,
+    num_results: int = 1000,
+    train_sample: Optional[int] = None,
+    drop_query_vec=False
+):
+    """Returns a retriever over a ScaNN (Scalable Nearest Neighbors) index.
+
+    Args:
+        n_leaves (int, optional): Number of leaves in the ScaNN index. Defaults to approximatley sqrt(doc_count).
+        leaves_to_search (int, optional): Number of leaves to search. Defaults to 1. The higher the value, the more accurate the search.
+        num_results (int, optional): Number of results to return. Defaults to 1000.
+        train_sample (int, optional): Number of training samples. Defaults to ``n_leaves*39``.
+        drop_query_vec (bool, optional): Whether to drop the query vector from the output.
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A transformer that retrieves using ScaNN.
+
+    .. note::
+        This method requires the ``scann`` package. Install it via ``pip install scann``.
+
+    .. code-block:: bibtex
+        :caption: ScaNN Citation
+        :class: citation
+
+        @inproceedings{DBLP:conf/icml/GuoSLGSCK20,
+          author       = {Ruiqi Guo and
+                          Philip Sun and
+                          Erik Lindgren and
+                          Quan Geng and
+                          David Simcha and
+                          Felix Chern and
+                          Sanjiv Kumar},
+          title        = {Accelerating Large-Scale Inference with Anisotropic Vector Quantization},
+          booktitle    = {Proceedings of the 37th International Conference on Machine Learning,
+                          {ICML} 2020, 13-18 July 2020, Virtual Event},
+          series       = {Proceedings of Machine Learning Research},
+          volume       = {119},
+          pages        = {3887--3896},
+          publisher    = {{PMLR}},
+          year         = {2020},
+          url          = {http://proceedings.mlr.press/v119/guo20h.html},
+          timestamp    = {Tue, 15 Dec 2020 17:40:18 +0100},
+          biburl       = {https://dblp.org/rec/conf/icml/GuoSLGSCK20.bib},
+          bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
+    """
     pyterrier_dr.util.assert_scann()
     import scann
     dvecs, meta, = self.payload(return_docnos=False)
@@ -79,5 +129,5 @@ def _scann_retriever(self, n_leaves=None, leaves_to_search=1, train_sample=None,
         else:
             with logger.duration('reading index'):
                 self._cache[key] = scann.scann_ops_pybind.load_searcher(dvecs, str(self.index_path/index_name))
-    return ScannRetriever(self, self._cache[key], leaves_to_search=leaves_to_search, drop_query_vec=drop_query_vec)
+    return ScannRetriever(self, self._cache[key], num_results=num_results, leaves_to_search=leaves_to_search, drop_query_vec=drop_query_vec)
 FlexIndex.scann_retriever = _scann_retriever
