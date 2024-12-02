@@ -66,7 +66,8 @@ class E5(_SBertBiEncoder):
 
     VARIANTS = {
         'base' : 'intfloat/e5-base-v2',
-        # TODO add more here
+        'small': 'intfloat/e5-small-v2', 
+        'large': 'intfloat/e5-large-v2',
     }
 
 class GTR(_SBertBiEncoder):
