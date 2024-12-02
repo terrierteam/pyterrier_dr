@@ -18,3 +18,4 @@ This functionality is covered in more detail in the following pages:
     overview
     indexing-retrieval
     prf
+    sbert
