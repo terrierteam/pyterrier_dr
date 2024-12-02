@@ -53,7 +53,7 @@ class BiEncoder(pt.Transformer):
         return BiScorer(self, verbose=verbose, batch_size=batch_size, sim_fn=sim_fn)
 
     def scorer(self, verbose=None, batch_size=None, sim_fn=None) -> pt.Transformer:
-        return self.text_scorer(self, verbose=verbose, batch_size=batch_size, sim_fn=sim_fn)
+        return self.text_scorer(verbose=verbose, batch_size=batch_size, sim_fn=sim_fn)
 
     @property
     def sim_fn(self) -> SimFn:
