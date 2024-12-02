@@ -71,31 +71,7 @@ def _scann_retriever(self,
     .. note::
         This method requires the ``scann`` package. Install it via ``pip install scann``.
 
-    .. code-block:: bibtex
-        :caption: ScaNN Citation
-        :class: citation
-
-        @inproceedings{DBLP:conf/icml/GuoSLGSCK20,
-          author       = {Ruiqi Guo and
-                          Philip Sun and
-                          Erik Lindgren and
-                          Quan Geng and
-                          David Simcha and
-                          Felix Chern and
-                          Sanjiv Kumar},
-          title        = {Accelerating Large-Scale Inference with Anisotropic Vector Quantization},
-          booktitle    = {Proceedings of the 37th International Conference on Machine Learning,
-                          {ICML} 2020, 13-18 July 2020, Virtual Event},
-          series       = {Proceedings of Machine Learning Research},
-          volume       = {119},
-          pages        = {3887--3896},
-          publisher    = {{PMLR}},
-          year         = {2020},
-          url          = {http://proceedings.mlr.press/v119/guo20h.html},
-          timestamp    = {Tue, 15 Dec 2020 17:40:18 +0100},
-          biburl       = {https://dblp.org/rec/conf/icml/GuoSLGSCK20.bib},
-          bibsource    = {dblp computer science bibliography, https://dblp.org}
-        }
+    .. cite:dblp:: conf/icml/GuoSLGSCK20
     """
     pyterrier_dr.util.assert_scann()
     import scann

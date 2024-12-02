@@ -73,34 +73,7 @@ def _pre_ladr(self,
     Returns:
         :class:`~pyterrier.Transformer`: A proactive LADR transformer.
 
-    .. code-block:: bibtex
-        :caption: LADR Citation
-        :class: citation
-
-        @inproceedings{DBLP:conf/sigir/KulkarniMGF23,
-          author       = {Hrishikesh Kulkarni and
-                          Sean MacAvaney and
-                          Nazli Goharian and
-                          Ophir Frieder},
-          editor       = {Hsin{-}Hsi Chen and
-                          Wei{-}Jou (Edward) Duh and
-                          Hen{-}Hsen Huang and
-                          Makoto P. Kato and
-                          Josiane Mothe and
-                          Barbara Poblete},
-          title        = {Lexically-Accelerated Dense Retrieval},
-          booktitle    = {Proceedings of the 46th International {ACM} {SIGIR} Conference on
-                          Research and Development in Information Retrieval, {SIGIR} 2023, Taipei,
-                          Taiwan, July 23-27, 2023},
-          pages        = {152--162},
-          publisher    = {{ACM}},
-          year         = {2023},
-          url          = {https://doi.org/10.1145/3539618.3591715},
-          doi          = {10.1145/3539618.3591715},
-          timestamp    = {Fri, 21 Jul 2023 22:25:19 +0200},
-          biburl       = {https://dblp.org/rec/conf/sigir/KulkarniMGF23.bib},
-          bibsource    = {dblp computer science bibliography, https://dblp.org}
-        }
+    .. cite:dblp:: conf/sigir/KulkarniMGF23
     """
     graph = self.corpus_graph(k) if isinstance(k, int) else k
     return LadrPreemptive(self, graph, num_results=num_results, hops=hops, dense_scorer=dense_scorer or self.scorer(), drop_query_vec=drop_query_vec)
@@ -189,34 +162,7 @@ def _ada_ladr(self,
     Returns:
         :class:`~pyterrier.Transformer`: An adaptive LADR transformer.
 
-    .. code-block:: bibtex
-        :caption: LADR Citation
-        :class: citation
-
-        @inproceedings{DBLP:conf/sigir/KulkarniMGF23,
-          author       = {Hrishikesh Kulkarni and
-                          Sean MacAvaney and
-                          Nazli Goharian and
-                          Ophir Frieder},
-          editor       = {Hsin{-}Hsi Chen and
-                          Wei{-}Jou (Edward) Duh and
-                          Hen{-}Hsen Huang and
-                          Makoto P. Kato and
-                          Josiane Mothe and
-                          Barbara Poblete},
-          title        = {Lexically-Accelerated Dense Retrieval},
-          booktitle    = {Proceedings of the 46th International {ACM} {SIGIR} Conference on
-                          Research and Development in Information Retrieval, {SIGIR} 2023, Taipei,
-                          Taiwan, July 23-27, 2023},
-          pages        = {152--162},
-          publisher    = {{ACM}},
-          year         = {2023},
-          url          = {https://doi.org/10.1145/3539618.3591715},
-          doi          = {10.1145/3539618.3591715},
-          timestamp    = {Fri, 21 Jul 2023 22:25:19 +0200},
-          biburl       = {https://dblp.org/rec/conf/sigir/KulkarniMGF23.bib},
-          bibsource    = {dblp computer science bibliography, https://dblp.org}
-        }
+    .. cite:dblp:: conf/sigir/KulkarniMGF23
     """
     graph = self.corpus_graph(k) if isinstance(k, int) else k
     return LadrAdaptive(self, graph, num_results=num_results, dense_scorer=dense_scorer or self.scorer(), depth=depth, max_hops=max_hops, drop_query_vec=drop_query_vec)

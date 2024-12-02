@@ -22,28 +22,7 @@ class VectorPrf(pt.Transformer):
     
             prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.vector_prf() >> index 
 
-    .. code-block:: bibtex
-        :caption: Citation
-
-        @article{DBLP:journals/tois/0009MZKZ23,
-          author       = {Hang Li and
-                          Ahmed Mourad and
-                          Shengyao Zhuang and
-                          Bevan Koopman and
-                          Guido Zuccon},
-          title        = {Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers:
-                          Successes and Pitfalls},
-          journal      = {{ACM} Trans. Inf. Syst.},
-          volume       = {41},
-          number       = {3},
-          pages        = {62:1--62:40},
-          year         = {2023},
-          url          = {https://doi.org/10.1145/3570724},
-          doi          = {10.1145/3570724},
-          timestamp    = {Fri, 21 Jul 2023 22:26:51 +0200},
-          biburl       = {https://dblp.org/rec/journals/tois/0009MZKZ23.bib},
-          bibsource    = {dblp computer science bibliography, https://dblp.org}
-        }
+    .. cite:dblp:: journals/tois/0009MZKZ23
     """
     def __init__(self,
         *,
@@ -89,28 +68,7 @@ class AveragePrf(pt.Transformer):
     
             prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.average_prf() >> index 
 
-    .. code-block:: bibtex
-        :caption: Citation
-
-        @article{DBLP:journals/tois/0009MZKZ23,
-          author       = {Hang Li and
-                          Ahmed Mourad and
-                          Shengyao Zhuang and
-                          Bevan Koopman and
-                          Guido Zuccon},
-          title        = {Pseudo Relevance Feedback with Deep Language Models and Dense Retrievers:
-                          Successes and Pitfalls},
-          journal      = {{ACM} Trans. Inf. Syst.},
-          volume       = {41},
-          number       = {3},
-          pages        = {62:1--62:40},
-          year         = {2023},
-          url          = {https://doi.org/10.1145/3570724},
-          doi          = {10.1145/3570724},
-          timestamp    = {Fri, 21 Jul 2023 22:26:51 +0200},
-          biburl       = {https://dblp.org/rec/journals/tois/0009MZKZ23.bib},
-          bibsource    = {dblp computer science bibliography, https://dblp.org}
-        }
+    .. cite:dblp:: journals/tois/0009MZKZ23
     """
     def __init__(self,
         *,
