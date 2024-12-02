@@ -172,6 +172,6 @@ def _np_scorer(self, *, num_results: Optional[int] = None) -> pt.Transformer:
     Returns:
         :class:`~pyterrier.Transformer`: A transformer that scores query vectors with numpy.
     """
-    return NumpyScorer(self, num_results)
+    return NumpyScorer(self, num_results=num_results)
 FlexIndex.np_scorer = _np_scorer
 FlexIndex.scorer = _np_scorer # default scorer

@@ -80,6 +80,29 @@ def _gar(self,
 
     Returns:
         :class:`~pyterrier.Transformer`: A retriever that uses a corpus graph to search over a FlexIndex.
+
+    .. code-block:: bibtex
+        :caption: GAR Citation
+        :class: citation
+
+        @inproceedings{DBLP:conf/cikm/MacAvaneyTM22,
+          author       = {Sean MacAvaney and
+                          Nicola Tonellotto and
+                          Craig Macdonald},
+          editor       = {Mohammad Al Hasan and
+                          Li Xiong},
+          title        = {Adaptive Re-Ranking with a Corpus Graph},
+          booktitle    = {Proceedings of the 31st {ACM} International Conference on Information
+                          {\\&} Knowledge Management, Atlanta, GA, USA, October 17-21, 2022},
+          pages        = {1491--1500},
+          publisher    = {{ACM}},
+          year         = {2022},
+          url          = {https://doi.org/10.1145/3511808.3557231},
+          doi          = {10.1145/3511808.3557231},
+          timestamp    = {Wed, 19 Oct 2022 17:09:02 +0200},
+          biburl       = {https://dblp.org/rec/conf/cikm/MacAvaneyTM22.bib},
+          bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
     """
     return FlexGar(self, self.corpus_graph(k), SimFn.dot, batch_size=batch_size, num_results=num_results)
 FlexIndex.gar = _gar

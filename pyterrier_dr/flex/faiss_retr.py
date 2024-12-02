@@ -75,6 +75,33 @@ def _faiss_flat_retriever(self, *, gpu=False, qbatch=64, drop_query_vec=False):
 
     .. note::
         This transformer requires the ``faiss`` package to be installed.
+
+    .. code-block:: bibtex
+        :caption: FAISS Citation
+        :class: citation
+
+        @article{DBLP:journals/corr/abs-2401-08281,
+          author       = {Matthijs Douze and
+                          Alexandr Guzhva and
+                          Chengqi Deng and
+                          Jeff Johnson and
+                          Gergely Szilvasy and
+                          Pierre{-}Emmanuel Mazar{\'{e}} and
+                          Maria Lomeli and
+                          Lucas Hosseini and
+                          Herv{\'{e}} J{\'{e}}gou},
+          title        = {The Faiss library},
+          journal      = {CoRR},
+          volume       = {abs/2401.08281},
+          year         = {2024},
+          url          = {https://doi.org/10.48550/arXiv.2401.08281},
+          doi          = {10.48550/ARXIV.2401.08281},
+          eprinttype    = {arXiv},
+          eprint       = {2401.08281},
+          timestamp    = {Thu, 01 Feb 2024 15:35:36 +0100},
+          biburl       = {https://dblp.org/rec/journals/corr/abs-2401-08281.bib},
+          bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
     """
     pyterrier_dr.util.assert_faiss()
     import faiss
@@ -132,6 +159,33 @@ def _faiss_hnsw_retriever(
 
     .. note::
         This transformer requires the ``faiss`` package to be installed.
+
+    .. code-block:: bibtex
+        :caption: FAISS Citation
+        :class: citation
+
+        @article{DBLP:journals/corr/abs-2401-08281,
+          author       = {Matthijs Douze and
+                          Alexandr Guzhva and
+                          Chengqi Deng and
+                          Jeff Johnson and
+                          Gergely Szilvasy and
+                          Pierre{-}Emmanuel Mazar{\'{e}} and
+                          Maria Lomeli and
+                          Lucas Hosseini and
+                          Herv{\'{e}} J{\'{e}}gou},
+          title        = {The Faiss library},
+          journal      = {CoRR},
+          volume       = {abs/2401.08281},
+          year         = {2024},
+          url          = {https://doi.org/10.48550/arXiv.2401.08281},
+          doi          = {10.48550/ARXIV.2401.08281},
+          eprinttype    = {arXiv},
+          eprint       = {2401.08281},
+          timestamp    = {Thu, 01 Feb 2024 15:35:36 +0100},
+          biburl       = {https://dblp.org/rec/journals/corr/abs-2401-08281.bib},
+          bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
     """
     pyterrier_dr.util.assert_faiss()
     import faiss
@@ -172,6 +226,33 @@ def _faiss_hnsw_graph(self, neighbours: int = 32, *, ef_construction: int = 40):
 
     .. note::
         This function requires the ``faiss`` package to be installed.
+
+    .. code-block:: bibtex
+        :caption: FAISS Citation
+        :class: citation
+
+        @article{DBLP:journals/corr/abs-2401-08281,
+          author       = {Matthijs Douze and
+                          Alexandr Guzhva and
+                          Chengqi Deng and
+                          Jeff Johnson and
+                          Gergely Szilvasy and
+                          Pierre{-}Emmanuel Mazar{\'{e}} and
+                          Maria Lomeli and
+                          Lucas Hosseini and
+                          Herv{\'{e}} J{\'{e}}gou},
+          title        = {The Faiss library},
+          journal      = {CoRR},
+          volume       = {abs/2401.08281},
+          year         = {2024},
+          url          = {https://doi.org/10.48550/arXiv.2401.08281},
+          doi          = {10.48550/ARXIV.2401.08281},
+          eprinttype    = {arXiv},
+          eprint       = {2401.08281},
+          timestamp    = {Thu, 01 Feb 2024 15:35:36 +0100},
+          biburl       = {https://dblp.org/rec/journals/corr/abs-2401-08281.bib},
+          bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
     """
     key = ('faiss_hnsw', neighbours//2, ef_construction)
     graph_name = f'hnsw_n-{neighbours}_ef-{ef_construction}.graph'
@@ -241,6 +322,33 @@ def _faiss_ivf_retriever(self,
 
     .. note::
         This transformer requires the ``faiss`` package to be installed.
+
+    .. code-block:: bibtex
+        :caption: FAISS Citation
+        :class: citation
+
+        @article{DBLP:journals/corr/abs-2401-08281,
+          author       = {Matthijs Douze and
+                          Alexandr Guzhva and
+                          Chengqi Deng and
+                          Jeff Johnson and
+                          Gergely Szilvasy and
+                          Pierre{-}Emmanuel Mazar{\'{e}} and
+                          Maria Lomeli and
+                          Lucas Hosseini and
+                          Herv{\'{e}} J{\'{e}}gou},
+          title        = {The Faiss library},
+          journal      = {CoRR},
+          volume       = {abs/2401.08281},
+          year         = {2024},
+          url          = {https://doi.org/10.48550/arXiv.2401.08281},
+          doi          = {10.48550/ARXIV.2401.08281},
+          eprinttype    = {arXiv},
+          eprint       = {2401.08281},
+          timestamp    = {Thu, 01 Feb 2024 15:35:36 +0100},
+          biburl       = {https://dblp.org/rec/journals/corr/abs-2401-08281.bib},
+          bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
     """
     pyterrier_dr.util.assert_faiss()
     import faiss
