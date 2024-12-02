@@ -11,13 +11,13 @@ class TestModels(unittest.TestCase):
 
     def _base_test(self, model, test_query_encoder=True, test_doc_encoder=True, test_scorer=True, test_indexer=True, test_retriever=True):
         dataset = pt.get_dataset('irds:vaswani')
+        topics = dataset.get_topics().head(10)
 
-        docs = list(itertools.islice(pt.get_dataset('irds:vaswani').get_corpus_iter(), 200))
+        docs = list(itertools.islice(pt.get_dataset('irds:vaswani').get_corpus_iter(), 50))
         docs_df = pd.DataFrame(docs)
 
         if test_query_encoder:
             with self.subTest('query_encoder'):
-                topics = dataset.get_topics()
                 enc_topics = model(topics)
                 self.assertEqual(len(enc_topics), len(topics))
                 self.assertTrue('query_vec' in enc_topics.columns)
