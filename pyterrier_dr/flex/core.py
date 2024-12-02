@@ -195,11 +195,11 @@ class FlexIndex(pta.Artifact, pt.Indexer):
 
 class FlexIndexer(pt.Indexer):
     def __init__(self, index: FlexIndex, mode: Union[IndexingMode, str] = IndexingMode.create):
-        self.index = index
+        self._index = index
         self.mode = IndexingMode(mode)
 
     def __repr__(self):
-        return f'{self.index}.indexer(mode={self.mode!r})'
+        return f'{self._index}.indexer(mode={self.mode!r})'
 
     def transform(self, inp):
         raise RuntimeError("FlexIndexer cannot be used as a transformer, use .index() instead")
@@ -208,16 +208,16 @@ class FlexIndexer(pt.Indexer):
         if isinstance(inp, pd.DataFrame):
             inp = inp.to_dict(orient="records")
         inp = more_itertools.peekable(inp)
-        path = Path(self.index.index_path)
+        path = Path(self._index.index_path)
         if path.exists():
             if self.mode == IndexingMode.overwrite:
                 shutil.rmtree(path)
             else:
-                raise RuntimeError(f'Index already exists at {self.index.index_path}. If you want to delete and re-create an existing index, you can pass index.indexer(mode="overwrite")')
+                raise RuntimeError(f'Index already exists at {self._index.index_path}. If you want to delete and re-create an existing index, you can pass index.indexer(mode="overwrite")')
         path.mkdir(parents=True, exist_ok=True)
         vec_size = None
         count = 0
-        if self.index.verbose:
+        if self._index.verbose:
             inp = pt.tqdm(inp, desc='indexing', unit='dvec')
         with open(path/'vecs.f4', 'wb') as fout, Lookup.builder(path/'docnos.npids') as docnos:
             for d in inp:
@@ -232,12 +232,12 @@ class FlexIndexer(pt.Indexer):
                 count += 1
         with open(path/'pt_meta.json', 'wt') as f_meta:
             json.dump({
-                "type": self.index.ARTIFACT_TYPE,
-                "format": self.index.ARTIFACT_FORMAT,
+                "type": self._index.ARTIFACT_TYPE,
+                "format": self._index.ARTIFACT_FORMAT,
                 "vec_size": vec_size,
                 "doc_count": count
             }, f_meta)
-        return self.index
+        return self._index
 
 
 def _load_dvecs(flex_index, inp):
