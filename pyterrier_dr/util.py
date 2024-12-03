@@ -16,7 +16,7 @@ class Variants(type):
             wrapped.__doc__ = f"``{cls.VARIANTS[name]}``"
             if name == next(iter(cls.VARIANTS)):
                 wrapped.__doc__ = '*(default)* ' + wrapped.__doc__
-            return wrapped
+            return wrapped.__get__(cls)
 
     def __init__(self, *args, **kwargs):
         return super().__init__(*args, **kwargs)
