@@ -16,6 +16,6 @@ This functionality is covered in more detail in the following pages:
     :maxdepth: 1
 
     overview
-    sbert
+    encoding
     indexing-retrieval
     prf
