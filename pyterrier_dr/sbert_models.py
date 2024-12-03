@@ -124,7 +124,7 @@ class Query2Query(pt.Transformer, metaclass=Variants):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
         from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer(model_name).to(self.device).eval()
+        self.model = SentenceTransformer(self.model_name).to(self.device).eval()
         self.batch_size = batch_size
         self.verbose = verbose
 

@@ -58,9 +58,9 @@ class _HgfBiEncoder(HgfBiEncoder, metaclass=Variants):
     VARIANTS: dict = None
     def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
         self.model_name = model_name or next(iter(self.VARIANTS.values()))
-        model = AutoModel.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        config = AutoConfig.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(self.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        config = AutoConfig.from_pretrained(self.model_name)
         super().__init__(model, tokenizer, config, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
 
     def __repr__(self):
