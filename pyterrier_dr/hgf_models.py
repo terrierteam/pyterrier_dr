@@ -8,7 +8,7 @@ from .util import Variants
 
 class HgfBiEncoder(BiEncoder):
     def __init__(self, model, tokenizer, config, batch_size=32, text_field='text', verbose=False, device=None):
-        super().__init__(batch_size, text_field, verbose)
+        super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)

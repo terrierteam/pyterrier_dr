@@ -1,3 +1,5 @@
+from typing import List, Optional
+from abc import abstractmethod
 import numpy as np
 import pyterrier as pt
 import pandas as pd
@@ -6,17 +8,32 @@ from . import SimFn
 
 
 class BiEncoder(pt.Transformer):
-    def __init__(self, batch_size=32, text_field='text', verbose=False):
+    """Represents a single-vector dense bi-encoder.
+
+    A ``BiEncoder`` encodes the text of a query or document into a dense vector.
+
+    This class functions as a transformer factory:
+     - Query encoding using :meth:`query_encoder`
+     - Document encoding using :meth:`doc_encoder`
+     - Text scoring (re-reranking) using :meth:`text_scorer`
+
+    It can also be used as a transformer directly. It infers which transformer to use
+    based on columns present in the input frame.
+
+    Note that in most cases, you will want to use a ``BiEncoder`` as part of a pipeline
+    with a :class:`~pyterrier_dr.FlexIndex` to perform dense indexing and retrival.
+    """
+    def __init__(self, *, batch_size=32, text_field='text', verbose=False):
+        """
+        Args:
+            batch_size: The default batch size to use for query/document encoding
+            text_field: The field in the input dataframe that contains the document text
+            verbose: Whether to show progress bars
+        """
         super().__init__()
         self.batch_size = batch_size
         self.text_field = text_field
         self.verbose = verbose
-
-    def encode_queries(self, texts, batch_size=None) -> np.array:
-        raise NotImplementedError()
-
-    def encode_docs(self, texts, batch_size=None) -> np.array:
-        raise NotImplementedError()
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         with pta.validate.any(inp) as v:
@@ -63,6 +80,36 @@ class BiEncoder(pt.Transformer):
         if hasattr(self, 'config') and hasattr(self.config, 'sim_fn'):
             return SimFn(self.config.sim_fn)
         return SimFn.dot # default
+
+    @abstractmethod
+    def encode_queries(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
+        """Abstract method to encode a list of query texts into dense vectors.
+
+        This function is used by the transformer returned by :meth:`query_encoder`.
+
+        Args:
+            texts: A list of query texts
+            batch_size: The batch size to use for encoding
+
+        Returns:
+            np.array: A numpy array of shape (n_queries, n_dims)
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def encode_docs(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
+        """Abstract method to encode a list of document texts into dense vectors.
+
+        This function is used by the transformer returned by :meth:`doc_encoder`.
+
+        Args:
+            texts: A list of document texts
+            batch_size: The batch size to use for encoding
+
+        Returns:
+            np.array: A numpy array of shape (n_docs, n_dims)
+        """
+        raise NotImplementedError()
 
 
 class BiQueryEncoder(pt.Transformer):

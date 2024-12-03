@@ -22,3 +22,10 @@ These classes are convenience aliases to popular dense encoding models.
 .. autoclass:: pyterrier_dr.Query2Query()
 .. autoclass:: pyterrier_dr.RetroMAE()
 .. autoclass:: pyterrier_dr.TasB()
+.. autoclass:: pyterrier_dr.TctColBert()
+
+API Documentation
+------------------------------------------------------------------
+
+.. autoclass:: pyterrier_dr.BiEncoder
+   :members:

@@ -13,10 +13,11 @@ class Variants(type):
             @staticmethod
             def wrapped(*args, **kwargs):
                 return cls(cls.VARIANTS[name], *args, **kwargs)
-            wrapped.__doc__ = f"``{cls.VARIANTS[name]}``"
+            wrapped = wrapped.__get__(cls)
+            wrapped.__doc__ = f"Model: ``{cls.VARIANTS[name]}`` `[link] <https://huggingface.co/{cls.VARIANTS[name]}>`__"
             if name == next(iter(cls.VARIANTS)):
                 wrapped.__doc__ = '*(default)* ' + wrapped.__doc__
-            return wrapped.__get__(cls)
+            return wrapped
 
     def __init__(self, *args, **kwargs):
         return super().__init__(*args, **kwargs)
