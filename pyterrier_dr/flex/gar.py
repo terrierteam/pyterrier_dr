@@ -81,7 +81,7 @@ def _gar(self,
     Returns:
         :class:`~pyterrier.Transformer`: A retriever that uses a corpus graph to search over a FlexIndex.
 
-    .. cite:dblp:: conf/cikm/MacAvaneyTM22
+    .. cite.dblp:: conf/cikm/MacAvaneyTM22
     """
     return FlexGar(self, self.corpus_graph(k), SimFn.dot, batch_size=batch_size, num_results=num_results)
 FlexIndex.gar = _gar

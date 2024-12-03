@@ -76,7 +76,7 @@ def _faiss_flat_retriever(self, *, gpu=False, qbatch=64, drop_query_vec=False):
     .. note::
         This transformer requires the ``faiss`` package to be installed.
 
-    .. cite:dblp:: journals/corr/abs-2401-08281
+    .. cite.dblp:: journals/corr/abs-2401-08281
     """
     pyterrier_dr.util.assert_faiss()
     import faiss
@@ -135,7 +135,7 @@ def _faiss_hnsw_retriever(
     .. note::
         This transformer requires the ``faiss`` package to be installed.
 
-    .. cite:dblp:: journals/corr/abs-2401-08281
+    .. cite.dblp:: journals/corr/abs-2401-08281
     """
     pyterrier_dr.util.assert_faiss()
     import faiss
@@ -177,7 +177,7 @@ def _faiss_hnsw_graph(self, neighbours: int = 32, *, ef_construction: int = 40):
     .. note::
         This function requires the ``faiss`` package to be installed.
 
-    .. cite:dblp:: journals/corr/abs-2401-08281
+    .. cite.dblp:: journals/corr/abs-2401-08281
     """
     key = ('faiss_hnsw', neighbours//2, ef_construction)
     graph_name = f'hnsw_n-{neighbours}_ef-{ef_construction}.graph'
@@ -248,7 +248,7 @@ def _faiss_ivf_retriever(self,
     .. note::
         This transformer requires the ``faiss`` package to be installed.
 
-    .. cite:dblp:: journals/corr/abs-2401-08281
+    .. cite.dblp:: journals/corr/abs-2401-08281
     """
     pyterrier_dr.util.assert_faiss()
     import faiss

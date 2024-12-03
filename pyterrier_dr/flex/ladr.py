@@ -73,7 +73,7 @@ def _pre_ladr(self,
     Returns:
         :class:`~pyterrier.Transformer`: A proactive LADR transformer.
 
-    .. cite:dblp:: conf/sigir/KulkarniMGF23
+    .. cite.dblp:: conf/sigir/KulkarniMGF23
     """
     graph = self.corpus_graph(k) if isinstance(k, int) else k
     return LadrPreemptive(self, graph, num_results=num_results, hops=hops, dense_scorer=dense_scorer or self.scorer(), drop_query_vec=drop_query_vec)
@@ -162,7 +162,7 @@ def _ada_ladr(self,
     Returns:
         :class:`~pyterrier.Transformer`: An adaptive LADR transformer.
 
-    .. cite:dblp:: conf/sigir/KulkarniMGF23
+    .. cite.dblp:: conf/sigir/KulkarniMGF23
     """
     graph = self.corpus_graph(k) if isinstance(k, int) else k
     return LadrAdaptive(self, graph, num_results=num_results, dense_scorer=dense_scorer or self.scorer(), depth=depth, max_hops=max_hops, drop_query_vec=drop_query_vec)

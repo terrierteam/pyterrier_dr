@@ -22,7 +22,7 @@ class VectorPrf(pt.Transformer):
     
             prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.vector_prf() >> index 
 
-    .. cite:dblp:: journals/tois/0009MZKZ23
+    .. cite.dblp:: journals/tois/0009MZKZ23
     """
     def __init__(self,
         *,
@@ -68,7 +68,7 @@ class AveragePrf(pt.Transformer):
     
             prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.average_prf() >> index 
 
-    .. cite:dblp:: journals/tois/0009MZKZ23
+    .. cite.dblp:: journals/tois/0009MZKZ23
     """
     def __init__(self,
         *,

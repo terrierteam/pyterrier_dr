@@ -71,7 +71,7 @@ def _scann_retriever(self,
     .. note::
         This method requires the ``scann`` package. Install it via ``pip install scann``.
 
-    .. cite:dblp:: conf/icml/GuoSLGSCK20
+    .. cite.dblp:: conf/icml/GuoSLGSCK20
     """
     pyterrier_dr.util.assert_scann()
     import scann
