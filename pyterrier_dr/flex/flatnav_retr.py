@@ -17,6 +17,7 @@ class FlatNavRetriever(pt.Transformer):
         self.num_results = num_results
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
+        self.num_initializations = num_initializations
         self.verbose = verbose
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
@@ -38,6 +39,7 @@ class FlatNavRetriever(pt.Transformer):
                 queries=query_vecs[qidx:qidx+QBATCH],
                 ef_search=self.ef_search,
                 K=min(self.num_results, len(self.flex_index)),
+                num_initializations=self.num_initializations,
             )
             scores = -scores # distances -> scores
             for s, d in zip(scores, dids):
@@ -84,6 +86,7 @@ def _flatnav_retriever(self,
         verbose (bool): whether to show progress bars
 
     .. versionadded:: 0.4.0
+    .. versionchanged:: 0.4.1 fixed bug with `num_initializations`
 
     .. note::
         This transformer requires the ``flatnav`` package to be installed. Instructions are available
