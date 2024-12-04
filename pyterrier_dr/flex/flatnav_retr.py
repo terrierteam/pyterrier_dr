@@ -37,7 +37,7 @@ class FlatNavRetriever(pt.Transformer):
             scores, dids = self.flatnav_index.search(
                 queries=query_vecs[qidx:qidx+QBATCH],
                 ef_search=self.ef_search,
-                K=self.num_results
+                K=min(self.num_results, len(self.flex_index)),
             )
             scores = -scores # distances -> scores
             for s, d in zip(scores, dids):
