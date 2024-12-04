@@ -83,6 +83,8 @@ def _flatnav_retriever(self,
         drop_query_vec (bool): whether to drop the query_vec column after retrieval
         verbose (bool): whether to show progress bars
 
+    .. versionadded:: 0.4.0
+
     .. note::
         This transformer requires the ``flatnav`` package to be installed. Instructions are available
         in the `flatnav repository <https://github.com/BlaiseMuhirwa/flatnav>`__.
