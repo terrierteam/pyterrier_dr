@@ -6,7 +6,7 @@ that provides functionality for Dense Retrieval.
 
 It provides this functionality primarily through:
 
-1. Transformers for encoding queries/documents into dense vectors (e.g., :class:`~pyterrier_dr.SBertBiEncoder`)
+1. Transformers for :doc:`encoding queries/documents <./encoding>` into dense vectors (e.g., :class:`~pyterrier_dr.SBertBiEncoder`)
 
 2. Transformers for :doc:`indexing and retrieval <./indexing-retrieval>` using these dense vectors (e.g., :class:`~pyterrier_dr.FlexIndex`)
 

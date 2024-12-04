@@ -35,6 +35,8 @@ and (2) algorithms and data structures to index and retrieve documents using the
 Encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+(More information can be found at :doc:`encoding`.)
+
 Let's start by loading a dense model: `RetroMAE <https://arxiv.org/abs/2205.12035>`__. The model has several
 checkpoints available on huggingface, including ``Shitao/RetroMAE_MSMARCO_distill``.
 ``pyterrier_dr`` provides an alias to this checkpoint with :meth:`RetroMAE.msmarco_distill() <pyterrier_dr.RetroMAE.msmarco_distill>`:[#]_
@@ -77,7 +79,42 @@ next section, we will use these vectors to perform retrieval.
 Indexing and Retrieval
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-More information found at :doc:`indexing-retrieval`.
+(More information can be found at :doc:`indexing-retrieval`.)
+
+:class:`pyterrier_dr.FlexIndex` provides dense indexing and retrieval capabilities. Here's how you can index
+a collection of documents:
+
+.. code-block:: python
+    :caption: Indexing documents with ``pyterrier_dr``
+
+    >>> from pyterrier_dr import FlexIndex, RetroMAE
+    >>> model = RetroMAE.msmarco_distill()
+    >>> index = FlexIndex('my-index.flex')
+    # build an indexing pipeline that first applies RetroMAE to get dense vectors, then indexes them into the FlexIndex
+    >>> pipeline = model >> index.indexer()
+    # run the indexing pipeline over a set of documents
+    >>> pipeline.index([
+    ...   {"docno": "1161848_2", "text": "Cutest breed of dog is a PBGV (look up on Internet) they are a little hound that looks like a shaggy terrier."},
+    ...   {"docno": "686980_0",  "text": "Golden retriever has longer hair and is a little heavier."},
+    ...   {"docno": "4189224_1", "text": "The onion releases a chemical that makes your eyes water up. I mean, no way short of wearing a mask or just avoiding the sting."},
+    ... ])
+
+Now that the documents are indexed, you can retrieve over them:
+
+.. code-block:: python
+    :caption: Retrieving with ``pyterrier_dr``
+
+    >>> from pyterrier_dr import FlexIndex, RetroMAE
+    >>> model = RetroMAE.msmarco_distill()
+    >>> index = FlexIndex('my-index.flex')
+    # build a retrieval pipeline that first applies RetroMAE to encode the query, then retrieves using those vectors over the FlexIndex
+    >>> pipeline = model >> index.retriever()
+    # run the indexing pipeline over a set of documents
+    >>> pipeline.search('golden retrievers')
+      qid              query      docno  docid      score  rank
+    0   1  golden retrievers   686980_0      1  77.125557     0
+    1   1  golden retrievers  1161848_2      0  61.379417     1
+    2   1  golden retrievers  4189224_1      2  54.269958     2
 
 Extras
 -------------------------------------------------------
@@ -99,4 +136,3 @@ Extras
 .. [#] You can also load the model from HuggingFace with :class:`~pyterrier_dr.HgfBiEncoder`:
    ``HgfBiEncoder("Shitao/RetroMAE_MSMARCO_distill")``. Using the alias will ensure that all settings for
    the model are assigned properly.
-
