@@ -134,6 +134,10 @@ class TestFlexIndex(unittest.TestCase):
     def test_scann_retriever(self):
         self._test_retr(FlexIndex.scann_retriever, exact=False)
 
+    @unittest.skipIf(not pyterrier_dr.util.flatnav_available(), "flatnav not available")
+    def test_flatnav_retriever(self):
+        self._test_retr(FlexIndex.flatnav_retriever, exact=False)
+
     def test_np_retriever(self):
         self._test_retr(FlexIndex.np_retriever)
 

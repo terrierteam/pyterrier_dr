@@ -2,7 +2,6 @@ pytest
 pytest-subtests
 pytest-cov
 pytest-json-report
-git+https://github.com/terrierteam/pyterrier_adaptive
 voyager
 FlagEmbedding
 faiss-cpu

@@ -63,3 +63,11 @@ def voyager_available():
 
 def assert_voyager():
     assert voyager_available(), "voyager required; install with `pip install voyager`"
+
+
+def flatnav_available():
+    return package_available('flatnav')
+
+
+def assert_flatnav():
+    assert flatnav_available(), "flatnav required; install with instructions here: https://github.com/BlaiseMuhirwa/flatnav"
