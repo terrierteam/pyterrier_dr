@@ -7,7 +7,7 @@ from .biencoder import BiEncoder
 
 class BGEM3(BiEncoder):
     def __init__(self, model_name='BAAI/bge-m3', batch_size=32, max_length=8192, text_field='text', verbose=False, device=None, use_fp16=False):
-        super().__init__(batch_size, text_field, verbose)
+        super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
         self.model_name = model_name
         self.use_fp16 = use_fp16
         self.max_length = max_length

@@ -13,7 +13,7 @@ import pyterrier_alpha as pta
 
 class CDE(BiEncoder):
     def __init__(self, model_name='jxm/cde-small-v1', cache: Optional['CDECache'] = None, batch_size=32, text_field='text', verbose=False, device=None):
-        super().__init__(batch_size, text_field, verbose)
+        super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
         self.model_name = model_name
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'

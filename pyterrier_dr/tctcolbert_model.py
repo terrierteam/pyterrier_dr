@@ -2,18 +2,29 @@ from more_itertools import chunked
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
+from pyterrier_dr.util import Variants
 from . import BiEncoder
 
 
-class TctColBert(BiEncoder):
-    def __init__(self, model_name='castorini/tct_colbert-msmarco', batch_size=32, text_field='text', verbose=False, device=None):
-        super().__init__(batch_size, text_field, verbose)
-        self.model_name = model_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+class TctColBert(BiEncoder, metaclass=Variants):
+    """Dense encoder for TCT-ColBERT (Tightly-Coupled Teachers over ColBERT)
+
+    See :class:`~pyterrier_dr.BiEncoder` for usage information.
+
+    .. cite.dblp:: journals/corr/abs-2010-11386
+
+    .. automethod:: base()
+    .. automethod:: hn()
+    .. automethod:: hnp()
+    """
+    def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
+        super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
+        self.model_name = model_name or next(iter(self.VARIANTS.values()))
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
-        self.model = AutoModel.from_pretrained(model_name).to(self.device).eval()
+        self.model = AutoModel.from_pretrained(self.model_name).to(self.device).eval()
 
     def encode_queries(self, texts, batch_size=None):
         results = []
@@ -47,3 +58,9 @@ class TctColBert(BiEncoder):
 
     def __repr__(self):
         return f'TctColBert({repr(self.model_name)})'
+
+    VARIANTS = {
+        'base': 'castorini/tct_colbert-msmarco',
+        'hn': 'castorini/tct_colbert-v2-hn-msmarco',
+        'hnp': 'castorini/tct_colbert-v2-hnp-msmarco',
+    }

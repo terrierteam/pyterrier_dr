@@ -10,7 +10,22 @@ from ..indexes import TorchRankedLists
 from . import FlexIndex
 
 
-def _corpus_graph(self, k=16, batch_size=8192):
+def _corpus_graph(self, k: int = 16, *, batch_size: int = 8192):
+    """Return the corpus graph (neighborhood graph) for the index.
+
+    The corpus graph is a directed graph where each node represents a document and each edge represents a
+    connection between two documents. The graph is built by computing the cosine similarity between each
+    pair of documents and storing the k-nearest neighbors for each document.
+
+    If the corpus graph has not been built yet, it will be built using the given k and batch size.
+
+    Args:
+        k: The number of neighbors to store for each document.
+        batch_size: The number of vectors to process in each batch.
+
+    Returns:
+        :class:`pyterrier_adaptive.CorpusGraph`: The corpus graph for the index.
+    """
     from pyterrier_adaptive import CorpusGraph
     key = ('corpus_graph', k)
     if key not in self._cache:
