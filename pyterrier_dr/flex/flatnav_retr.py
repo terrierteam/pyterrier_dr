@@ -83,6 +83,10 @@ def _flatnav_retriever(self,
         drop_query_vec (bool): whether to drop the query_vec column after retrieval
         verbose (bool): whether to show progress bars
 
+    .. note::
+        This transformer requires the ``flatnav`` package to be installed. Instructions are available
+        in the `flatnav repository <https://github.com/BlaiseMuhirwa/flatnav>`__.
+
     .. cite:: arxiv:2412.01940
         :citation: Munyampirwa et al. Down with the Hierarchy: The 'H' in HNSW Stands for "Hubs". arXiv 2024.
         :link: https://arxiv.org/abs/2412.01940

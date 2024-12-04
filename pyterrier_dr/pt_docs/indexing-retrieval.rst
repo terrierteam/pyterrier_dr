@@ -37,6 +37,7 @@ API Documentation
     .. automethod:: faiss_flat_retriever
     .. automethod:: faiss_hnsw_retriever
     .. automethod:: faiss_ivf_retriever
+    .. automethod:: flatnav_retriever
     .. automethod:: scann_retriever
     .. automethod:: voyager_retriever
 
@@ -44,7 +45,7 @@ API Documentation
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     Results can be re-ranked using indexed vectors using :meth:`scorer`. (:meth:`np_scorer` and :meth:`torch_scorer` are
-    available as specific implemenations, if needed.)
+    available as specific implementations, if needed.)
 
     :meth:`gar`, :meth:`ladr_proactive`, and :meth:`ladr_adaptive` are *adaptive* re-ranking approaches that pull in other
     documents from the corpus that may be relevant.
