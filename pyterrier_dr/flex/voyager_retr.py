@@ -10,10 +10,11 @@ logger = ir_datasets.log.easy()
 
 
 class VoyagerRetriever(pt.Indexer):
-    def __init__(self, flex_index, voyager_index, query_ef=None, qbatch=64, drop_query_vec=False):
+    def __init__(self, flex_index, voyager_index, query_ef=None, num_results=1000, qbatch=64, drop_query_vec=False):
         self.flex_index = flex_index
         self.voyager_index = voyager_index
         self.query_ef = query_ef
+        self.num_results = num_results
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
 
@@ -32,7 +33,7 @@ class VoyagerRetriever(pt.Indexer):
             it = pt.tqdm(it, unit='qbatch')
         for qidx in it:
             qvec_batch = query_vecs[qidx:qidx+QBATCH]
-            neighbor_ids, distances = self.voyager_index.query(qvec_batch, self.flex_index.num_results, self.query_ef)
+            neighbor_ids, distances = self.voyager_index.query(qvec_batch, self.num_results, self.query_ef)
             for s, d in zip(distances, neighbor_ids):
                 mask = d != -1
                 d = d[mask]
@@ -49,7 +50,33 @@ class VoyagerRetriever(pt.Indexer):
         return result.to_df(inp)
 
 
-def _voyager_retriever(self, neighbours=12, ef_construction=200, random_seed=1, storage_data_type='float32', query_ef=10, drop_query_vec=False):
+def _voyager_retriever(self,
+    neighbours: int = 12,
+    *,
+    num_results: int = 1000,
+    ef_construction: int = 200,
+    random_seed: int = 1,
+    storage_data_type: str = 'float32',
+    query_ef: int = 10,
+    drop_query_vec: bool = False
+) -> pt.Transformer:
+    """Returns a retriever that uses HNSW to search over a Voyager index.
+
+    Args:
+        neighbours (int, optional): Number of neighbours to search. Defaults to 12.
+        num_results (int, optional): Number of results to return per query. Defaults to 1000.
+        ef_construction (int, optional): Expansion factor for graph construction. Defaults to 200.
+        random_seed (int, optional): Random seed. Defaults to 1.
+        storage_data_type (str, optional): Storage data type. One of 'float32', 'float8', 'e4m3'. Defaults to 'float32'.
+        query_ef (int, optional): Expansion factor during querying. Defaults to 10.
+        drop_query_vec (bool, optional): Drop the query vector from the output. Defaults to False.
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A retriever that uses HNSW to search over a Voyager index.
+
+    .. note::
+        This method requires the ``voyager`` package. Install it via ``pip install voyager``.
+    """
     pyterrier_dr.util.assert_voyager()
     import voyager
     meta, = self.payload(return_dvecs=False, return_docnos=False)

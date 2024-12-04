@@ -10,8 +10,13 @@ class SimFn(Enum):
 class Variants(type):
     def __getattr__(cls, name):
         if name in cls.VARIANTS:
+            @staticmethod
             def wrapped(*args, **kwargs):
                 return cls(cls.VARIANTS[name], *args, **kwargs)
+            wrapped = wrapped.__get__(cls)
+            wrapped.__doc__ = f"Model: ``{cls.VARIANTS[name]}`` `[link] <https://huggingface.co/{cls.VARIANTS[name]}>`__"
+            if name == next(iter(cls.VARIANTS)):
+                wrapped.__doc__ = '*(default)* ' + wrapped.__doc__
             return wrapped
 
     def __init__(self, *args, **kwargs):

@@ -8,7 +8,7 @@ from .util import Variants
 
 class HgfBiEncoder(BiEncoder):
     def __init__(self, model, tokenizer, config, batch_size=32, text_field='text', verbose=False, device=None):
-        super().__init__(batch_size, text_field, verbose)
+        super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
@@ -56,11 +56,11 @@ class HgfBiEncoder(BiEncoder):
 
 class _HgfBiEncoder(HgfBiEncoder, metaclass=Variants):
     VARIANTS: dict = None
-    def __init__(self, model_name, batch_size=32, text_field='text', verbose=False, device=None):
-        self.model_name = model_name
-        model = AutoModel.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        config = AutoConfig.from_pretrained(model_name)
+    def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
+        self.model_name = model_name or next(iter(self.VARIANTS.values()))
+        model = AutoModel.from_pretrained(self.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        config = AutoConfig.from_pretrained(self.model_name)
         super().__init__(model, tokenizer, config, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
 
     def __repr__(self):
@@ -71,15 +71,31 @@ class _HgfBiEncoder(HgfBiEncoder, metaclass=Variants):
 
 
 class TasB(_HgfBiEncoder):
+    """Dense encoder for TAS-B (Topic Aware Sampling, Balanced).
+
+    See :class:`~pyterrier_dr.BiEncoder` for usage information.
+
+    .. cite.dblp:: conf/sigir/HofstatterLYLH21
+
+    .. automethod:: dot()
+    """
     VARIANTS = {
         'dot': 'sebastian-hofstaetter/distilbert-dot-tas_b-b256-msmarco',
     }
 
 
 class RetroMAE(_HgfBiEncoder):
+    """Dense encoder for RetroMAE (Masked Auto-Encoder).
+
+    See :class:`~pyterrier_dr.BiEncoder` for usage information.
+
+    .. cite.dblp:: conf/emnlp/XiaoLSC22
+
+    .. automethod:: msmarco_finetune()
+    .. automethod:: msmarco_distill()
+    .. automethod:: wiki_bookscorpus_beir()
+    """
     VARIANTS = {
-        #'wiki_bookscorpus': 'Shitao/RetroMAE', # only pre-trained
-        #'msmarco': 'Shitao/RetroMAE_MSMARCO', # only pre-trained
         'msmarco_finetune': 'Shitao/RetroMAE_MSMARCO_finetune',
         'msmarco_distill': 'Shitao/RetroMAE_MSMARCO_distill',
         'wiki_bookscorpus_beir': 'Shitao/RetroMAE_BEIR',
