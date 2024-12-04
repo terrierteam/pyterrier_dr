@@ -9,7 +9,7 @@ from . import FlexIndex
 
 
 class FlatNavRetriever(pt.Transformer):
-    def __init__(self, flex_index, flatnav_index, *, threads=16, ef_search=100, num_results=1000, qbatch=64, drop_query_vec=False, verbose=False):
+    def __init__(self, flex_index, flatnav_index, *, threads=16, ef_search=100, num_initializations=100, num_results=1000, qbatch=64, drop_query_vec=False, verbose=False):
         self.flex_index = flex_index
         self.flatnav_index = flatnav_index
         self.threads = threads
@@ -60,6 +60,7 @@ def _flatnav_retriever(self,
     k: int = 32,
     *,
     ef_search: int = 100,
+    num_initializations: int = 100,
     ef_construction: int = 100,
     threads: int = 16,
     num_results: int = 1000,
@@ -68,6 +69,24 @@ def _flatnav_retriever(self,
     drop_query_vec: bool = False,
     verbose: bool = False,
 ) -> pt.Transformer:
+    """Returns a retriever that searchers over a flatnav index.
+
+    Args:
+        k (int): the maximum number of edges per document in the index
+        ef_search (int): the size of the list during searches. Higher values are slower but more accurate.
+        num_initializations (int): the number of random initializations to use during search.
+        ef_construction (int): the size of the list during graph construction. Higher values are slower but more accurate.
+        threads (int): the number of threads to use
+        num_results (int): the number of results to return per query
+        cache (bool): whether to cache the index to disk
+        qbatch (int): the number of queries to search at once
+        drop_query_vec (bool): whether to drop the query_vec column after retrieval
+        verbose (bool): whether to show progress bars
+
+    .. cite:: arxiv:2412.01940
+        :citation: Munyampirwa et al. Down with the Hierarchy: The 'H' in HNSW Stands for "Hubs". arXiv 2024.
+        :link: https://arxiv.org/abs/2412.01940
+    """
     pyterrier_dr.util.assert_flatnav()
     import flatnav
 
@@ -98,5 +117,5 @@ def _flatnav_retriever(self,
         else:
             self._cache[key] = flatnav.index.IndexIPFloat.load_index(str(self.index_path/index_name))
             self._cache[key].set_data_type(flatnav.data_type.DataType.float32)
-    return FlatNavRetriever(self, self._cache[key], threads=threads, ef_search=ef_search, num_results=num_results, qbatch=qbatch, drop_query_vec=drop_query_vec, verbose=verbose)
+    return FlatNavRetriever(self, self._cache[key], threads=threads, ef_search=ef_search, num_initializations=num_initializations, num_results=num_results, qbatch=qbatch, drop_query_vec=drop_query_vec, verbose=verbose)
 FlexIndex.flatnav_retriever = _flatnav_retriever
