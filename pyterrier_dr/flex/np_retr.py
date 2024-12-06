@@ -21,6 +21,9 @@ class NumpyRetriever(pt.Transformer):
         self.batch_size = batch_size or 4096
         self.drop_query_vec = drop_query_vec
 
+    def fuse_rank_cutoff(self, k):
+        return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
+
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
@@ -67,7 +70,9 @@ class NumpyVectorLoader(pt.Transformer):
         docids = self.flex_index._load_docids(inp)
         dvecs, config = self.flex_index.payload(return_docnos=False)
         return inp.assign(doc_vec=list(dvecs[docids]))
-
+    
+    def fuse_rank_cutoff(self, k):
+        return pt.RankCutoff(k) >> self
 
 class NumpyScorer(pt.Transformer):
     def __init__(self, flex_index: FlexIndex, *, num_results: Optional[int] = None):

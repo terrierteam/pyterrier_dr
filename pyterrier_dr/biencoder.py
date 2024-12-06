@@ -143,6 +143,9 @@ class BiDocEncoder(pt.Transformer):
 
     def encode(self, texts, batch_size=None) -> np.array:
         return self.bi_encoder_model.encode_docs(texts, batch_size=batch_size or self.batch_size)
+    
+    def fuse_rank_cutoff(self, k):
+        return pt.RankCutoff(k) >> self
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.columns(inp, includes=[self.text_field])

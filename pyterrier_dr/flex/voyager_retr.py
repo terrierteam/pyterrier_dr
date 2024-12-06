@@ -18,6 +18,15 @@ class VoyagerRetriever(pt.Indexer):
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
 
+    def fuse_rank_cutoff(self, k):
+        return VoyagerRetriever(
+            self.flex_index, 
+            self.voyager_index,
+            query_ef=self.query_ef, 
+            num_results=k, 
+            qbatch=self.qbatch, 
+            drop_query_vec=self.drop_query_vec)
+
     def transform(self, inp):
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
