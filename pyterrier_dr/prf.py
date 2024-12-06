@@ -79,6 +79,9 @@ class AveragePrf(pt.Transformer):
     ):
         self.k = k
 
+    def compile(self) -> pt.Transformer:
+        return pt.RankCutoff(self.k) >> self
+    
     @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         """Performs Average PRF on the input dataframe."""
