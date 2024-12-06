@@ -22,7 +22,8 @@ class NumpyRetriever(pt.Transformer):
         self.drop_query_vec = drop_query_vec
 
     def fuse_rank_cutoff(self, k):
-        return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
+        if k < self.num_results:
+            return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(inp, extra_columns=['query_vec'])

@@ -26,9 +26,10 @@ class FaissRetriever(pt.Indexer):
         self.num_results = num_results
 
     def fuse_rank_cutoff(self, k):
-        return FaissRetriever(self.flex_index, self.faiss_index,
-                              n_probe=self.n_probe, ef_search=self.ef_search, search_bounded_queue=self.search_bounded_queue,
-                               num_results=k, qbatch=self.qbatch, drop_query_vec=self.drop_query_vec)
+        if k < self.num_results:
+            return FaissRetriever(self.flex_index, self.faiss_index,
+                                n_probe=self.n_probe, ef_search=self.ef_search, search_bounded_queue=self.search_bounded_queue,
+                                num_results=k, qbatch=self.qbatch, drop_query_vec=self.drop_query_vec)
 
     def transform(self, inp):
         pta.validate.query_frame(inp, extra_columns=['query_vec'])

@@ -21,10 +21,11 @@ class FlatNavRetriever(pt.Transformer):
         self.verbose = verbose
 
     def fuse_rank_cutoff(self, k):
-        return FlatNavRetriever(self.flex_index, self.flatnav_index, 
-                                num_results=k, ef_search=self.ef_search, 
-                                qbatch = self.qbatch, num_initializations=self.num_initializations, 
-                                drop_query_vec=self.drop_query_vec, verbose=self.verbose)
+        if k < self.num_results:
+            return FlatNavRetriever(self.flex_index, self.flatnav_index, 
+                                    num_results=k, ef_search=self.ef_search, 
+                                    qbatch = self.qbatch, num_initializations=self.num_initializations, 
+                                    drop_query_vec=self.drop_query_vec, verbose=self.verbose)
 
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
