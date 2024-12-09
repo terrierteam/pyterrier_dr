@@ -19,6 +19,7 @@ class VoyagerRetriever(pt.Indexer):
         self.drop_query_vec = drop_query_vec
 
     def fuse_rank_cutoff(self, k):
+        return None # disable fusion for ANN
         if k < self.num_results:
             return VoyagerRetriever(
                 self.flex_index, 
