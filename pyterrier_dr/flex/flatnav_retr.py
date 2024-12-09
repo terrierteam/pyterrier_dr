@@ -20,6 +20,15 @@ class FlatNavRetriever(pt.Transformer):
         self.num_initializations = num_initializations
         self.verbose = verbose
 
+    def fuse_rank_cutoff(self, k):
+        return None # disable fusion for ANN
+        if k < self.num_results:
+            return FlatNavRetriever(self.flex_index, self.flatnav_index, 
+                                    num_results=k, ef_search=self.ef_search, 
+                                    qbatch = self.qbatch, num_initializations=self.num_initializations, 
+                                    drop_query_vec=self.drop_query_vec, verbose=self.verbose)
+
+
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)

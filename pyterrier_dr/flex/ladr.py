@@ -91,6 +91,11 @@ class LadrAdaptive(pt.Transformer):
         self.max_hops = max_hops
         self.drop_query_vec = drop_query_vec
 
+    def fuse_rank_cutoff(self, k):
+        if k < self.num_results:
+            return LadrAdaptive(self.flex_index, self.graph, self.dense_scorer,
+                                num_results=k, depth=self.depth, max_hops=self.max_hops, drop_query_vec=self.drop_query_vec)
+
     def transform(self, inp):
         pta.validate.result_frame(inp, extra_columns=['query_vec'])
         docnos, config = self.flex_index.payload(return_dvecs=False)
