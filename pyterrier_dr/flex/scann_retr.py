@@ -21,6 +21,7 @@ class ScannRetriever(pt.Indexer):
         self.drop_query_vec = drop_query_vec
 
     def fuse_rank_cutoff(self, k):
+        return None # disable fusion for ANN
         if k < self.num_results:
             return ScannRetriever(self.flex_index, self.scann_index, num_results=k, leaves_to_search=self.leaves_to_search, qbatch=self.qbatch, drop_query_vec=self.drop_query_vec)
 

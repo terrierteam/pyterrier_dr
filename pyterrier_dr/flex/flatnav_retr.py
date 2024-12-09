@@ -21,6 +21,7 @@ class FlatNavRetriever(pt.Transformer):
         self.verbose = verbose
 
     def fuse_rank_cutoff(self, k):
+        return None # disable fusion for ANN
         if k < self.num_results:
             return FlatNavRetriever(self.flex_index, self.flatnav_index, 
                                     num_results=k, ef_search=self.ef_search, 

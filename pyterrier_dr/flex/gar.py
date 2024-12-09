@@ -15,6 +15,11 @@ class FlexGar(pt.Transformer):
         self.num_results = num_results
         self.drop_query_vec = drop_query_vec
 
+    def fuse_rank_cutoff(self, k):
+        if k < self.num_results:
+            return FlexGar(self.flex_index, self.graph, score_fn=self.score_fn,
+                                num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
+
     def transform(self, inp):
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'score'])
 

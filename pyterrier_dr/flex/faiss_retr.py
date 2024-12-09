@@ -26,6 +26,7 @@ class FaissRetriever(pt.Indexer):
         self.num_results = num_results
 
     def fuse_rank_cutoff(self, k):
+        return None # disable fusion for ANN
         if k < self.num_results:
             return FaissRetriever(self.flex_index, self.faiss_index,
                                 n_probe=self.n_probe, ef_search=self.ef_search, search_bounded_queue=self.search_bounded_queue,
