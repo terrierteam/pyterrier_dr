@@ -16,7 +16,7 @@ This measure can be used alongside PyTerrier's built-in evaluation measures in a
 
     dataset = pt.get_dataset('irds:msmarco-passage/trec-dl-2019/judged')
     index = FlexIndex.from_hf('macavaney/msmarco-passage.tasb.flex')
-    bm25 = PisaIndex.from_hf('macavaney/msmarco-passage.bm25.pisa').bm25()
+    bm25 = PisaIndex.from_hf('macavaney/msmarco-passage.pisa').bm25()
     model = TasB.dot()
 
     pt.Experiment(
