@@ -9,8 +9,10 @@ import pandas as pd
 import pyterrier as pt
 from npids import Lookup
 from enum import Enum
+import ir_measures
 from .. import SimFn
 import pyterrier_alpha as pta
+import pyterrier_dr
 
 
 class IndexingMode(Enum):
@@ -191,6 +193,11 @@ class FlexIndex(pta.Artifact, pt.Indexer):
         """
         docnos, meta = self.payload(return_dvecs=False)
         return docnos
+
+    @property
+    def ILS(self) -> ir_measures.Measure:
+        """Return an ILS (Intra-List Similarity) measure for this index. See: :func:`pyterrier_dr.ILS` for more details."""
+        return pyterrier_dr.ILS(self)
 
     def __repr__(self):
         return f'FlexIndex({str(self.index_path)!r})'
