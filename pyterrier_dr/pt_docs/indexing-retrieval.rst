@@ -59,6 +59,12 @@ API Documentation
     .. automethod:: gar
     .. automethod:: ladr_proactive
     .. automethod:: ladr_adaptive
+    .. automethod:: mmr
+
+    Evaluation
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    .. autoproperty:: ILS
 
     Index Data Access
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
