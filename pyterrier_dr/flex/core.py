@@ -193,6 +193,10 @@ class FlexIndex(pta.Artifact, pt.Indexer):
         return docnos
 
 
+    def __repr__(self):
+        return f'FlexIndex({str(self.index_path)!r})'
+
+
 class FlexIndexer(pt.Indexer):
     def __init__(self, index: FlexIndex, mode: Union[IndexingMode, str] = IndexingMode.create):
         self._index = index
