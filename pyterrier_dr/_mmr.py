@@ -12,17 +12,19 @@ class MmrScorer(pt.Transformer):
 
     .. cite.dblp:: conf/sigir/CarbonellG98
     """
-    def __init__(self, *, Lambda: float = 0.5, norm_rel: bool = False, norm_sim: bool = False, verbose: bool = False):
+    def __init__(self, *, Lambda: float = 0.5, norm_rel: bool = False, norm_sim: bool = False, drop_doc_vec: bool = True, verbose: bool = False):
         """
         Args:
             Lambda: The balance parameter between relevance and diversity (default: 0.5)
             norm_rel: Whether to normalize relevance scores to [0, 1] (default: False)
             norm_sim: Whether to normalize similarity scores to [0, 1] (default: False)
+            drop_doc_vec: Whether to drop the 'doc_vec' column after re-ranking (default: True)
             verbose: Whether to display verbose output (e.g., progress bars) (default: False)
         """
         self.Lambda = Lambda
         self.norm_rel = norm_rel
         self.norm_sim = norm_sim
+        self.drop_doc_vec = drop_doc_vec
         self.verbose = verbose
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
@@ -51,10 +53,13 @@ class MmrScorer(pt.Transformer):
                 if marg_rels.shape[0] > 1:
                     marg_rels = np.max(np.stack([marg_rels, dvec_sims[idx]]), axis=0)
                     marg_rels[idx] = float('inf') # ignore this document from now on
-            out.append(frame.iloc[new_idxs].reset_index(drop=True).assign(
+            new_frame = frame.iloc[new_idxs].reset_index(drop=True).assign(
                 score=-np.arange(len(new_idxs), dtype=float),
                 rank=np.arange(len(new_idxs))
-            ))
+            )
+            if self.drop_doc_vec:
+                new_frame = new_frame.drop(columns='doc_vec')
+            out.append(new_frame)
 
         return pd.concat(out, ignore_index=True)
 
