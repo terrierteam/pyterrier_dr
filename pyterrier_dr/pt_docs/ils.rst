@@ -1,4 +1,4 @@
-Evaluation
+Intra-List Similarity
 =======================================================
 
 ``pyterrier-dr`` provides an evaluation measure, :func:`pyterrier_dr.ILS` (Intra-List Similarity),
