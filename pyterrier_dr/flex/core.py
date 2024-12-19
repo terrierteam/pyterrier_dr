@@ -196,8 +196,12 @@ class FlexIndex(pta.Artifact, pt.Indexer):
 
     @property
     def ILS(self) -> ir_measures.Measure:
-        """Return an ILS (Intra-List Similarity) measure for this index. See: :func:`pyterrier_dr.ILS` for more details."""
+        """Return an ILS (Intra-List Similarity) measure for this index. See :func:`pyterrier_dr.ILS` for more details."""
         return pyterrier_dr.ILS(self)
+
+    def __repr__(self):
+        return f'FlexIndex({str(self.index_path)!r})'
+
 
 class FlexIndexer(pt.Indexer):
     def __init__(self, index: FlexIndex, mode: Union[IndexingMode, str] = IndexingMode.create):
