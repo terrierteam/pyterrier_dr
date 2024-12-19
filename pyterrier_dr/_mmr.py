@@ -52,7 +52,7 @@ class MmrScorer(pt.Transformer):
                     marg_rels = np.max(np.stack([marg_rels, dvec_sims[idx]]), axis=0)
                     marg_rels[idx] = float('inf')
             new_frame = frame.iloc[new_idxs].reset_index(drop=True).copy()
-            new_frame['score'] = -np.arange(len(new_idxs))
+            new_frame['score'] = -np.arange(len(new_idxs), dtype=float)
             new_frame['rank'] = np.arange(len(new_idxs))
             out.append(new_frame)
 
