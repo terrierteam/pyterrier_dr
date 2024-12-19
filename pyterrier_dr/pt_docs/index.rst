@@ -19,4 +19,4 @@ This functionality is covered in more detail in the following pages:
     encoding
     indexing-retrieval
     prf
-    ils
+    diversity

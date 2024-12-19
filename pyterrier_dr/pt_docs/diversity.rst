@@ -1,10 +1,10 @@
-Intra-List Similarity
+Diversity
 =======================================================
 
-``pyterrier-dr`` provides an evaluation measure, :func:`pyterrier_dr.ILS` (Intra-List Similarity),
+``pyterrier-dr`` provides a diversity evaluation measure, :func:`~pyterrier_dr.ILS` (Intra-List Similarity),
 which can be used to evaluate the diversity of search results based on the dense vectors of a :class:`~pyterrier_dr.FlexIndex`.
 
-This measure can be used alongside PyTerrier's built-in evaluation measures in a ``pt.Experiment``.
+This measure can be used alongside PyTerrier's built-in evaluation measures in a :func:`pyterrier.Experiment`.
 
 .. code-block:: python
     :caption: Compare the relevance and ILS of lexical and dense retrieval with a PyTerrier Experiment
