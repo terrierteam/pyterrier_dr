@@ -18,4 +18,5 @@ This functionality is covered in more detail in the following pages:
     overview
     encoding
     indexing-retrieval
+    evaluation
     prf

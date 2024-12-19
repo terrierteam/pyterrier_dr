@@ -11,8 +11,9 @@ from pyterrier_dr.electra import ElectraScorer
 from pyterrier_dr.bge_m3 import BGEM3, BGEM3QueryEncoder, BGEM3DocEncoder
 from pyterrier_dr.cde import CDE, CDECache
 from pyterrier_dr.prf import AveragePrf, VectorPrf
+from pyterrier_dr._ils import ILS, ils
 
 __all__ = ["FlexIndex", "DocnoFile", "NilIndex", "NumpyIndex", "RankedLists", "FaissFlat", "FaissHnsw", "MemIndex", "TorchIndex",
            "BiEncoder", "BiQueryEncoder", "BiDocEncoder", "BiScorer", "HgfBiEncoder", "TasB", "RetroMAE", "SBertBiEncoder", "Ance",
            "Query2Query", "GTR", "E5", "TctColBert", "ElectraScorer", "BGEM3", "BGEM3QueryEncoder", "BGEM3DocEncoder", "CDE", "CDECache",
-           "SimFn", "infer_device", "AveragePrf", "VectorPrf"]
+           "SimFn", "infer_device", "AveragePrf", "VectorPrf", "ILS", "ils"]
