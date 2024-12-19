@@ -192,7 +192,6 @@ class FlexIndex(pta.Artifact, pt.Indexer):
         docnos, meta = self.payload(return_dvecs=False)
         return docnos
 
-
     def __repr__(self):
         return f'FlexIndex({str(self.index_path)!r})'
 
