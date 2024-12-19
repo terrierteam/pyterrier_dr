@@ -35,11 +35,11 @@ class MmrScorer(pt.Transformer):
 
         for qid, frame in it:
             scores = frame['score'].values
-            if self.norm_rel:
-                scores = (scores - scores.min()) / (scores.max() - scores.min())
             dvec_matrix = np.stack(frame['doc_vec'])
             dvec_matrix = dvec_matrix / np.linalg.norm(dvec_matrix, axis=1)[:, None]
             dvec_sims = dvec_matrix @ dvec_matrix.T
+            if self.norm_rel:
+                scores = (scores - scores.min()) / (scores.max() - scores.min())
             if self.norm_sim:
                 dvec_sims = (dvec_sims - dvec_sims.min()) / (dvec_sims.max() - dvec_sims.min())
             marg_rels = np.zeros_like(scores)
@@ -50,11 +50,11 @@ class MmrScorer(pt.Transformer):
                 new_idxs.append(idx)
                 if marg_rels.shape[0] > 1:
                     marg_rels = np.max(np.stack([marg_rels, dvec_sims[idx]]), axis=0)
-                    marg_rels[idx] = float('inf')
-            new_frame = frame.iloc[new_idxs].reset_index(drop=True).copy()
-            new_frame['score'] = -np.arange(len(new_idxs), dtype=float)
-            new_frame['rank'] = np.arange(len(new_idxs))
-            out.append(new_frame)
+                    marg_rels[idx] = float('inf') # ignore this document from now on
+            out.append(frame.iloc[new_idxs].reset_index(drop=True).assign(
+                score=-np.arange(len(new_idxs), dtype=float),
+                rank=np.arange(len(new_idxs))
+            ))
 
         return pd.concat(out, ignore_index=True)
 
