@@ -1,7 +1,19 @@
 Diversity
 =======================================================
 
-``pyterrier-dr`` provides a diversity evaluation measure, :func:`~pyterrier_dr.ILS` (Intra-List Similarity),
+Search Result Diversification
+-------------------------------------------------------
+
+``pyterrier-dr`` provides one diversification algorithm, :class:`~pyterrier_dr.MmrScorer` (Maximal Marginal Relevance).
+The transformer works over input dataframes that contain the dense vectors of the documents and the query. You can also
+use :meth:`~pyterrier_dr.FlexIndex.mmr` to first load vectors from an index and then apply MMR.
+
+.. autoclass:: pyterrier_dr.MmrScorer
+
+Diversity Evaluation
+-------------------------------------------------------
+
+``pyterrier-dr`` provides one diversity evaluation measure, :func:`~pyterrier_dr.ILS` (Intra-List Similarity),
 which can be used to evaluate the diversity of search results based on the dense vectors of a :class:`~pyterrier_dr.FlexIndex`.
 
 This measure can be used alongside PyTerrier's built-in evaluation measures in a :func:`pyterrier.Experiment`.
@@ -22,15 +34,17 @@ This measure can be used alongside PyTerrier's built-in evaluation measures in a
     pt.Experiment(
         [
             bm25,
-            model >> index,
+            model >> index.retriever(),
+            model >> index.retriever() >> index.mmr(),
         ],
         dataset.get_topics(),
         dataset.get_qrels(),
         [nDCG@10, R(rel=2)@1000, index.ILS@10, index.ILS@1000]
     )
-    #  name   nDCG@10  R(rel=2)@1000    ILS@10  ILS@1000
-    # BM25   0.498902       0.755495  0.852248  0.754691
-    # TAS-B  0.716068       0.841756  0.889112  0.775415
+    #        name   nDCG@10  R(rel=2)@1000    ILS@10  ILS@1000
+    # BM25            0.498          0.755     0.852     0.754
+    # TasB            0.716          0.841     0.889     0.775
+    # TasB w/ MMR     0.714          0.841     0.888     0.775
 
 .. autofunction:: pyterrier_dr.ILS
 .. autofunction:: pyterrier_dr.ils
