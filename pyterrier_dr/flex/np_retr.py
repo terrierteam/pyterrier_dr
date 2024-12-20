@@ -154,7 +154,22 @@ def _np_vec_loader(self):
     """Return a transformer that loads indexed vectors.
 
     The returned transformer expects a DataFrame with columns ``docno``. It outputs a frame that
-    includes a column ``doc_vec``, which contains the indexed vectors.
+    includes a column ``doc_vec``, which contains the indexed vectors. For example:
+
+    .. code-block:: python
+        :caption: Load vectors from a ``FlexIndex``
+
+        index = FexIndex.from_hf('macavaney/msmarco-passage.tasb.flex')
+        loader = index.vec_loader()
+        loader(pd.DataFrame([
+            {"docno": "5"},
+            {"docno": "100"},
+            {"docno": "74356"},
+        ]))
+        # docno                                            doc_vec
+        #     5  [-0.09343405, 0.12045559, -0.25184962, 0.15029...
+        #   100  [-0.11527929, 0.63400555, -0.0877756, -0.26490...
+        # 74356  [0.15367049, 0.16049547, -0.012261144, -0.2588...
 
     Returns:
         :class:`~pyterrier.Transformer`: A transformer that loads indexed vectors.
