@@ -2,7 +2,7 @@ transformers
 python-terrier>=0.11.0
 pyterrier-alpha>=0.10.0
 torch
-numpy>=1.21.0, <2.0.0
+numpy
 npids
 sentence_transformers
 pyterrier-adaptive
