@@ -6,3 +6,4 @@ voyager
 FlagEmbedding
 faiss-cpu
 ruff
+numpy<2.0.0 # needed for some operations with faiss
