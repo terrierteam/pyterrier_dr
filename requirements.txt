@@ -1,6 +1,6 @@
 transformers
 python-terrier>=0.11.0
-pyterrier-alpha>=0.10.0
+pyterrier-alpha>=0.16.1
 torch
 numpy
 npids

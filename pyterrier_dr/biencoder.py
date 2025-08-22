@@ -37,6 +37,8 @@ class BiEncoder(pt.Transformer):
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         with pta.validate.any(inp) as v:
+            v.query_frame(extra_columns=['query'], mode='query_encoder')
+            v.document_frame(extra_columns=['text'], mode='doc_encoder')            
             v.columns(includes=['query', self.text_field], mode='scorer')
             v.columns(includes=['query_vec', self.text_field], mode='scorer')
             v.columns(includes=['query', 'doc_vec'], mode='scorer')
