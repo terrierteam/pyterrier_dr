@@ -26,7 +26,11 @@ class NumpyRetriever(pt.Transformer):
             return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.query_frame(inp, extra_columns=['query_vec'])
+        if not len(inp):
+            result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
+            if self.drop_query_vec:
+                inp = inp.drop(columns='query_vec')
+            return result.to_df(inp)
         inp = inp.reset_index(drop=True)
         query_vecs = np.stack(inp['query_vec'])
         docnos, dvecs, config = self.flex_index.payload()
