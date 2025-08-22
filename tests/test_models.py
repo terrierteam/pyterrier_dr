@@ -192,6 +192,7 @@ class TestModels(unittest.TestCase):
         self.assertIn(["qid", "query"], pt.inspect.transformer_inputs(model))
         self.assertIn(["docno", "text"], pt.inspect.transformer_inputs(model))
         self.assertIn(["query", "text"], pt.inspect.transformer_inputs(model))
+        self.assertIn(['qid', 'docno', 'query', 'text'], pt.inspect.transformer_inputs(model))
 
 if __name__ == '__main__':
     unittest.main()
