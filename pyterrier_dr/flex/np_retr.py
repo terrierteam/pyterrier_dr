@@ -6,6 +6,7 @@ from .. import SimFn
 from ..indexes import RankedLists
 from . import FlexIndex
 import pyterrier_alpha as pta
+from typing import List
 
 
 class NumpyRetriever(pt.Transformer):
@@ -26,6 +27,7 @@ class NumpyRetriever(pt.Transformer):
             return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
+        pt.validate.query_frame(inp, extra_columns=['query_vec'])
         if not len(inp):
             result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
             if self.drop_query_vec:
@@ -71,6 +73,10 @@ class NumpyVectorLoader(pt.Transformer):
     def __init__(self, flex_index: FlexIndex):
         self.flex_index = flex_index
 
+    def transform_outputs(self, inp_cols : List[str]) -> List[str]:
+        pt.validate.any(inp_cols, ['docid'])
+        return inp_cols + ['doc_vec']
+    
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         docids = self.flex_index._load_docids(inp)
         dvecs, config = self.flex_index.payload(return_docnos=False)
@@ -97,7 +103,7 @@ class NumpyScorer(pt.Transformer):
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        with pta.validate.any(inp) as v:
+        with pt.validate.any(inp) as v:
             v.columns(includes=['query_vec', 'docno'])
             v.columns(includes=['query_vec', 'docid'])
         inp = inp.reset_index(drop=True)
@@ -163,7 +169,7 @@ def _np_vec_loader(self):
     .. code-block:: python
         :caption: Load vectors from a ``FlexIndex``
 
-        index = FexIndex.from_hf('macavaney/msmarco-passage.tasb.flex')
+        index = FlexIndex.from_hf('macavaney/msmarco-passage.tasb.flex')
         loader = index.vec_loader()
         loader(pd.DataFrame([
             {"docno": "5"},
