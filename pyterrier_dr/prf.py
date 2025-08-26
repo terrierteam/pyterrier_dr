@@ -40,7 +40,7 @@ class VectorPrf(pt.Transformer):
     @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         """Performs Vector PRF on the input dataframe."""
-        pt.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
+        pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
         if len(inp) == 0:
@@ -87,7 +87,7 @@ class AveragePrf(pt.Transformer):
     @pta.transform.by_query(add_ranks=False)
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         """Performs Average PRF on the input dataframe."""
-        pt.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
+        pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
 
