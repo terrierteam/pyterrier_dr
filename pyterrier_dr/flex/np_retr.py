@@ -27,7 +27,7 @@ class NumpyRetriever(pt.Transformer):
             return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pt.validate.query_frame(inp, extra_columns=['query_vec'])
+        pta.validate.query_frame(inp, extra_columns=['query_vec'])
         if not len(inp):
             result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
             if self.drop_query_vec:
@@ -74,7 +74,7 @@ class NumpyVectorLoader(pt.Transformer):
         self.flex_index = flex_index
 
     def transform_outputs(self, inp_cols : List[str]) -> List[str]:
-        pt.validate.any(inp_cols, ['docid'])
+        pta.validate.any(inp_cols, ['docid'])
         return inp_cols + ['doc_vec']
     
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
@@ -103,7 +103,7 @@ class NumpyScorer(pt.Transformer):
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        with pt.validate.any(inp) as v:
+        with pta.validate.any(inp) as v:
             v.columns(includes=['query_vec', 'docno'])
             v.columns(includes=['query_vec', 'docid'])
         inp = inp.reset_index(drop=True)
