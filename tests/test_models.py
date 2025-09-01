@@ -187,6 +187,8 @@ class TestModels(unittest.TestCase):
         self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
 
     def test_inspect(self):
+        if not hasattr(pt, 'inspect') or not hasattr(pt.inspect, 'transformer_inputs') :
+            self.skipTest("requires pt 1")
         from pyterrier_dr import TctColBert
         model = TctColBert()
         self.assertIn(["qid", "query"], pt.inspect.transformer_inputs(model))
