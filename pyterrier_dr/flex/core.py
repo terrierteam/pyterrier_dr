@@ -173,7 +173,7 @@ class FlexIndex(pta.Artifact, pt.Indexer):
             v.columns(includes=['docid'], mode='docid')
             v.columns(includes=['docno'], mode='docno')
         if v.mode == 'docid':
-            return inp['docid'].values
+            return inp['docid'].astype('int').values
         docnos, config = self.payload(return_dvecs=False)
         return docnos.inv[inp['docno'].values] # look up docids from docnos
 

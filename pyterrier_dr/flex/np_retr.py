@@ -72,10 +72,6 @@ class NumpyRetriever(pt.Transformer):
 class NumpyVectorLoader(pt.Transformer):
     def __init__(self, flex_index: FlexIndex):
         self.flex_index = flex_index
-
-    def transform_outputs(self, inp_cols : List[str]) -> List[str]:
-        pta.validate.any(inp_cols, ['docid'])
-        return inp_cols + ['doc_vec']
     
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         docids = self.flex_index._load_docids(inp)
