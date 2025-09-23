@@ -6,8 +6,6 @@ from .. import SimFn
 from ..indexes import RankedLists
 from . import FlexIndex
 import pyterrier_alpha as pta
-from typing import List
-
 
 class NumpyRetriever(pt.Transformer):
     def __init__(self,
