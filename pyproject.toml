@@ -30,6 +30,9 @@ dependencies = {file = ["requirements.txt"]}
 bgem3 = [
   "FlagEmbedding",
 ]
+lightning-ir = [
+  "lightning-ir",
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
