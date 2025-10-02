@@ -22,7 +22,7 @@ if you want to use the BGE-M3 encoder with `pyterrier_dr`, you can install the p
 pip install pyterrier-dr[bgem3]
 ```
 
-If you want to use `lightning-ir` models with `pyterrier_dr`, you can install the package with the `lightning-ir` dependency:
+If you want to use [lightning-ir](https://github.com/webis-de/lightning-ir/tree/main/lightning_ir) models with `pyterrier_dr`, you can install the package with the `lightning-ir` dependency:
 
 ```bash
 pip install pyterrier-dr[lightning-ir]

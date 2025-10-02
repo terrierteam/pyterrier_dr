@@ -2,6 +2,7 @@ import numpy as np
 import more_itertools
 import torch
 import pyterrier as pt
+import pyterrier_alpha as pta
 
 LIGHTNING_IR_AVAILIBLE = False
 try:
@@ -35,10 +36,11 @@ class LightningIRMonoScorer(pt.Transformer):
         self.model = L.models.cross_encoders.mono.MonoModel.from_pretrained(model_name).eval().to(self.device)
 
     def transform(self, inp):
+        pta.validate.columns(inp, includes=['query', self.text_field])
         scores = []
         it = inp[['query', self.text_field]].itertuples(index=False)
         if self.verbose:
-            it = pt.tqdm(it, total=len(inp), unit='record', desc='ELECTRA scoring')
+            it = pt.tqdm(it, total=len(inp), unit='record', desc=f'{self.model_name} scoring')
         with torch.no_grad():
             for chunk in more_itertools.chunked(it, self.batch_size):
                 queries, texts = map(list, zip(*chunk))
