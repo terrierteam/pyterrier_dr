@@ -39,7 +39,7 @@ class LightningIRMonoScorer(pt.Transformer):
         pta.validate.columns(inp, includes=['query', self.text_field])
         scores = []
         it = inp[['query', self.text_field]].itertuples(index=False)
-        if self.verbose:
+        if self.verbose and len(inp):
             it = pt.tqdm(it, total=len(inp), unit='record', desc=f'{self.model_name} scoring')
         with torch.no_grad():
             for chunk in more_itertools.chunked(it, self.batch_size):
