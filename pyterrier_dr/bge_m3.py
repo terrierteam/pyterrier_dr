@@ -5,26 +5,32 @@ import torch
 import pyterrier_alpha as pta
 from .biencoder import BiEncoder
 
+IS_FLAGEMBEDDING_AVAILIBLE = False
+try:
+    import FlagEmbedding as FE
+    IS_FLAGEMBEDDING_AVAILIBLE = True
+except ImportError:
+    pass
+
+
 class BGEM3(BiEncoder):
     def __init__(self, model_name='BAAI/bge-m3', batch_size=32, max_length=8192, text_field='text', verbose=False, device=None, use_fp16=False):
         super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
+        if not IS_FLAGEMBEDDING_AVAILIBLE:
+            raise ImportError("BGE-M3 requires the FlagEmbedding package. You can install it using 'pip install pyterrier-dr[bgem3]'")
+
         self.model_name = model_name
         self.use_fp16 = use_fp16
         self.max_length = max_length
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-        except ImportError:
-            raise ImportError("BGE-M3 requires the FlagEmbedding package. You can install it using 'pip install pyterrier-dr[bgem3]'")
-        
-        self.model = BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16, device=self.device)
 
+        self.model = FE.BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16, device=self.device)
 
     def __repr__(self):
         return f'BGEM3({repr(self.model_name)})'
-    
+
     def encode_queries(self, texts, batch_size=None):
         return self.model.encode(list(texts), batch_size=batch_size, max_length=self.max_length,
                                   return_dense=True, return_sparse=False, return_colbert_vecs=False)['dense_vecs']
@@ -36,14 +42,17 @@ class BGEM3(BiEncoder):
     # Only does dense (single_vec) encoding
     def query_encoder(self, verbose=None, batch_size=None):
         return BGEM3QueryEncoder(self, verbose=verbose, batch_size=batch_size)
+
     def doc_encoder(self, verbose=None, batch_size=None):
         return BGEM3DocEncoder(self, verbose=verbose, batch_size=batch_size)
-    
+
     # Does all three BGE-M3 encodings: dense, sparse and colbert(multivec)
     def query_multi_encoder(self, verbose=None, batch_size=None, return_dense=True, return_sparse=True, return_colbert_vecs=True):
         return BGEM3QueryEncoder(self, verbose=verbose, batch_size=batch_size, return_dense=return_dense, return_sparse=return_sparse, return_colbert_vecs=return_colbert_vecs)
+
     def doc_multi_encoder(self, verbose=None, batch_size=None, return_dense=True, return_sparse=True, return_colbert_vecs=True):
         return BGEM3DocEncoder(self, verbose=verbose, batch_size=batch_size, return_dense=return_dense, return_sparse=return_sparse, return_colbert_vecs=return_colbert_vecs)
+
 
 class BGEM3QueryEncoder(pt.Transformer):
     def __init__(self, bge_factory: BGEM3, verbose=None, batch_size=None, max_length=None, return_dense=True, return_sparse=False, return_colbert_vecs=False):
@@ -55,7 +64,7 @@ class BGEM3QueryEncoder(pt.Transformer):
         self.dense = return_dense
         self.sparse = return_sparse
         self.multivecs = return_colbert_vecs
-    
+
     def encode(self, texts):
         return self.bge_factory.model.encode(list(texts), batch_size=self.batch_size, max_length=self.max_length,
                              return_dense=self.dense, return_sparse=self.sparse, return_colbert_vecs=self.multivecs)
@@ -88,9 +97,10 @@ class BGEM3QueryEncoder(pt.Transformer):
         if self.multivecs:
             inp = inp.assign(query_embs=[bgem3_results['colbert_vecs'][i] for i in inv])
         return inp
-    
+
     def __repr__(self):
         return f'{repr(self.bge_factory)}.query_encoder()'
+
 
 class BGEM3DocEncoder(pt.Transformer):
     def __init__(self, bge_factory: BGEM3, verbose=None, batch_size=None, max_length=None, return_dense=True, return_sparse=False, return_colbert_vecs=False):
