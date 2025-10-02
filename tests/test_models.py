@@ -6,6 +6,12 @@ import pandas as pd
 import pyterrier as pt
 from pyterrier_dr import FlexIndex
 
+IS_FLAG_EMBEDDING_AVAILABLE = False
+try:
+    import FlagEmbedding
+    IS_FLAG_EMBEDDING_AVAILABLE = True
+except ImportError:
+    pass
 
 class TestModels(unittest.TestCase):
 
@@ -103,7 +109,8 @@ class TestModels(unittest.TestCase):
                     self.assertTrue('docno' in retr_res.columns)
                     self.assertTrue('score' in retr_res.columns)
                     self.assertTrue('rank' in retr_res.columns)
-    
+
+    @unittest.skipUnless(IS_FLAG_EMBEDDING_AVAILABLE, "FlagEmbedding package is not available")
     def _test_bgem3_multi(self, model, test_query_multivec_encoder=False, test_doc_multivec_encoder=False):
         dataset = pt.get_dataset('irds:vaswani')
 
@@ -175,6 +182,7 @@ class TestModels(unittest.TestCase):
         from pyterrier_dr import Query2Query
         self._base_test(Query2Query(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
 
+    @unittest.skipUnless(IS_FLAG_EMBEDDING_AVAILABLE, "FlagEmbedding package is not available")
     def test_bgem3(self):
         from pyterrier_dr import BGEM3
         # create BGEM3 instance
