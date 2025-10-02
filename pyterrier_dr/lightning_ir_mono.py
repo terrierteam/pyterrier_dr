@@ -11,7 +11,7 @@ except ImportError:
     pass
 
 
-class WebisElectraScorer(pt.Transformer):
+class LightningIRMonoScorer(pt.Transformer):
     def __init__(self,
                  model_name='webis/monoelectra-base',
                  batch_size=16,
@@ -21,7 +21,7 @@ class WebisElectraScorer(pt.Transformer):
                  query_length=32,
                  doc_length=512):
         if not LIGHTNING_IR_AVAILIBLE:
-            raise ImportError("lightning_ir is required for WebisElectraScorer. Please install it via 'pip install lightning-ir'")
+            raise ImportError("lightning_ir is required for LightningIRMonoScorer. Please install it via 'pip install lightning-ir'")
         self.model_name = model_name
         self.batch_size = batch_size
         self.text_field = text_field

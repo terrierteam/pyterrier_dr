@@ -214,9 +214,9 @@ class TestModels(unittest.TestCase):
         self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
 
     @unittest.skipIf(not LIGHTNING_IR_AVAILIBLE, "lightning_ir is not installed")
-    def test_webis_mono_electra(self):
-        from pyterrier_dr import WebisElectraScorer
-        self._base_crossencoder_test(WebisElectraScorer(
+    def test_lightning_ir_mono_electra(self):
+        from pyterrier_dr import LightningIRMonoScorer
+        self._base_crossencoder_test(LightningIRMonoScorer(
                             model_name='webis/monoelectra-base'
                         ))
 
