@@ -173,7 +173,7 @@ class FlexIndex(pta.Artifact, pt.Indexer):
             v.columns(includes=['docid'], mode='docid')
             v.columns(includes=['docno'], mode='docno')
         if v.mode == 'docid':
-            return inp['docid'].values
+            return inp['docid'].astype('int').values
         docnos, config = self.payload(return_dvecs=False)
         return docnos.inv[inp['docno'].values] # look up docids from docnos
 
@@ -211,8 +211,8 @@ class FlexIndexer(pt.Indexer):
     def __repr__(self):
         return f'{self._index}.indexer(mode={self.mode!r})'
 
-    def transform(self, inp):
-        raise RuntimeError("FlexIndexer cannot be used as a transformer, use .index() instead")
+    def index_inputs(self):
+        return [["docno", "doc_vec"]]
 
     def index(self, inp):
         if isinstance(inp, pd.DataFrame):
