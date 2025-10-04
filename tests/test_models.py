@@ -6,6 +6,12 @@ import pandas as pd
 import pyterrier as pt
 from pyterrier_dr import FlexIndex
 
+IS_FLAG_EMBEDDING_AVAILABLE = False
+try:
+    import FlagEmbedding
+    IS_FLAG_EMBEDDING_AVAILABLE = True
+except ImportError:
+    pass
 
 class TestModels(unittest.TestCase):
 
@@ -103,7 +109,51 @@ class TestModels(unittest.TestCase):
                     self.assertTrue('docno' in retr_res.columns)
                     self.assertTrue('score' in retr_res.columns)
                     self.assertTrue('rank' in retr_res.columns)
-    
+
+    def test_tct(self):
+        from pyterrier_dr import TctColBert
+        self._base_test(TctColBert())
+
+    def test_ance(self):
+        from pyterrier_dr import Ance
+        self._base_test(Ance.firstp())
+
+    def test_e5(self):
+        from pyterrier_dr import E5
+        testmodel = E5.base()
+        self._base_test(testmodel)
+        inp = pd.DataFrame([{'qid': 'q1', 'query' : 'chemical reactions', 'docno' : 'd2', 'text' : 'professor proton mixed the chemical'}])
+        self.assertTrue(testmodel(inp).iloc[0]['score'] > 0)
+
+    def test_tasb(self):
+        from pyterrier_dr import TasB
+        self._base_test(TasB.dot())
+
+    def test_retromae(self):
+        from pyterrier_dr import RetroMAE
+        self._base_test(RetroMAE.msmarco_finetune())
+
+    def test_gtr(self):
+        from pyterrier_dr import GTR
+        self._base_test(GTR.base())
+
+    def test_query2query(self):
+        from pyterrier_dr import Query2Query
+        self._base_test(Query2Query(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
+
+    @unittest.skipUnless(IS_FLAG_EMBEDDING_AVAILABLE, "FlagEmbedding package is not available")
+    def test_bgem3(self):
+        from pyterrier_dr import BGEM3
+        # create BGEM3 instance
+        bgem3 = BGEM3(max_length=1024)
+        
+        self._base_test(bgem3.query_multi_encoder(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
+        self._base_test(bgem3.doc_multi_encoder(), test_query_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
+
+        self._test_bgem3_multi(bgem3.query_multi_encoder(), test_query_multivec_encoder=True)
+        self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
+
+    @unittest.skipUnless(IS_FLAG_EMBEDDING_AVAILABLE, "FlagEmbedding package is not available")
     def _test_bgem3_multi(self, model, test_query_multivec_encoder=False, test_doc_multivec_encoder=False):
         dataset = pt.get_dataset('irds:vaswani')
 
@@ -143,48 +193,6 @@ class TestModels(unittest.TestCase):
                 self.assertEqual(len(enc_docs_empty), 0)
                 self.assertTrue('toks' in enc_docs_empty.columns)
                 self.assertTrue('doc_embs' in enc_docs_empty.columns)
-
-    def test_tct(self):
-        from pyterrier_dr import TctColBert
-        self._base_test(TctColBert())
-
-    def test_ance(self):
-        from pyterrier_dr import Ance
-        self._base_test(Ance.firstp())
-
-    def test_e5(self):
-        from pyterrier_dr import E5
-        testmodel = E5.base()
-        self._base_test(testmodel)
-        inp = pd.DataFrame([{'qid': 'q1', 'query' : 'chemical reactions', 'docno' : 'd2', 'text' : 'professor proton mixed the chemical'}])
-        self.assertTrue(testmodel(inp).iloc[0]['score'] > 0)
-
-    def test_tasb(self):
-        from pyterrier_dr import TasB
-        self._base_test(TasB.dot())
-
-    def test_retromae(self):
-        from pyterrier_dr import RetroMAE
-        self._base_test(RetroMAE.msmarco_finetune())
-
-    def test_gtr(self):
-        from pyterrier_dr import GTR
-        self._base_test(GTR.base())
-
-    def test_query2query(self):
-        from pyterrier_dr import Query2Query
-        self._base_test(Query2Query(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
-
-    def test_bgem3(self):
-        from pyterrier_dr import BGEM3
-        # create BGEM3 instance
-        bgem3 = BGEM3(max_length=1024)
-        
-        self._base_test(bgem3.query_multi_encoder(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
-        self._base_test(bgem3.doc_multi_encoder(), test_query_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
-
-        self._test_bgem3_multi(bgem3.query_multi_encoder(), test_query_multivec_encoder=True)
-        self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
 
 
 if __name__ == '__main__':
