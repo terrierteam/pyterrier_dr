@@ -10,6 +10,8 @@ import os
 import json
 from .index import JPQIndex
 import math
+from datasets import IterableDataset
+
 
 def flex_payload(flex_index: pyterrier_dr.FlexIndex):
     docnos_map, vecs, meta = flex_index.payload()
@@ -114,20 +116,6 @@ class JPQLoss(nn.Module):
         labels = torch.zeros(scores.size(0), dtype=torch.long, device=dev)
         return self.loss_fct(scores, labels)
 
-class JPQDataset(Dataset):
-    def __init__(self, queries: Dict[str, str], docpairs, codes: np.ndarray, sel_inv: Dict[str, int]):
-        self.queries = queries
-        self.docpairs = docpairs
-        self.codes = torch.from_numpy(codes).long()
-        self.sel_inv = sel_inv
-    def __getitem__(self, idx):
-        dp = self.docpairs[idx]
-        return {
-            'query_text': self.queries[dp.query_id],
-            'pos_codes': self.codes[self.sel_inv[dp.doc_id_a]],
-            'neg_codes': self.codes[self.sel_inv[dp.doc_id_b]],
-        }
-    def __len__(self): return len(self.docpairs)
 
 class BiEncoder:
     def __init__(self, query_encoder: QueryEncoderBase, passage_encoder: JPQEmbeddingModel):
@@ -162,6 +150,7 @@ class JPQTrainer:
     def fit(
             self,
             training_docpairs,
+            queries,
             code_batch_size: int = 200000, 
             recon_batch_size: int = 20000,
             pq_sample_size: int = 500,
@@ -175,56 +164,79 @@ class JPQTrainer:
         rng = np.random.RandomState(42)
         full_docnos, vecs_mem, N, d = flex_payload(self.existing_index)
 
+        queries = {e.query_id : e.text for e in queries}
+
         ##### TODO: figure out this stuff
 
          # ------- split / subset -------
-        qrels_all = defaultdict(set)
-        # I think training_docpairs is a irds iterator
-        for dp in training_docpairs:
-            qrels_all[dp.query_id].add(dp.doc_id_a)
-        all_qids = [qid for qid in qrels_all.keys() if qid in training_queries]
-        val_size = max(1, int(len(all_qids) * val_ratio))
-        val_qids = set(rng.choice(all_qids, size=val_size, replace=False).tolist())
-        train_qids = set(all_qids) - val_qids
-        train_pairs = [dp for dp in training_docpairs if dp.query_id in train_qids]
-        val_qrels = {qid: qrels_all[qid] for qid in val_qids}
-        print(f"[JPQ] train_qids={len(train_qids)}, val_qids={len(val_qids)}, train_pairs={len(train_pairs)}")
+        # qrels_all = defaultdict(set)
+        # # I think training_docpairs is a irds iterator
+        # for dp in training_docpairs:
+        #     qrels_all[dp.query_id].add(dp.doc_id_a)
+        # all_qids = [qid for qid in qrels_all.keys() if qid in training_queries]
+        # val_size = max(1, int(len(all_qids) * val_ratio))
+        # val_qids = set(rng.choice(all_qids, size=val_size, replace=False).tolist())
+        # train_qids = set(all_qids) - val_qids
+        # train_pairs = [dp for dp in training_docpairs if dp.query_id in train_qids]
+        # val_qrels = {qid: qrels_all[qid] for qid in val_qids}
+        # print(f"[JPQ] train_qids={len(train_qids)}, val_qids={len(val_qids)}, train_pairs={len(train_pairs)}")
 
-        eval_pool == "union"
+        # eval_pool == "union"
         id2idx = inv_map(self.existing_index)
-        train_doc_ids = {dp.doc_id_a for dp in train_pairs} | {dp.doc_id_b for dp in train_pairs}
-        val_pos_doc_ids = set().union(*[val_qrels[qid] for qid in val_qrels]) if val_qrels else set()
-        selected_doc_ids = (train_doc_ids | val_pos_doc_ids) if eval_pool == "union" else set(train_doc_ids)
+        # train_doc_ids = {dp.doc_id_a for dp in train_pairs} | {dp.doc_id_b for dp in train_pairs}
+        # val_pos_doc_ids = set().union(*[val_qrels[qid] for qid in val_qrels]) if val_qrels else set()
+        # selected_doc_ids = (train_doc_ids | val_pos_doc_ids) if eval_pool == "union" else set(train_doc_ids)
 
-        if eval_qrels_df is not None and len(eval_qrels_df) > 0:
-            pos_df = eval_qrels_df[eval_qrels_df['label'] >= eval_label_min]
-            eval_pos = set(map(str, pos_df['docno'].astype(str).tolist()))
-            eval_pos_in_index = {d for d in eval_pos if d in id2idx}
-            selected_doc_ids |= eval_pos_in_index
-            print(f"[EVAL POOL] covered_dev_pos={len(eval_pos_in_index)}, total_dev_pos={len(eval_pos)}")
+        # if eval_qrels_df is not None and len(eval_qrels_df) > 0:
+        #     pos_df = eval_qrels_df[eval_qrels_df['label'] >= eval_label_min]
+        #     eval_pos = set(map(str, pos_df['docno'].astype(str).tolist()))
+        #     eval_pos_in_index = {d for d in eval_pos if d in id2idx}
+        #     selected_doc_ids |= eval_pos_in_index
+        #     print(f"[EVAL POOL] covered_dev_pos={len(eval_pos_in_index)}, total_dev_pos={len(eval_pos)}")
 
-        if extra_neg_pool > 0:
-            need = extra_neg_pool
-            while need > 0:
-                did = full_docnos[int(rng.randint(0, N))]
-                if did not in selected_doc_ids:
-                    selected_doc_ids.add(did); need -= 1
+        # if extra_neg_pool > 0:
+        #     need = extra_neg_pool
+        #     while need > 0:
+        #         did = full_docnos[int(rng.randint(0, N))]
+        #         if did not in selected_doc_ids:
+        #             selected_doc_ids.add(did); need -= 1
+        selected_doc_ids = self.existing_index.payload()[0].fwd[list(range(len(self.existing_index)))]
 
         selected_doc_ids = list(selected_doc_ids)
         rng.shuffle(selected_doc_ids)
-        print(f"[SELECT] selected_docs={len(selected_doc_ids)} "
-            f"(train_docs={len(train_doc_ids)}, val_pos_docs={len(val_pos_doc_ids)}, extra_neg={extra_neg_pool})")
+        #print(f"[SELECT] selected_docs={len(selected_doc_ids)} "
+        #    f"(train_docs={len(train_doc_ids)}, val_pos_docs={len(val_pos_doc_ids)}, extra_neg={extra_neg_pool})")
 
         sel_indices = np.array([int(id2idx[did]) for did in selected_doc_ids], dtype=np.int64)
         sel_inv = {did: i for i, did in enumerate(selected_doc_ids)}
 
         codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
 
-        # TODO bring over the dataloader stuff
+        # bring over the dataloader stuff
+        def _gen():
+            for dp in training_docpairs.docpairs_iter():
+                print(dp)
+                yield dp._asdict()
 
+        dataset = IterableDataset.from_generator(_gen)
+
+        def queries_and_codes(x):
+            return {
+                    'query_text': queries[x.query_id],
+                    'pos_codes': codes_sel[sel_inv[x.doc_id_a]],#not sure about codes_sel
+                    'neg_codes': codes_sel[sel_inv[x.doc_id_b]],#not sure about codes_sel
+                }
+        def collate(batch):
+            return {
+                'query_text': [b['query_text'] for b in batch],
+                'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
+                'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
+            }
+        dl = DataLoader(dataset.map(queries_and_codes), batch_size=batch_size, collate_fn=collate)
         self._training_loop(self.model, pq, dl, epochs, lr, patience)
 
     def _compute_PQ(self, pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng):
+        print("[PQ] training on selected subset...")
         pq = faiss.ProductQuantizer(self.d, self.pq_M, self.pq_nbits)
         sample_size = min(pq_sample_size, len(sel_indices))
         sample_idx = rng.choice(sel_indices, size=sample_size, replace=False)
