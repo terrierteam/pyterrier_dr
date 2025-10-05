@@ -151,9 +151,9 @@ class JPQTrainer:
             self,
             training_docpairs,
             queries,
-            code_batch_size: int = 200000, 
+            code_batch_size: int = 20_0000, 
             recon_batch_size: int = 20000,
-            pq_sample_size: int = 500,
+            pq_sample_size: int = 10_000,
             epochs: int = 3, 
             batch_size: int = 32, 
             patience : int = 2,
@@ -215,7 +215,6 @@ class JPQTrainer:
         # bring over the dataloader stuff
         def _gen():
             for dp in training_docpairs.docpairs_iter():
-                print(dp)
                 yield dp._asdict()
 
         dataset = IterableDataset.from_generator(_gen)
@@ -290,7 +289,7 @@ class JPQTrainer:
             print(f"[JPQ] epoch {ep}/{epochs} train_loss={ep_loss/len(dl):.4f}")
 
             model.passage.eval()
-            stats = self.run_validation()
+            stats = self.run_validation(model)
             model.passage.to(self.device).train()
             print(f"[JPQ][val] MRR@10={stats['MRR@10']:.4f} Recall@50={stats['Recall@50']:.4f} NDCG@10={stats['NDCG@10']:.4f}")
 
@@ -310,7 +309,7 @@ class JPQTrainer:
         if best_state is not None:
             model.passage.load_state_dict(best_state)
 
-    def _run_validation():
+    def _run_validation(model):
         val_qids = sorted([qid for qid in gt_idx.keys() if qid in training_queries])
         if not val_qids: return {"MRR@10":0.0,"Recall@50":0.0,"NDCG@10":0.0}
         texts = [training_queries[qid] for qid in val_qids]
@@ -352,207 +351,6 @@ class JPQTrainer:
             raise ValueError("JPQTrainer not fitted")
         return JPQIndex.build(dest)
 
-def JPQ(
-    model: BiEncoder,
-    existing_index: pyterrier_dr.FlexIndex,
-    training_queries: Dict[str, str],
-    training_docpairs,
-    out_dir: str,
-    pq_M: int = 8, pq_nbits: int = 8, pq_sample_size: int = 500,
-    epochs: int = 3, batch_size: int = 32, lr: float = 2e-5,
-    val_ratio: float = 0.1, topk_eval: int = 100,
-    eval_pool: str = "union", extra_neg_pool: int = 0,
-    code_batch_size: int = 200000, recon_batch_size: int = 20000,
-    eval_qrels_df: Optional[pd.DataFrame] = None, eval_label_min: int = 1,
-    device: Optional[str] = None,
-    save_index: str = "none",            # {'none','pq','flex'}
-    index_out: Optional[str] = None,     # file for 'pq', dir for 'flex'
-    indexpq_metric: str = "IP",
-    doc_encoder_for_full = None,
-) -> Tuple[BiEncoder, str, Optional[str], JPQIndex, List[str], Dict[str,int]]:
-    """
-    Train JPQ on a selected subset; return a JPQRetriever over the SAME subset.
-    If save_index is 'pq' or 'flex', write a NEW FULL index (8.8M) with the same docs as `existing_index`.
-    """
-    os.makedirs(out_dir, exist_ok=True)
-    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-
-    # ------- full universe -------
-    full_docnos, vecs_mem, N, d = flex_payload(existing_index)
-    rng = np.random.RandomState(42)
-
-    # ------- split / subset -------
-    qrels_all = defaultdict(set)
-    for dp in training_docpairs:
-        qrels_all[dp.query_id].add(dp.doc_id_a)
-    all_qids = [qid for qid in qrels_all.keys() if qid in training_queries]
-    val_size = max(1, int(len(all_qids) * val_ratio))
-    val_qids = set(rng.choice(all_qids, size=val_size, replace=False).tolist())
-    train_qids = set(all_qids) - val_qids
-    train_pairs = [dp for dp in training_docpairs if dp.query_id in train_qids]
-    val_qrels = {qid: qrels_all[qid] for qid in val_qids}
-    print(f"[JPQ] train_qids={len(train_qids)}, val_qids={len(val_qids)}, train_pairs={len(train_pairs)}")
-
-    id2idx = inv_map(existing_index)
-    train_doc_ids = {dp.doc_id_a for dp in train_pairs} | {dp.doc_id_b for dp in train_pairs}
-    val_pos_doc_ids = set().union(*[val_qrels[qid] for qid in val_qrels]) if val_qrels else set()
-    selected_doc_ids = (train_doc_ids | val_pos_doc_ids) if eval_pool == "union" else set(train_doc_ids)
-
-    if eval_qrels_df is not None and len(eval_qrels_df) > 0:
-        pos_df = eval_qrels_df[eval_qrels_df['label'] >= eval_label_min]
-        eval_pos = set(map(str, pos_df['docno'].astype(str).tolist()))
-        eval_pos_in_index = {d for d in eval_pos if d in id2idx}
-        selected_doc_ids |= eval_pos_in_index
-        print(f"[EVAL POOL] covered_dev_pos={len(eval_pos_in_index)}, total_dev_pos={len(eval_pos)}")
-
-    if extra_neg_pool > 0:
-        need = extra_neg_pool
-        while need > 0:
-            did = full_docnos[int(rng.randint(0, N))]
-            if did not in selected_doc_ids:
-                selected_doc_ids.add(did); need -= 1
-
-    selected_doc_ids = list(selected_doc_ids); rng.shuffle(selected_doc_ids)
-    print(f"[SELECT] selected_docs={len(selected_doc_ids)} "
-          f"(train_docs={len(train_doc_ids)}, val_pos_docs={len(val_pos_doc_ids)}, extra_neg={extra_neg_pool})")
-
-    sel_indices = np.array([int(id2idx[did]) for did in selected_doc_ids], dtype=np.int64)
-    sel_inv = {did: i for i, did in enumerate(selected_doc_ids)}
-
-    # ------- PQ on subset  -------
-    # assert d % pq_M == 0
-    # pq = faiss.ProductQuantizer(d, pq_M, pq_nbits)
-    # sample_size = min(pq_sample_size, len(sel_indices))
-    # sample_idx = rng.choice(sel_indices, size=sample_size, replace=False)
-    # with timer(f"PQ / train (samples={len(sample_idx):,})"):
-    #     xb = l2_normalize_np(vecs_mem[sample_idx])
-    #     pq.train(xb)
-
-    # print("[PQ] computing codes for selected docs in chunks...")
-    # codes_sel = np.empty((len(sel_indices), pq_M), dtype=np.uint8)
-    # with timer("PQ / compute codes (selected)"):
-    #     for i in tqdm(range(0, len(sel_indices), code_batch_size), desc="PQ compute_codes", leave=False):
-    #         part = sel_indices[i:i+code_batch_size]
-    #         x = l2_normalize_np(vecs_mem[part])
-    #         packed = pq.compute_codes(x)
-    #         if packed.shape[1] != pq_M:
-    #             unpacked = _unpack_pq_codes_batch(packed, pq_M, pq_nbits)
-    #         else:
-    #             unpacked = packed
-    #         codes_sel[i:i+len(part)] = unpacked
-
-    # ------- filter pairs in subset, train JPQ -------
-    filt = [dp for dp in train_pairs if (dp.doc_id_a in sel_inv) and (dp.doc_id_b in sel_inv)]
-    if len(filt) != len(train_pairs):
-        print(f"[WARN] {len(train_pairs)-len(filt)} train pairs dropped (docs not in subset)")
-    train_pairs = filt
-
-    model = model.to(device)
-    model.passage = JPQEmbeddingModel(pq).to(device)
-
-    ds = JPQDataset(training_queries, train_pairs, codes_sel, sel_inv)
-    def collate(batch):
-        return {'query_text': [b['query_text'] for b in batch],
-                'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
-                'neg_codes': torch.stack([b['neg_codes'] for b in batch])}
-    dl = DataLoader(ds, shuffle=True, batch_size=batch_size, collate_fn=collate)
-    loss_f = JPQLoss(model.query, model.passage).to(device)
-
-    model.query.eval()
-    for p in model.query.parameters(recurse=True): p.requires_grad = False
-    optimizer = torch.optim.AdamW(list(model.passage.parameters()), lr=lr, weight_decay=0.0)
-
-    # --- val GT ---
-    gt_idx = {}
-    for qid, dids in val_qrels.items():
-        idxs = [sel_inv[d] for d in dids if d in sel_inv]
-        if idxs: gt_idx[qid] = set(idxs)
-
-    def _val_metrics(I, qids, gt, k_mrr=10, k_recall=50, k_ndcg=10):
-        mrr=rec=ndcg=0.0; valid=0
-        for i, qid in enumerate(qids):
-            if qid not in gt or not gt[qid]: continue
-            valid+=1; top = I[i]
-            rank=None
-            for j in range(min(k_mrr, len(top))):
-                if top[j] in gt[qid]: rank=j+1; break
-            if rank is not None: mrr += 1.0/rank
-            hit = sum(1 for j in range(min(k_recall, len(top))) if top[j] in gt[qid])
-            rec += hit/float(len(gt[qid]))
-            dcg=0.0
-            for j in range(min(k_ndcg, len(top))):
-                if top[j] in gt[qid]: dcg += 1.0/math.log2(j+2)
-            ideal = sum(1.0/math.log2(j+2) for j in range(min(len(gt[qid]), k_ndcg)))
-            if ideal>0: ndcg += dcg/ideal
-        if valid==0: return {"MRR@10":0.0,"Recall@50":0.0,"NDCG@10":0.0}
-        return {"MRR@10":mrr/valid,"Recall@50":rec/valid,"NDCG@10":ndcg/valid}
-
-    def run_validation():
-        val_qids = sorted([qid for qid in gt_idx.keys() if qid in training_queries])
-        if not val_qids: return {"MRR@10":0.0,"Recall@50":0.0,"NDCG@10":0.0}
-        texts = [training_queries[qid] for qid in val_qids]
-        with torch.no_grad():
-            Q_t = model.query.encode_texts(texts, batch_size=256)
-        Q = Q_t.detach().cpu().numpy().astype('float32')
-        Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
-
-        dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
-        index = faiss.IndexFlatIP(dim)
-        pm = model.passage.to("cpu").eval()
-        with torch.no_grad():
-            for i in range(0, len(codes_sel), recon_batch_size):
-                chunk = torch.from_numpy(codes_sel[i:i+recon_batch_size]).long()
-                embs = pm(chunk)
-                embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
-                index.add(embs)
-        D, I = index.search(Q, topk_eval)
-        return _val_metrics(I, val_qids, gt_idx)
-
-    stats0 = run_validation()
-    print(f"[JPQ][val@epoch0] MRR@10={stats0['MRR@10']:.4f} Recall@50={stats0['Recall@50']:.4f} NDCG@10={stats0['NDCG@10']:.4f}")
-    best_mrr = stats0['MRR@10']; patience = 2; bad = 0
-
-    with torch.no_grad():
-        init_w = torch.cat([emb.weight.detach().flatten() for emb in model.passage.sub_embeddings]).to(device)
-    lambda_reg = 1e-4
-    model_dir = os.path.join(out_dir, "model"); os.makedirs(model_dir, exist_ok=True)
-    best_state = None
-
-    for ep in range(1, epochs + 1):
-        model.passage.to(device).train()
-        ep_loss = 0.0
-        with timer(f"JPQ / epoch {ep}"):
-            for batch in dl:
-                optimizer.zero_grad()
-                base = loss_f(batch)
-                cur_w = torch.cat([emb.weight.flatten() for emb in model.passage.sub_embeddings])
-                reg = lambda_reg * torch.mean((cur_w - init_w.to(cur_w.device))**2)
-                loss = base + reg
-                loss.backward()
-                optimizer.step()
-                ep_loss += float(base.item())
-        print(f"[JPQ] epoch {ep}/{epochs} train_loss={ep_loss/len(dl):.4f}")
-
-        model.passage.eval()
-        stats = run_validation()
-        model.passage.to(device).train()
-        print(f"[JPQ][val] MRR@10={stats['MRR@10']:.4f} Recall@50={stats['Recall@50']:.4f} NDCG@10={stats['NDCG@10']:.4f}")
-
-        if stats['MRR@10'] > best_mrr + 1e-5:
-            best_mrr = stats['MRR@10']; bad = 0
-            best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
-            torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
-            with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
-                json.dump({"M": pq_M, "nbits": pq_nbits, "d": d}, f)
-            cents0 = faiss.vector_to_array(pq.centroids).reshape(pq.M, pq.ksub, pq.dsub).astype('float32')
-            np.save(os.path.join(model_dir, "pq_init_centroids.npy"), cents0)
-        else:
-            bad += 1
-            if bad >= patience:
-                print("[JPQ] Early stopping."); break
-
-    if best_state is not None:
-        model.passage.load_state_dict(best_state)
 
     # # ------- optional -------
     # saved_index_path = None
