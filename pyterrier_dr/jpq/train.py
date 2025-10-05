@@ -257,16 +257,24 @@ class JPQTrainer:
             collate_fn=collate)
         self._training_loop(self.model, pq, dl, epochs, lr, patience)
 
-    def _compute_PQ(self, pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng):
-        print("[PQ] training on selected subset...")
+    def _compute_PQ(self, 
+                    pq_sample_size: int, # how many doc vectors to use to train PQ centroids
+                    code_batch_size: int, # how many doc vectors to process in a batch when computing PQ codes
+                    sel_indices : np.array, # which document indices (into full vecs_mem) to compute codes for
+                    vecs_mem : np.array, # vector store
+                    rng # random state
+                    ) -> Tuple[np.ndarray, faiss.ProductQuantizer]:
+        
+        # train PQ on a random sample of the selected docs
         pq = faiss.ProductQuantizer(self.d, self.pq_M, self.pq_nbits)
         sample_size = min(pq_sample_size, len(sel_indices))
+        print("[PQ] training on %d documents..." % sample_size)
         sample_idx = rng.choice(sel_indices, size=sample_size, replace=False)
         with timer(f"PQ / train (samples={len(sample_idx):,})"):
             xb = l2_normalize_np(vecs_mem[sample_idx])
             pq.train(xb)
 
-        print("[PQ] computing codes for selected docs in chunks...")
+        print("[PQ] computing codes for %d selected docs in chunks..." % len(sel_indices))
         codes_sel = np.empty((len(sel_indices), self.pq_M), dtype=np.uint8)
         with timer("PQ / compute codes (selected)"):
             for i in tqdm(range(0, len(sel_indices), code_batch_size), desc="PQ compute_codes", leave=False):
