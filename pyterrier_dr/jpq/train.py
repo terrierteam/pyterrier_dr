@@ -153,7 +153,8 @@ class JPQTrainer:
             queries,
             code_batch_size: int = 20_0000, 
             recon_batch_size: int = 20000,
-            pq_sample_size: int = 10_000,
+            pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
+            docid_subset: Optional[List[int] | List[str] | int] = None, # how mant doc vectors to use to train the sub-id embeddings 
             epochs: int = 3, 
             batch_size: int = 32, 
             patience : int = 2,
@@ -203,15 +204,30 @@ class JPQTrainer:
         #             selected_doc_ids.add(did); need -= 1
 
         print(f"Ingesting docno mapping from index ")
-        selected_doc_ids = self.existing_index.payload()[0].fwd[list(range(len(self.existing_index)))]
+        
+        if docid_subset is None:
+            selected_doc_ids = self.existing_index.payload()[0].fwd[list(range(len(self.existing_index)))]
+            print(f"[SUBSET] using ALL {len(self.existing_index)} docs from index")
+        else:
+            N = len(self.existing_index)
+            if isinstance(docid_subset, int):
+                if docid_subset > N:
+                    raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
+                docid_subset = rng.choice(full_docnos, size=docid_subset, replace=False).tolist()
+            elif isinstance(docid_subset, list):
+                if isinstance(docid_subset[0], int):
+                    docid_subset =  self.existing_index.payload()[0].rev(docid_subset)  # int -> str
+                assert isinstance(docid_subset[0], str)
+                print(f"[SUBSET] using {len(docid_subset)} docs from docid_subset")
+            selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
 
         selected_doc_ids = list(selected_doc_ids)
         rng.shuffle(selected_doc_ids)
-        #print(f"[SELECT] selected_docs={len(selected_doc_ids)} "
-        #    f"(train_docs={len(train_doc_ids)}, val_pos_docs={len(val_pos_doc_ids)}, extra_neg={extra_neg_pool})")
-
+        
         sel_indices = np.array([int(id2idx[did]) for did in selected_doc_ids], dtype=np.int64)
         sel_inv = {did: i for i, did in enumerate(selected_doc_ids)}
+        # make it a set of easier dataset filtering below
+        selected_doc_ids = set(selected_doc_ids)
 
         codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
 
@@ -234,7 +250,11 @@ class JPQTrainer:
                 'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
                 'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
             }
-        dl = DataLoader(dataset.map(queries_and_codes), batch_size=batch_size, collate_fn=collate)
+        dl = DataLoader(
+            # remove train queries for documents that arent in our selection
+            dataset.filter(lambda row: row['doc_id_a'] in selected_doc_ids and row['doc_id_b'] in selected_doc_ids).map(queries_and_codes), 
+            batch_size=batch_size, 
+            collate_fn=collate)
         self._training_loop(self.model, pq, dl, epochs, lr, patience)
 
     def _compute_PQ(self, pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng):
