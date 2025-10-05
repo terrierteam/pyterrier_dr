@@ -210,26 +210,44 @@ class JPQTrainer:
             print(f"[SUBSET] using ALL {len(self.existing_index)} docs from index")
         else:
             N = len(self.existing_index)
-            if isinstance(docid_subset, int):
+            if isinstance(docid_subset, int): # select random subset of this size
                 if docid_subset > N:
                     raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
-                docid_subset = rng.choice(full_docnos, size=docid_subset, replace=False).tolist()
-            elif isinstance(docid_subset, list):
-                if isinstance(docid_subset[0], int):
-                    docid_subset =  self.existing_index.payload()[0].rev(docid_subset)  # int -> str
-                assert isinstance(docid_subset[0], str)
-                print(f"[SUBSET] using {len(docid_subset)} docs from docid_subset")
-            selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
-
+                docid_subset = rng.randint(0, N, docid_subset).tolist()
+                # docid_subset = rng.choice(full_docnos, size=docid_subset, replace=False).tolist()
+                selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
+            elif isinstance(docid_subset, list):  
+                if isinstance(docid_subset[0], int): # use the provided list of int docid
+                    selected_doc_ids = self.existing_index.payload()[0].rev(docid_subset)  # int -> str
+                else:   # use the provided list of str docnos
+                    assert isinstance(docid_subset[0], str)
+                    selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
+            print(f"[SUBSET] using {len(docid_subset)} docs from docid_subset")
+            
         selected_doc_ids = list(selected_doc_ids)
-        rng.shuffle(selected_doc_ids)
+        # I dont think we need to shuffle, as its likely a random sample. would be better sorted!
+        # rng.shuffle(selected_doc_ids)
+        # selected_doc_ids.sort()
         
         sel_indices = np.array([int(id2idx[did]) for did in selected_doc_ids], dtype=np.int64)
         sel_inv = {did: i for i, did in enumerate(selected_doc_ids)}
         # make it a set of easier dataset filtering below
         selected_doc_ids = set(selected_doc_ids)
 
-        codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
+        # ------- PQ -------
+        codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, sel_inv, vecs_mem, rng)
+        
+        # ------- dataloader -------
+        dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, queries, codes_sel)
+        
+        # ------- training the sub-id embeddings -------
+        self._training_loop(self.model, pq, dl, epochs, lr, patience)
+        self.fitted = True
+
+    
+    def _dataloader(self, training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel):
+        # make it a set of easier dataset filtering below
+        selected_doc_ids = set(selected_doc_ids)
 
         # bring over the dataloader stuff
         def _gen():
@@ -255,7 +273,7 @@ class JPQTrainer:
             dataset.filter(lambda row: row['doc_id_a'] in selected_doc_ids and row['doc_id_b'] in selected_doc_ids).map(queries_and_codes), 
             batch_size=batch_size, 
             collate_fn=collate)
-        self._training_loop(self.model, pq, dl, epochs, lr, patience)
+        return dl
 
     def _compute_PQ(self, 
                     pq_sample_size: int, # how many doc vectors to use to train PQ centroids
@@ -274,7 +292,7 @@ class JPQTrainer:
             xb = l2_normalize_np(vecs_mem[sample_idx])
             pq.train(xb)
 
-        print("[PQ] computing codes for %d selected docs in chunks..." % len(sel_indices))
+        print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(sel_indices), code_batch_size))
         codes_sel = np.empty((len(sel_indices), self.pq_M), dtype=np.uint8)
         with timer("PQ / compute codes (selected)"):
             for i in tqdm(range(0, len(sel_indices), code_batch_size), desc="PQ compute_codes", leave=False):
