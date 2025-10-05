@@ -142,7 +142,7 @@ class JPQTrainer:
         self.d = existing_index.payload()[2]['vec_size']
         self.pq_M = pq_M
         self.pq_nbits = pq_nbits
-        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         ptdr_enc_module_tct = PTRDRQueryEncoderAsModule(existing_model, normalize=True, batch_size=64)
         self.model = BiEncoder(ptdr_enc_module_tct, JPQEmbeddingModel(faiss.ProductQuantizer(self.d, pq_M, pq_nbits)))
