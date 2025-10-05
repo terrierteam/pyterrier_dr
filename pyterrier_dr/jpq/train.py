@@ -164,6 +164,7 @@ class JPQTrainer:
         rng = np.random.RandomState(42)
         full_docnos, vecs_mem, N, d = flex_payload(self.existing_index)
 
+        print(f"Ingesting query mapping ")
         queries = {e.query_id : e.text for e in queries}
 
         ##### TODO: figure out this stuff
@@ -200,6 +201,8 @@ class JPQTrainer:
         #         did = full_docnos[int(rng.randint(0, N))]
         #         if did not in selected_doc_ids:
         #             selected_doc_ids.add(did); need -= 1
+
+        print(f"Ingesting docno mapping from index ")
         selected_doc_ids = self.existing_index.payload()[0].fwd[list(range(len(self.existing_index)))]
 
         selected_doc_ids = list(selected_doc_ids)
