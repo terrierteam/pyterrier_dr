@@ -235,7 +235,7 @@ class JPQTrainer:
         selected_doc_ids = set(selected_doc_ids)
 
         # ------- PQ -------
-        codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, sel_inv, vecs_mem, rng)
+        codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
         
         # ------- dataloader -------
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
