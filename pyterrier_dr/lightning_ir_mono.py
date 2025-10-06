@@ -18,9 +18,8 @@ class LightningIRMonoScorer(pt.Transformer):
                  batch_size=16,
                  text_field='text',
                  verbose=True,
-                 device=None,
-                 query_length=32,
-                 doc_length=512):
+                 device=None
+                 ):
         if not LIGHTNING_IR_AVAILIBLE:
             raise ImportError("lightning_ir is required for LightningIRMonoScorer. Please install it via 'pip install lightning-ir'")
         self.model_name = model_name
@@ -30,34 +29,61 @@ class LightningIRMonoScorer(pt.Transformer):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
-        self.tokenizer = L.cross_encoder.cross_encoder_tokenizer.CrossEncoderTokenizer.from_pretrained(model_name,
-                                                                                                       query_length=query_length,
-                                                                                                       doc_length=doc_length)
-        self.model = L.models.cross_encoders.mono.MonoModel.from_pretrained(model_name).eval().to(self.device)
+        self.model = L.CrossEncoderModule(model_name).eval().to(self.device)
 
     def transform(self, inp):
         pta.validate.columns(inp, includes=['query', self.text_field])
-        scores = []
-        it = inp[['query', self.text_field]].itertuples(index=False)
-        if self.verbose and len(inp):
-            it = pt.tqdm(it, total=len(inp), unit='record', desc=f'{self.model_name} scoring')
-        with torch.no_grad():
-            for chunk in more_itertools.chunked(it, self.batch_size):
-                queries, texts = map(list, zip(*chunk))
-                inps = self.tokenizer.tokenize(queries=queries,
-                                               docs=texts,
-                                               padding=True,
-                                               truncation=True,
-                                               return_tensors='pt'
-                                               )["encoding"].to(self.device)
-                with torch.inference_mode():
-                    output = self.model.forward(inps).scores
-                scores.append(output.cpu().detach().numpy())
-        if not scores:
-            scores = np.empty(shape=(0, 0))
-        else:
-            scores = np.concatenate(scores, axis=0)
-        res = inp.assign(score=scores)
+        if len(inp) == 0:
+            res = inp.assign(score=np.empty(shape=(0,), dtype=np.float32))
+            pt.model.add_ranks(res)
+            return res.sort_values(['qid', 'rank'])
+
+        tmp = inp.reset_index().rename(columns={'index': '_row'})
+        g = tmp.groupby('query', sort=False)[['_row', self.text_field]].agg(list)
+
+        queries = g.index.tolist()                 # List[str]
+        doclists = g[self.text_field].tolist()      # List[List[str]]
+        idxlists = g['_row'].tolist()               # List[List[int]]
+
+        out_scores = np.empty(len(inp), dtype=np.float32)
+
+        n_groups = len(queries)
+        iterator = range(n_groups)
+        if self.verbose:
+            iterator = pt.tqdm(iterator, total=n_groups, unit='query', desc=f'{self.model_name} scoring')
+
+        start = 0
+        for _ in iterator:
+            if start >= n_groups:
+                break
+
+            # Pack queries until adding the next would exceed the pair budget
+            pairs = 0
+            end = start
+            lengths = []
+            while end < n_groups:
+                need = len(doclists[end])
+                if pairs > 0 and (pairs + need > self.batch_size):
+                    break
+                pairs += need
+                lengths.append(need)
+                end += 1
+
+            q_batch = queries[start:end]
+            d_batch = doclists[start:end]
+            idx_batch = idxlists[start:end]
+
+            with torch.no_grad(), torch.inference_mode():
+                flat = self.model.score(q_batch, d_batch).scores.detach().cpu().numpy().reshape(-1)
+
+            splits = np.cumsum(lengths)[:-1]
+            per_query = np.split(flat, splits) if splits.size > 0 else [flat]
+            for row_idxs, sc in zip(idx_batch, per_query):
+                out_scores[np.asarray(row_idxs, dtype=int)] = sc
+
+            start = end
+
+        res = inp.assign(score=out_scores)
         pt.model.add_ranks(res)
         res = res.sort_values(['qid', 'rank'])
         return res
