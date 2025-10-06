@@ -345,7 +345,7 @@ class JPQTrainer:
             
             model.passage.to(self.device).train()
             ep_loss = 0.0
-            counter = 0
+            steps = 0
             with timer(f"JPQ / epoch {ep}"):
                 for batch in tqdm(dl, unit="batch", desc=f"JPQ epoch batches"):
                     optimizer.zero_grad()
@@ -358,13 +358,13 @@ class JPQTrainer:
                     ep_loss += float(base.item())
 
                     # counting stuff
-                    counter += dl.batch_size
+                    steps += dl.batch_size
                     total_steps += dl.batch_size
-                    if counter > valid_every:
+                    if steps > valid_every:
                         break
-                    if counter >= (max_steps or math.inf):
+                    if steps >= (max_steps or math.inf):
                         break
-            print(f"[JPQ] epoch {ep}/{epochs} train_loss={ep_loss/len(dl):.4f}")
+            print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             model.passage.eval()
             stats = self.run_validation(model)
