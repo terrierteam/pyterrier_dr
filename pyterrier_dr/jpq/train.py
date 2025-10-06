@@ -251,7 +251,7 @@ class JPQTrainer:
 
         # bring over the dataloader stuff
         def _gen():
-            for dp in training_docpairs.docpairs_iter():
+            for dp in training_docpairs:
                 yield dp._asdict()
 
         dataset = IterableDataset.from_generator(_gen)
@@ -259,8 +259,8 @@ class JPQTrainer:
         def queries_and_codes(x):
             return {
                     'query_text': queries[x.query_id],
-                    'pos_codes': codes_sel[sel_inv[x.doc_id_a]],#not sure about codes_sel
-                    'neg_codes': codes_sel[sel_inv[x.doc_id_b]],#not sure about codes_sel
+                    'pos_codes': codes_sel[sel_inv[x.doc_id_a]],
+                    'neg_codes': codes_sel[sel_inv[x.doc_id_b]],
                 }
         def collate(batch):
             return {
