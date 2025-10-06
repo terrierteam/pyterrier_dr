@@ -408,7 +408,7 @@ class JPQTrainer:
         if best_state is not None:
             model.passage.load_state_dict(best_state)
 
-    def _run_validation(model, val_queries, cut_qrels, selected_doc_ids, codes_sel, recon_batch_size, topk_eval=100):
+    def _run_validation(self, model, val_queries, cut_qrels, selected_doc_ids, codes_sel, recon_batch_size, topk_eval=100):
         with torch.no_grad():
             Q_t = model.query.encode_texts(val_queries['query'], batch_size=256)
         Q = Q_t.detach().cpu().numpy().astype('float32')
