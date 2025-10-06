@@ -173,34 +173,8 @@ class JPQTrainer:
         print(f"Ingesting query mapping ")
         queries = {e.query_id : e.text for e in queries}
 
-        ##### TODO: figure out this stuff
-
-         # ------- split / subset -------
-        # qrels_all = defaultdict(set)
-        # # I think training_docpairs is a irds iterator
-        # for dp in training_docpairs:
-        #     qrels_all[dp.query_id].add(dp.doc_id_a)
-        # all_qids = [qid for qid in qrels_all.keys() if qid in training_queries]
-        # val_size = max(1, int(len(all_qids) * val_ratio))
-        # val_qids = set(rng.choice(all_qids, size=val_size, replace=False).tolist())
-        # train_qids = set(all_qids) - val_qids
-        # train_pairs = [dp for dp in training_docpairs if dp.query_id in train_qids]
-        # val_qrels = {qid: qrels_all[qid] for qid in val_qids}
-        # print(f"[JPQ] train_qids={len(train_qids)}, val_qids={len(val_qids)}, train_pairs={len(train_pairs)}")
-
-        # eval_pool == "union"
         id2idx = inv_map(self.existing_index)
-        # train_doc_ids = {dp.doc_id_a for dp in train_pairs} | {dp.doc_id_b for dp in train_pairs}
-        # val_pos_doc_ids = set().union(*[val_qrels[qid] for qid in val_qrels]) if val_qrels else set()
-        # selected_doc_ids = (train_doc_ids | val_pos_doc_ids) if eval_pool == "union" else set(train_doc_ids)
-
-        # if eval_qrels_df is not None and len(eval_qrels_df) > 0:
-        #     pos_df = eval_qrels_df[eval_qrels_df['label'] >= eval_label_min]
-        #     eval_pos = set(map(str, pos_df['docno'].astype(str).tolist()))
-        #     eval_pos_in_index = {d for d in eval_pos if d in id2idx}
-        #     selected_doc_ids |= eval_pos_in_index
-        #     print(f"[EVAL POOL] covered_dev_pos={len(eval_pos_in_index)}, total_dev_pos={len(eval_pos)}")
-
+        
         # if extra_neg_pool > 0:
         #     need = extra_neg_pool
         #     while need > 0:
@@ -247,6 +221,7 @@ class JPQTrainer:
 
             cut_qrels = eval_qrels[eval_qrels['qid'].isin(eval_qids)]
             eval_queries = eval_queries[eval_queries['qid'].isin(eval_qids)]
+            print(f"[VAL] using {len(eval_qids)} queries with {len(cut_qrels)} qrels for validation")
 
 
         # ------- PQ -------
