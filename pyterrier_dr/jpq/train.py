@@ -1,5 +1,5 @@
 import pyterrier_dr
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Set
 import pandas as pd
 import numpy as np
 import faiss
@@ -224,7 +224,7 @@ class JPQTrainer:
                     selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
             print(f"[SUBSET] using {len(docid_subset)} docs from docid_subset")
             
-        selected_doc_ids = list(selected_doc_ids)
+        selected_doc_ids : List[str] = list(selected_doc_ids)
         # I dont think we need to shuffle, as its likely a random sample. would be better sorted!
         # rng.shuffle(selected_doc_ids)
         # selected_doc_ids.sort()
@@ -232,7 +232,6 @@ class JPQTrainer:
         sel_indices = np.array([int(id2idx[did]) for did in selected_doc_ids], dtype=np.int64)
         sel_inv = {did: i for i, did in enumerate(selected_doc_ids)}
         # make it a set of easier dataset filtering below
-        selected_doc_ids = set(selected_doc_ids)
 
         # ------- PQ -------
         codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
@@ -245,9 +244,18 @@ class JPQTrainer:
         self.fitted = True
 
     
-    def _dataloader(self, training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel):
+    def _dataloader(self, 
+                    training_docpairs, 
+                    batch_size : int, # batch size for training
+                    selected_doc_ids : List[str], # documents that we're using during training
+                    sel_inv : Dict[str,int], # map from str docid -> index into codes_sel 
+                    queries : Dict[str,str], # map from str queryid -> query text
+                    codes_sel : np.Array) -> DataLoader: # PQ codes for selected documents
+       
         # make it a set of easier dataset filtering below
         selected_doc_ids = set(selected_doc_ids)
+        # bring codes to torch
+        codes_sel = torch.from_numpy(codes_sel).long()
 
         # bring over the dataloader stuff
         def _gen():
@@ -258,9 +266,9 @@ class JPQTrainer:
 
         def queries_and_codes(x):
             return {
-                    'query_text': queries[x.query_id],
-                    'pos_codes': codes_sel[sel_inv[x.doc_id_a]],
-                    'neg_codes': codes_sel[sel_inv[x.doc_id_b]],
+                    'query_text': queries[x["query_id"]],
+                    'pos_codes': codes_sel[sel_inv[x["doc_id_a"]]],
+                    'neg_codes': codes_sel[sel_inv[x["doc_id_b"]]],
                 }
         def collate(batch):
             return {
