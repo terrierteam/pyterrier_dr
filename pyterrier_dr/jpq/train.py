@@ -360,6 +360,7 @@ class JPQTrainer:
         best_state = None
         total_steps = 0
         best_mrr = 0.0
+        bad = 0
 
         for ep in range(1, epochs + 1):
             if total_steps >= (max_steps or math.inf):
