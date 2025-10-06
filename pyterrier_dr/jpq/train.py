@@ -359,6 +359,7 @@ class JPQTrainer:
         lambda_reg = 1e-4
         best_state = None
         total_steps = 0
+        best_mrr = 0.0
 
         for ep in range(1, epochs + 1):
             if total_steps >= (max_steps or math.inf):
