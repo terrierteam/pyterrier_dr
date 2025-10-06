@@ -220,6 +220,15 @@ class TestModels(unittest.TestCase):
                             model_name='webis/monoelectra-base'
                         ))
 
+    def test_inspect(self):
+        if not hasattr(pt, 'inspect') or not hasattr(pt.inspect, 'transformer_inputs') :
+            self.skipTest("requires pt 1")
+        from pyterrier_dr import TctColBert
+        model = TctColBert()
+        self.assertIn(["qid", "query"], pt.inspect.transformer_inputs(model))
+        self.assertIn(["docno", "text"], pt.inspect.transformer_inputs(model))
+        self.assertIn(["query", "text"], pt.inspect.transformer_inputs(model))
+        self.assertIn(['qid', 'docno', 'query', 'text'], pt.inspect.transformer_inputs(model))
 
 if __name__ == '__main__':
     unittest.main()

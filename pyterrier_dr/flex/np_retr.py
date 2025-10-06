@@ -7,7 +7,6 @@ from ..indexes import RankedLists
 from . import FlexIndex
 import pyterrier_alpha as pta
 
-
 class NumpyRetriever(pt.Transformer):
     def __init__(self,
         flex_index: FlexIndex,
@@ -27,6 +26,11 @@ class NumpyRetriever(pt.Transformer):
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
+        if not len(inp):
+            result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
+            if self.drop_query_vec:
+                inp = inp.drop(columns='query_vec')
+            return result.to_df(inp)
         inp = inp.reset_index(drop=True)
         query_vecs = np.stack(inp['query_vec'])
         docnos, dvecs, config = self.flex_index.payload()
@@ -66,7 +70,7 @@ class NumpyRetriever(pt.Transformer):
 class NumpyVectorLoader(pt.Transformer):
     def __init__(self, flex_index: FlexIndex):
         self.flex_index = flex_index
-
+    
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         docids = self.flex_index._load_docids(inp)
         dvecs, config = self.flex_index.payload(return_docnos=False)
@@ -159,7 +163,7 @@ def _np_vec_loader(self):
     .. code-block:: python
         :caption: Load vectors from a ``FlexIndex``
 
-        index = FexIndex.from_hf('macavaney/msmarco-passage.tasb.flex')
+        index = FlexIndex.from_hf('macavaney/msmarco-passage.tasb.flex')
         loader = index.vec_loader()
         loader(pd.DataFrame([
             {"docno": "5"},
