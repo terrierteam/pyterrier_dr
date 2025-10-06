@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 import time
-from typing import Generator, Tuple
+from typing import Iterator, Tuple
 import numpy as np
 import os
 import pandas as pd
@@ -27,7 +27,7 @@ def dir_size_bytes(path: str) -> int:
             total += os.path.getsize(os.path.join(root, f))
     return total
 
-def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Generator[Tuple[str, str, str, str]]:
+def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Iterator[Tuple[str, str, str, str]]:
     """
     Given a set of queries and qrels, yield (queryid, querytext, posdocid, negdocid) tuples
     suitable for training a bi-encoder with pairwise loss.
