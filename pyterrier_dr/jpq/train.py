@@ -250,7 +250,7 @@ class JPQTrainer:
                     selected_doc_ids : List[str], # documents that we're using during training
                     sel_inv : Dict[str,int], # map from str docid -> index into codes_sel 
                     queries : Dict[str,str], # map from str queryid -> query text
-                    codes_sel : np.Array) -> DataLoader: # PQ codes for selected documents
+                    codes_sel : np.array) -> DataLoader: # PQ codes for selected documents
        
         # make it a set of easier dataset filtering below
         selected_doc_ids = set(selected_doc_ids)
