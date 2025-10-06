@@ -427,7 +427,7 @@ class JPQTrainer:
         results = []
         for qoffset in range(len(val_queries)):
             qid = val_queries['qid'].iloc[qoffset]
-            retrieved_sel_docids = D[i][:topk_eval]
+            retrieved_sel_docids = I[i][:topk_eval].tolist()
             retrieved_sel_docnos = [ selected_doc_ids[r] for r in retrieved_sel_docids]
             scores = list(range(topk_eval, 0, -1)) # we do have scores in the I matrix, these ranks are sufficient
             df = pd.DataFrame()
