@@ -347,7 +347,7 @@ class JPQTrainer:
             ep_loss = 0.0
             counter = 0
             with timer(f"JPQ / epoch {ep}"):
-                for batch in tqdm(dl):
+                for batch in tqdm(dl, unit="batch", desc=f"JPQ epoch batches"):
                     optimizer.zero_grad()
                     base = loss_f(batch)
                     cur_w = torch.cat([emb.weight.flatten() for emb in model.passage.sub_embeddings])
@@ -362,7 +362,7 @@ class JPQTrainer:
                     total_steps += dl.batch_size
                     if counter > valid_every:
                         break
-                    if counter >= max_steps:
+                    if counter >= (max_steps or math.inf):
                         break
             print(f"[JPQ] epoch {ep}/{epochs} train_loss={ep_loss/len(dl):.4f}")
 
