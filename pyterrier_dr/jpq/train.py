@@ -393,8 +393,8 @@ class JPQTrainer:
             model.passage.to(self.device).train()
             print(f"[JPQ][val] {str(stats)}")
 
-            if stats['MRR@10'] > best_mrr + 1e-5:
-                best_mrr = stats['MRR@10']; bad = 0
+            if stats['RR@10'] > best_mrr + 1e-5:
+                best_mrr = stats['RR@10']; bad = 0
                 best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
                 torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
                 with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
@@ -436,7 +436,7 @@ class JPQTrainer:
             df["docno"] = retrieved_sel_docnos
             df["qid"] = [qid] * topk_eval
             results.append(df)
-        return pt.Evaluate(pd.concat(results), cut_qrels, metrics=[MRR@10, Recall@50, nDCG@10])
+        return pt.Evaluate(pd.concat(results), cut_qrels, metrics=[RR@10, Recall@50, nDCG@10])
     
         #cut_qrels[qid] = [selected_doc_ids[i] for i in I[qoffset] if i < len(selected_doc_ids)]
 
