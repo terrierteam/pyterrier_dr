@@ -241,8 +241,8 @@ class JPQTrainer:
             # reduce qrels to those with docs in selected_doc_ids
             eval_qrels = eval_qrels[eval_qrels.docno.isin(selected_doc_ids)]
 
-            # idenntify qid that still have relevant documents
-            eval_qids = set(eval_queries[eval_queries['label'] > 0]['qid'].tolist())
+            # identify qid that still have relevant documents
+            eval_qids = set(eval_qrels[eval_qrels['label'] > 0]['qid'].tolist())
 
             cut_qrels = eval_qrels[eval_qrels['qid'].isin(eval_qids)]
             eval_queries = eval_queries[eval_queries['qid'].isin(eval_qids)]
