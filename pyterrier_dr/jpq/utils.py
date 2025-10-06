@@ -1,7 +1,9 @@
 from contextlib import contextmanager
 import time
+from typing import Generator, Tuple
 import numpy as np
 import os
+import pandas as pd
 
 @contextmanager
 def timer(name: str):
@@ -24,3 +26,23 @@ def dir_size_bytes(path: str) -> int:
         for f in files:
             total += os.path.getsize(os.path.join(root, f))
     return total
+
+def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame) -> Generator[Tuple[str, str, str, str]]:
+    """
+    Given a set of queries and qrels, yield (queryid, querytext, posdocid, negdocid) tuples
+    suitable for training a bi-encoder with pairwise loss.
+
+    Note that this does not ensure that the negative document is not also a positive document.
+    """
+    qdict = dict(zip(queries['qid'], queries['query']))
+    qrels_grouped = qrels.groupby('qid')
+    for qid, group in qrels_grouped:
+
+        pos_docs = group[group['label'] > 0]['docno'].tolist()
+        neg_docs = group[group['label'] <= 0]['docno'].tolist()
+        if len(pos_docs) == 0 or len(neg_docs) == 0:
+            continue
+        query_text = qdict[qid]
+        for pos_doc in pos_docs:
+            for neg_doc in neg_docs:
+                yield (qid, query_text, pos_doc, neg_doc)
