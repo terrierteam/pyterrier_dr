@@ -154,7 +154,7 @@ class JPQTrainer:
             code_batch_size: int = 20_0000, 
             recon_batch_size: int = 20000,
             pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
-            docid_subset: Optional[List[int] | List[str] | int] = None, # how mant doc vectors to use to train the sub-id embeddings 
+            docid_subset: Optional[List[int] | List[str] | int] = None, # how many doc vectors to use to train the sub-id embeddings 
             epochs: int = 3, 
             batch_size: int = 32, 
             patience : int = 2,
@@ -299,34 +299,47 @@ class JPQTrainer:
                 part = sel_indices[i:i+code_batch_size]
                 x = l2_normalize_np(vecs_mem[part])
                 packed = pq.compute_codes(x)
-                if packed.shape[1] != self.pq_M:
+                if packed.shape[1] != self.pq_M: # not sure what this if is for?
                     unpacked = _unpack_pq_codes_batch(packed, self.pq_M, self.pq_nbits)
                 else:
                     unpacked = packed
                 codes_sel[i:i+len(part)] = unpacked
+        
+        # TODO: we should check how the average/min/max codes are observed in sel_indices
+        # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
+        # as a codes are centroids in the vector space defined in the small sample_size set, which
+        # is a subset of the sel_indices set, it should be ok.
         return codes_sel, pq
     
-    def _training_loop(self, model, pq, dl, epochs, lr, patience):
+    def _training_loop(self, model, pq, dl : DataLoader, epochs, lr, patience, max_steps=None, valid_every=100):
 
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
         model.query.eval()
         for p in model.query.parameters(recurse=True): p.requires_grad = False
         optimizer = torch.optim.AdamW(list(model.passage.parameters()), lr=lr, weight_decay=0.0)
 
-        out_dir = ... # TODO
+        import tempfile
+        out_dir = tempfile.mkdtemp()
+        model_dir = os.path.join(out_dir, "model"); 
+        os.makedirs(model_dir, exist_ok=True)
+
         with torch.no_grad():
             init_w = torch.cat([emb.weight.detach().flatten() for emb in self.model.passage.sub_embeddings]).to(self.device)
         
         lambda_reg = 1e-4
-        model_dir = os.path.join(out_dir, "model"); 
-        os.makedirs(model_dir, exist_ok=True)
         best_state = None
+        total_steps = 0
 
         for ep in range(1, epochs + 1):
+            if total_steps >= (max_steps or math.inf):
+                print("[JPQ] reached max_steps"); 
+                break
+            
             model.passage.to(self.device).train()
             ep_loss = 0.0
+            counter = 0
             with timer(f"JPQ / epoch {ep}"):
-                for batch in dl:
+                for batch in tqdm(dl):
                     optimizer.zero_grad()
                     base = loss_f(batch)
                     cur_w = torch.cat([emb.weight.flatten() for emb in model.passage.sub_embeddings])
@@ -335,6 +348,14 @@ class JPQTrainer:
                     loss.backward()
                     optimizer.step()
                     ep_loss += float(base.item())
+
+                    # counting stuff
+                    counter += dl.batch_size
+                    total_steps += dl.batch_size
+                    if counter > valid_every:
+                        break
+                    if counter >= max_steps:
+                        break
             print(f"[JPQ] epoch {ep}/{epochs} train_loss={ep_loss/len(dl):.4f}")
 
             model.passage.eval()
