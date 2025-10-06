@@ -432,7 +432,7 @@ class JPQTrainer:
             retrieved_sel_docnos = [ selected_doc_ids[r] for r in retrieved_sel_docids]
             scores = list(range(topk_eval, 0, -1)) # we do have scores in the I matrix, these ranks are sufficient
             df = pd.DataFrame()
-            df["scores"] = scores
+            df["score"] = scores
             df["docno"] = retrieved_sel_docnos
             df["qid"] = [qid] * topk_eval
             results.append(df)
