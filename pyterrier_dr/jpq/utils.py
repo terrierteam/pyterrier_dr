@@ -27,7 +27,7 @@ def dir_size_bytes(path: str) -> int:
             total += os.path.getsize(os.path.join(root, f))
     return total
 
-def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame) -> Generator[Tuple[str, str, str, str]]:
+def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Generator[Tuple[str, str, str, str]]:
     """
     Given a set of queries and qrels, yield (queryid, querytext, posdocid, negdocid) tuples
     suitable for training a bi-encoder with pairwise loss.
@@ -39,10 +39,12 @@ def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame) -> Ge
     for qid, group in qrels_grouped:
 
         pos_docs = group[group['label'] > 0]['docno'].tolist()
-        neg_docs = group[group['label'] <= 0]['docno'].tolist()
+        neg_docs = group[group['label'] <= 0]['docno'].tolist() #.sample(frac=1)
         if len(pos_docs) == 0 or len(neg_docs) == 0:
             continue
         query_text = qdict[qid]
         for pos_doc in pos_docs:
-            for neg_doc in neg_docs:
+            for count_neg, neg_doc in enumerate(neg_docs):
                 yield (qid, query_text, pos_doc, neg_doc)
+                if max_neg is not None and count_neg + 1 >= max_neg:
+                    break
