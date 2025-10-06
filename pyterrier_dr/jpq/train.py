@@ -340,7 +340,7 @@ class JPQTrainer:
                        selected_doc_ids : List[str], codes_sel : np.array,
                        eval_queries : pd.DataFrame, eval_qrels : pd.DataFrame, 
                        recon_batch_size : int,
-                        max_steps=None, valid_every=100):
+                        max_steps=None, valid_every=25):
 
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
         model.query.eval()
