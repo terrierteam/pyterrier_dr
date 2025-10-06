@@ -388,7 +388,7 @@ class JPQTrainer:
             print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             model.passage.eval()
-            stats = self.run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
+            stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
             model.passage.to(self.device).train()
             print(f"[JPQ][val] {str(stats)}")
 
