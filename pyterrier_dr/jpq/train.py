@@ -1,6 +1,7 @@
 import pyterrier_dr
 from typing import List, Optional, Tuple, Dict, Set
 import pandas as pd
+import pyterrier as pt
 import numpy as np
 import faiss
 from .utils import timer, l2_normalize_np
@@ -143,6 +144,7 @@ class JPQTrainer:
         self.pq_M = pq_M
         self.pq_nbits = pq_nbits
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        print("[JPQTrainer] device=", self.device)
 
         ptdr_enc_module_tct = PTRDRQueryEncoderAsModule(existing_model, normalize=True, batch_size=64)
         self.model = BiEncoder(ptdr_enc_module_tct, JPQEmbeddingModel(faiss.ProductQuantizer(self.d, pq_M, pq_nbits)))
@@ -151,15 +153,17 @@ class JPQTrainer:
             self,
             training_docpairs,
             queries,
-            code_batch_size: int = 20_0000, 
-            recon_batch_size: int = 20000,
+            code_batch_size: int = 200_000, 
+            recon_batch_size: int = 20_000,
             pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
             docid_subset: Optional[List[int] | List[str] | int] = None, # how many doc vectors to use to train the sub-id embeddings 
             epochs: int = 3, 
             batch_size: int = 32, 
             patience : int = 2,
             extra_neg_pool : int = 0,
-            eval_qrels_df : Optional[pd.DataFrame] = None,
+            eval_queries : pd.DataFrame = None,
+            eval_qrels : pd.DataFrame = None,
+            #eval_qrels_df : Optional[pd.DataFrame] = None,
             lr: float = 2e-5):
         
         rng = np.random.RandomState(42)
@@ -231,7 +235,18 @@ class JPQTrainer:
         
         sel_indices = np.array([int(id2idx[did]) for did in selected_doc_ids], dtype=np.int64)
         sel_inv = {did: i for i, did in enumerate(selected_doc_ids)}
-        # make it a set of easier dataset filtering below
+        
+        if eval_queries is not None:
+            assert eval_qrels is not None
+            # reduce qrels to those with docs in selected_doc_ids
+            eval_qrels = eval_qrels[eval_qrels.docno.isin(selected_doc_ids)]
+
+            # idenntify qid that still have relevant documents
+            eval_qids = set(eval_queries[eval_queries['label'] > 0]['qid'].tolist())
+
+            cut_qrels = eval_qrels[eval_qrels['qid'].isin(eval_qids)]
+            eval_queries = eval_queries[eval_queries['qid'].isin(eval_qids)]
+
 
         # ------- PQ -------
         codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
@@ -240,7 +255,9 @@ class JPQTrainer:
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
         
         # ------- training the sub-id embeddings -------
-        self._training_loop(self.model, pq, dl, epochs, lr, patience)
+        self._training_loop(self.model, pq, dl, epochs, lr, patience, 
+                            selected_doc_ids, codes_sel,
+                            eval_queries, cut_qrels, recon_batch_size)
         self.fitted = True
 
     
@@ -319,7 +336,11 @@ class JPQTrainer:
         # is a subset of the sel_indices set, it should be ok.
         return codes_sel, pq
     
-    def _training_loop(self, model, pq, dl : DataLoader, epochs, lr, patience, max_steps=None, valid_every=100):
+    def _training_loop(self, model, pq, dl : DataLoader, epochs, lr, patience, 
+                       selected_doc_ids : List[str], codes_sel : np.array,
+                       eval_queries : pd.DataFrame, eval_qrels : pd.DataFrame, 
+                       recon_batch_size : int,
+                        max_steps=None, valid_every=100):
 
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
         model.query.eval()
@@ -367,9 +388,9 @@ class JPQTrainer:
             print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             model.passage.eval()
-            stats = self.run_validation(model)
+            stats = self.run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
             model.passage.to(self.device).train()
-            print(f"[JPQ][val] MRR@10={stats['MRR@10']:.4f} Recall@50={stats['Recall@50']:.4f} NDCG@10={stats['NDCG@10']:.4f}")
+            print(f"[JPQ][val] {str(stats)}")
 
             if stats['MRR@10'] > best_mrr + 1e-5:
                 best_mrr = stats['MRR@10']; bad = 0
@@ -387,15 +408,11 @@ class JPQTrainer:
         if best_state is not None:
             model.passage.load_state_dict(best_state)
 
-    def _run_validation(model):
-        val_qids = sorted([qid for qid in gt_idx.keys() if qid in training_queries])
-        if not val_qids: return {"MRR@10":0.0,"Recall@50":0.0,"NDCG@10":0.0}
-        texts = [training_queries[qid] for qid in val_qids]
+    def _run_validate(model, val_queries, cut_qrels, selected_doc_ids, codes_sel, recon_batch_size, topk_eval=100):
         with torch.no_grad():
-            Q_t = model.query.encode_texts(texts, batch_size=256)
+            Q_t = model.query.encode_texts(val_queries['query'], batch_size=256)
         Q = Q_t.detach().cpu().numpy().astype('float32')
         Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
-
         dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
         index = faiss.IndexFlatIP(dim)
         pm = model.passage.to("cpu").eval()
@@ -406,7 +423,43 @@ class JPQTrainer:
                 embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
                 index.add(embs)
         D, I = index.search(Q, topk_eval)
-        return _val_metrics(I, val_qids, gt_idx)
+
+        results = []
+        for qoffset in range(len(val_queries)):
+            qid = val_queries['qid'].iloc[qoffset]
+            retrieved_sel_docids = D[i][:topk_eval]
+            retrieved_sel_docnos = selected_doc_ids[retrieved_sel_docids]
+            scores = list(range(topk_eval, 0, -1)) # we do have scores in the I matrix, these ranks are sufficient
+            df = pd.DataFrame()
+            df["scores"] = scores
+            df["docno"] = retrieved_sel_docnos
+            df["qid"] = qid
+            results.append(df)
+        return pt.Evaluate(pd.concat(results), cut_qrels, metrics=["MRR@10", "Recall@50", "NDCG@10"])
+    
+        #cut_qrels[qid] = [selected_doc_ids[i] for i in I[qoffset] if i < len(selected_doc_ids)]
+
+
+    # def _run_validation(model):
+    #     #val_qids = sorted([qid for qid in gt_idx.keys() if qid in training_queries])
+    #     #if not val_qids: return {"MRR@10":0.0,"Recall@50":0.0,"NDCG@10":0.0}
+    #     #texts = [training_queries[qid] for qid in val_qids]
+    #     with torch.no_grad():
+    #         Q_t = model.query.encode_texts(texts, batch_size=256)
+    #     Q = Q_t.detach().cpu().numpy().astype('float32')
+    #     Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
+
+    #     dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
+    #     index = faiss.IndexFlatIP(dim)
+    #     pm = model.passage.to("cpu").eval()
+    #     with torch.no_grad():
+    #         for i in range(0, len(codes_sel), recon_batch_size):
+    #             chunk = torch.from_numpy(codes_sel[i:i+recon_batch_size]).long()
+    #             embs = pm(chunk)
+    #             embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
+    #             index.add(embs)
+    #     D, I = index.search(Q, topk_eval)
+    #     return _val_metrics(I, val_qids, gt_idx)
 
     def faiss_index(self, index_out):
         if not self.fitted:
