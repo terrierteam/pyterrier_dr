@@ -12,6 +12,7 @@ import json
 from .index import JPQIndex
 import math
 from datasets import IterableDataset
+from pyterrier.measures import *
 
 
 def flex_payload(flex_index: pyterrier_dr.FlexIndex):
@@ -435,7 +436,7 @@ class JPQTrainer:
             df["docno"] = retrieved_sel_docnos
             df["qid"] = [qid] * topk_eval
             results.append(df)
-        return pt.Evaluate(pd.concat(results), cut_qrels, metrics=["MRR@10", "Recall@50", "NDCG@10"])
+        return pt.Evaluate(pd.concat(results), cut_qrels, metrics=[MRR@10, Recall@50, nDCG@10])
     
         #cut_qrels[qid] = [selected_doc_ids[i] for i in I[qoffset] if i < len(selected_doc_ids)]
 
