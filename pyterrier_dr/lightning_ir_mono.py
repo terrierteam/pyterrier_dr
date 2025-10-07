@@ -1,5 +1,4 @@
 import numpy as np
-import more_itertools
 import torch
 import pyterrier as pt
 import pyterrier_alpha as pta
