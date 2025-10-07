@@ -1,5 +1,4 @@
 import pyterrier_dr
-from typing import List, Optional, Tuple, Dict, Set
 import pandas as pd
 import pyterrier as pt
 import numpy as np
@@ -8,12 +7,14 @@ from .utils import timer, l2_normalize_np, NullWanDBRun
 import torch
 from pyterrier import tqdm
 import os
-import json
 from .index import JPQIndex
 import math
 from datasets import IterableDataset
 from pyterrier.measures import *
 import wandb
+
+from .model import *
+from torch.utils.data import DataLoader
 
 def get_grad_norm(model, norm_type=2):
     total_norm = 0.0
@@ -24,12 +25,14 @@ def get_grad_norm(model, norm_type=2):
     total_norm = total_norm ** (1. / norm_type)
     return total_norm
 
+
 def flex_payload(flex_index: pyterrier_dr.FlexIndex):
     docnos_map, vecs, meta = flex_index.payload()
     N = int(meta.get('doc_count', len(vecs)))
     d = int(meta['vec_size'])
     docnos = [docnos_map[i] for i in range(N)]
     return docnos, vecs, N, d
+
 
 def inv_map(flex_index: pyterrier_dr.FlexIndex):
     return flex_index.payload()[0].inv  # docno -> position
@@ -54,89 +57,6 @@ def _unpack_pq_codes_batch(packed: np.ndarray, M: int, nbits: int) -> np.ndarray
         out[i] = vals
     return out
 
-# ==== JPQ core (subset-train -> subset retriever) ====
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from collections import defaultdict
-
-class QueryEncoderBase(nn.Module):
-    def encode_texts(self, texts: List[str], batch_size: int = 128) -> torch.Tensor:
-        raise NotImplementedError
-    def save(self, path: str):
-        os.makedirs(path, exist_ok=True)
-
-class PTRDRQueryEncoderAsModule(QueryEncoderBase):
-    """Treat pyterrier_dr encoders as a frozen QueryEncoderBase."""
-    def __init__(self, dr_model, normalize: bool = True, batch_size: int = 64):
-        super().__init__()
-        self.dr = dr_model
-        self.normalize = normalize
-        self.batch = batch_size
-    def to(self, device):  # frozen
-        return self
-    def parameters(self, recurse: bool = True):
-        return iter(())
-    def encode_texts(self, texts: List[str], batch_size: int = 128) -> torch.Tensor:
-        outs = []
-        with torch.no_grad():
-            for i in range(0, len(texts), self.batch):
-                chunk = texts[i:i+self.batch]
-                if hasattr(self.dr, "encode_queries"):
-                    arr = self.dr.encode_queries(chunk, batch_size=self.batch)
-                else:
-                    qe = getattr(self.dr, "query_encoder", lambda **kw: None)(batch_size=self.batch)
-                    if qe and hasattr(qe, "encode"):
-                        arr = qe.encode(chunk, batch_size=self.batch)
-                    else:
-                        raise RuntimeError("dr_model must expose encode_queries or query_encoder().encode")
-                t = torch.from_numpy(np.asarray(arr, dtype=np.float32))
-                if self.normalize:
-                    t = t / (t.norm(dim=1, keepdim=True) + 1e-12)
-                outs.append(t)
-        return torch.cat(outs, dim=0)
-
-class JPQEmbeddingModel(nn.Module):
-    def __init__(self, pq: faiss.ProductQuantizer):
-        super().__init__()
-        self.M, self.k, self.dsub = pq.M, pq.ksub, pq.dsub
-        self.sub_embeddings = nn.ModuleList([nn.Embedding(self.k, self.dsub) for _ in range(self.M)])
-        cents = faiss.vector_to_array(pq.centroids).reshape(self.M, self.k, self.dsub)
-        for i in range(self.M):
-            self.sub_embeddings[i].weight.data.copy_(torch.from_numpy(cents[i]).float())
-    def forward(self, doc_codes: torch.Tensor) -> torch.Tensor:
-        parts = [self.sub_embeddings[i](doc_codes[:, i]) for i in range(self.M)]
-        return torch.cat(parts, dim=1)
-
-class JPQLoss(nn.Module):
-    def __init__(self, query_encoder: QueryEncoderBase, passage_encoder: JPQEmbeddingModel):
-        super().__init__()
-        self.query_encoder = query_encoder
-        self.passage_encoder = passage_encoder
-        self.cos_sim = nn.CosineSimilarity(dim=-1)
-        self.loss_fct = nn.CrossEntropyLoss()
-    def forward(self, batch):
-        q = self.query_encoder.encode_texts(batch['query_text'])      # CPU
-        dev = next(self.passage_encoder.parameters()).device
-        q = q.to(dev, non_blocking=True)
-        pos = batch['pos_codes'].to(dev, non_blocking=True)
-        neg = batch['neg_codes'].to(dev, non_blocking=True)
-        pos = self.passage_encoder(pos)
-        neg = self.passage_encoder(neg)
-        s_pos = self.cos_sim(q, pos); s_neg = self.cos_sim(q, neg)
-        scores = torch.stack([s_pos, s_neg], dim=1)
-        labels = torch.zeros(scores.size(0), dtype=torch.long, device=dev)
-        return self.loss_fct(scores, labels)
-
-
-class BiEncoder:
-    def __init__(self, query_encoder: QueryEncoderBase, passage_encoder: JPQEmbeddingModel):
-        self.query = query_encoder
-        self.passage = passage_encoder
-    def to(self, device: str):
-        self.query = self.query.to(device)
-        self.passage = self.passage.to(device)
-        return self
-
 
 class JPQTrainer:
 
@@ -158,8 +78,8 @@ class JPQTrainer:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print("[JPQTrainer] device=", self.device)
 
-        ptdr_enc_module_tct = PTRDRQueryEncoderAsModule(existing_model, normalize=True, batch_size=64)
-        self.model = BiEncoder(ptdr_enc_module_tct, JPQEmbeddingModel(faiss.ProductQuantizer(self.d, pq_M, pq_nbits)))
+        ptdr_enc_module_tct = QueryEncoder(existing_model, normalise=True, batch_size=64)
+        self.model = JPQBiencoder(ptdr_enc_module_tct, PassageEncoder(faiss.ProductQuantizer(self.d, pq_M, pq_nbits)))
 
     def fit(
             self,
@@ -168,7 +88,7 @@ class JPQTrainer:
             code_batch_size: int = 200_000, 
             recon_batch_size: int = 20_000,
             pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
-            docid_subset: Optional[List[int] | List[str] | int] = None, # how many doc vectors to use to train the sub-id embeddings 
+            docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
             epochs: int = 3, 
             batch_size: int = 32, 
             patience : int = 2,
@@ -214,7 +134,7 @@ class JPQTrainer:
                     selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
             print(f"[SUBSET] using {len(docid_subset)} docs from docid_subset")
             
-        selected_doc_ids : List[str] = list(selected_doc_ids)
+        selected_doc_ids : list[str] = list(selected_doc_ids)
         # I dont think we need to shuffle, as its likely a random sample. would be better sorted!
         # rng.shuffle(selected_doc_ids)
         # selected_doc_ids.sort()
@@ -253,9 +173,9 @@ class JPQTrainer:
     def _dataloader(self, 
                     training_docpairs, 
                     batch_size : int, # batch size for training
-                    selected_doc_ids : List[str], # documents that we're using during training
-                    sel_inv : Dict[str,int], # map from str docid -> index into codes_sel 
-                    queries : Dict[str,str], # map from str queryid -> query text
+                    selected_doc_ids : list[str], # documents that we're using during training
+                    sel_inv : dict[str,int], # map from str docid -> index into codes_sel 
+                    queries : dict[str,str], # map from str queryid -> query text
                     codes_sel : np.array) -> DataLoader: # PQ codes for selected documents
        
         # make it a set of easier dataset filtering below
@@ -295,7 +215,7 @@ class JPQTrainer:
                     sel_indices : np.array, # which document indices (into full vecs_mem) to compute codes for
                     vecs_mem : np.array, # vector store
                     rng # random state
-                    ) -> Tuple[np.ndarray, faiss.ProductQuantizer]:
+                    ) -> tuple[np.ndarray, faiss.ProductQuantizer]:
         
         # train PQ on a random sample of the selected docs
         pq = faiss.ProductQuantizer(self.d, self.pq_M, self.pq_nbits)
@@ -326,14 +246,15 @@ class JPQTrainer:
         return codes_sel, pq
     
     def _training_loop(self, model, pq, dl : DataLoader, epochs, lr, patience, 
-                       selected_doc_ids : List[str], codes_sel : np.array,
+                       selected_doc_ids : list[str], codes_sel : np.array,
                        eval_queries : pd.DataFrame, eval_qrels : pd.DataFrame, 
                        recon_batch_size : int,
                         max_steps=None, valid_every=25):
 
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
         model.query.eval()
-        for p in model.query.parameters(recurse=True): p.requires_grad = False
+        for p in model.query.parameters():
+            p.requires_grad = False
         optimizer = torch.optim.AdamW(list(model.passage.parameters()), lr=lr, weight_decay=0.0)
 
         import tempfile
