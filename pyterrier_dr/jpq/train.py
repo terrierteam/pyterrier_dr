@@ -164,7 +164,7 @@ class JPQTrainer:
 
         # ------- initialise the model -------
         # using the centroids from PQ as the starting point for the sub-id embeddings
-        self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.pq_M, 2**self.pq_nbits, self.d / self.pq_M, centroids))
+        self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.pq_M, 2**self.pq_nbits, self.d // self.pq_M, centroids))
         
         # ------- dataloader -------
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
@@ -308,22 +308,23 @@ class JPQTrainer:
             print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             # model.passage.eval()
-            val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
-            self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
-            print(f"[JPQ][val] {str(val_stats)}")
+            if eval_queries:
+                val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
+                self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
+                print(f"[JPQ][val] {str(val_stats)}")
 
-            if val_stats['RR@10'] > best_mrr + 1e-5:
-                best_mrr = val_stats['RR@10']; bad = 0
-                best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
-                torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
-                with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
-                    json.dump({"M": self.pq_M, "nbits": self.pq_nbits, "d": self.d}, f)
-                cents0 = centroids
-                np.save(os.path.join(model_dir, "pq_init_centroids.npy"), cents0)
-            else:
-                bad += 1
-                if bad >= patience:
-                    print("[JPQ] Early stopping."); break
+                if val_stats['RR@10'] > best_mrr + 1e-5:
+                    best_mrr = val_stats['RR@10']; bad = 0
+                    best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
+                    torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
+                    with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
+                        json.dump({"M": self.pq_M, "nbits": self.pq_nbits, "d": self.d}, f)
+                    cents0 = centroids
+                    np.save(os.path.join(model_dir, "pq_init_centroids.npy"), cents0)
+                else:
+                    bad += 1
+                    if bad >= patience:
+                        print("[JPQ] Early stopping."); break
 
         if best_state is not None:
             model.passage.load_state_dict(best_state)
