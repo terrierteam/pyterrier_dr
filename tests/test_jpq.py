@@ -27,5 +27,5 @@ class TestJPQ(unittest.TestCase):
             epochs=5, 
             pq_sample_size=200, 
             eval_queries=dataset.get_topics(), 
-            eval_qrels= dataset.get_qrels()
+            eval_qrels= dataset.get_qrels(), valid_every=64
         )
