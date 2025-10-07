@@ -1,5 +1,5 @@
 import pyterrier_dr
-from typing import List, Optional, Tuple, Dict, Set
+from typing import List, Optional, Tuple, Dict, Literal
 import pandas as pd
 import pyterrier as pt
 import numpy as np
@@ -96,13 +96,14 @@ class PTRDRQueryEncoderAsModule(QueryEncoderBase):
         return torch.cat(outs, dim=0)
 
 class JPQEmbeddingModel(nn.Module):
-    def __init__(self, pq: faiss.ProductQuantizer):
+    def __init__(self, M, k, dsub, centroids):
         super().__init__()
-        self.M, self.k, self.dsub = pq.M, pq.ksub, pq.dsub
+        self.M, self.k, self.dsub = M,k,dsub
         self.sub_embeddings = nn.ModuleList([nn.Embedding(self.k, self.dsub) for _ in range(self.M)])
-        cents = faiss.vector_to_array(pq.centroids).reshape(self.M, self.k, self.dsub)
+        assert centroids.shape == (self.M, self.k, self.dsub)
+        #cents = faiss.vector_to_array(pq.centroids).reshape(self.M, self.k, self.dsub)
         for i in range(self.M):
-            self.sub_embeddings[i].weight.data.copy_(torch.from_numpy(cents[i]).float())
+            self.sub_embeddings[i].weight.data.copy_(torch.from_numpy(centroids[i]).float())
     def forward(self, doc_codes: torch.Tensor) -> torch.Tensor:
         parts = [self.sub_embeddings[i](doc_codes[:, i]) for i in range(self.M)]
         return torch.cat(parts, dim=1)
@@ -145,6 +146,7 @@ class JPQTrainer:
             existing_model : pyterrier_dr.BiEncoder,
             existing_index: pyterrier_dr.FlexIndex,
             device = None,
+            pq_impl = Literal['faiss'] | Literal['sklearn'], 
             pq_M: int = 8, 
             pq_nbits: int = 8,
             wandb : wandb.Run | NullWanDBRun = NullWanDBRun()):
@@ -154,12 +156,12 @@ class JPQTrainer:
         self.d = existing_index.payload()[2]['vec_size']
         self.pq_M = pq_M
         self.pq_nbits = pq_nbits
+        self.pq_impl = pq_impl
         self.wandb = wandb or NullWanDBRun()
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print("[JPQTrainer] device=", self.device)
 
-        ptdr_enc_module_tct = PTRDRQueryEncoderAsModule(existing_model, normalize=True, batch_size=64)
-        self.model = BiEncoder(ptdr_enc_module_tct, JPQEmbeddingModel(faiss.ProductQuantizer(self.d, pq_M, pq_nbits)))
+        self.query_encoder = PTRDRQueryEncoderAsModule(existing_model, normalize=True, batch_size=64)
 
     def fit(
             self,
@@ -175,7 +177,6 @@ class JPQTrainer:
             extra_neg_pool : int = 0,
             eval_queries : pd.DataFrame = None,
             eval_qrels : pd.DataFrame = None,
-            #eval_qrels_df : Optional[pd.DataFrame] = None,
             lr: float = 2e-5):
         
         rng = np.random.RandomState(42)
@@ -204,7 +205,6 @@ class JPQTrainer:
                 if docid_subset > N:
                     raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
                 docid_subset = rng.randint(0, N, docid_subset).tolist()
-                # docid_subset = rng.choice(full_docnos, size=docid_subset, replace=False).tolist()
                 selected_doc_ids = self.existing_index.payload()[0].fwd[docid_subset]
             elif isinstance(docid_subset, list):  
                 if isinstance(docid_subset[0], int): # use the provided list of int docid
@@ -215,7 +215,8 @@ class JPQTrainer:
             print(f"[SUBSET] using {len(docid_subset)} docs from docid_subset")
             
         selected_doc_ids : List[str] = list(selected_doc_ids)
-        # I dont think we need to shuffle, as its likely a random sample. would be better sorted!
+        # I dont think we need to shuffle, as its likely a random sample. 
+        # would be better sorted for faster lookups during PQ training?!
         # rng.shuffle(selected_doc_ids)
         # selected_doc_ids.sort()
         
@@ -230,19 +231,23 @@ class JPQTrainer:
             # identify qid that still have relevant documents
             eval_qids = set(eval_qrels[eval_qrels['label'] > 0]['qid'].tolist())
 
+            # cut queries and qrels to only those that have relevant documents
             cut_qrels = eval_qrels[eval_qrels['qid'].isin(eval_qids)]
             eval_queries = eval_queries[eval_queries['qid'].isin(eval_qids)]
             print(f"[VAL] using {len(eval_qids)} queries with {len(cut_qrels)} qrels for validation")
 
-
         # ------- PQ -------
-        codes_sel, pq = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
+        codes_sel, centroids = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
+
+        # ------- initialise the model -------
+        # using the centroids from PQ as the starting point for the sub-id embeddings
+        self.model = BiEncoder(self.query_encoder, JPQEmbeddingModel(self.d, self.pq_M, self.pq_nbits, centroids))
         
         # ------- dataloader -------
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
         
         # ------- training the sub-id embeddings -------
-        self._training_loop(self.model, pq, dl, epochs, lr, patience, 
+        self._training_loop(self.model, centroids, dl, epochs, lr, patience, 
                             selected_doc_ids, codes_sel,
                             eval_queries, cut_qrels, recon_batch_size)
         self.fitted = True
@@ -286,44 +291,44 @@ class JPQTrainer:
             batch_size=batch_size, 
             collate_fn=collate)
         return dl
-
+    
     def _compute_PQ(self, 
                     pq_sample_size: int, # how many doc vectors to use to train PQ centroids
                     code_batch_size: int, # how many doc vectors to process in a batch when computing PQ codes
                     sel_indices : np.array, # which document indices (into full vecs_mem) to compute codes for
                     vecs_mem : np.array, # vector store
                     rng # random state
-                    ) -> Tuple[np.ndarray, faiss.ProductQuantizer]:
-        
+                    ) -> Tuple[np.ndarray, np.ndarray]:
+        from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSklearn
+        pq_class : ProductQuantizer = None
+        if self.pq_impl == 'faiss':
+            pq_class = ProductQuantizerFAISS
+        elif self.pq_impl == 'sklearn':
+            pq_class = ProductQuantizerSklearn
+        else:
+            raise ValueError(f"Unknown pq_impl {self.pq_impl}, must be 'faiss' or 'sklearn'")
+        pq = pq_class(M=self.pq_M, Ks=2**self.pq_nbits)
+
         # train PQ on a random sample of the selected docs
-        pq = faiss.ProductQuantizer(self.d, self.pq_M, self.pq_nbits)
         sample_size = min(pq_sample_size, len(sel_indices))
         print("[PQ] training on %d documents..." % sample_size)
         sample_idx = rng.choice(sel_indices, size=sample_size, replace=False)
         with timer(f"PQ / train (samples={len(sample_idx):,})"):
             xb = l2_normalize_np(vecs_mem[sample_idx])
-            pq.train(xb)
+            pq.fit(xb)
 
         print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(sel_indices), code_batch_size))
         codes_sel = np.empty((len(sel_indices), self.pq_M), dtype=np.uint8)
         with timer("PQ / compute codes (selected)"):
-            for i in tqdm(range(0, len(sel_indices), code_batch_size), desc="PQ compute_codes", leave=False):
-                part = sel_indices[i:i+code_batch_size]
-                x = l2_normalize_np(vecs_mem[part])
-                packed = pq.compute_codes(x)
-                if packed.shape[1] != self.pq_M: # not sure what this if is for?
-                    unpacked = _unpack_pq_codes_batch(packed, self.pq_M, self.pq_nbits)
-                else:
-                    unpacked = packed
-                codes_sel[i:i+len(part)] = unpacked
+            codes_sel = pq.encode_batch(l2_normalize_np(vecs_mem[sel_indices]), batch_size=code_batch_size)
         
-        # TODO: we should check how the average/min/max codes are observed in sel_indices
+        #  TODO: we should check how the average/min/max codes are observed in sel_indices
         # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
         # as a codes are centroids in the vector space defined in the small sample_size set, which
         # is a subset of the sel_indices set, it should be ok.
-        return codes_sel, pq
+        return codes_sel, pq.get_centroids()
     
-    def _training_loop(self, model, pq, dl : DataLoader, epochs, lr, patience, 
+    def _training_loop(self, model, centroids, dl : DataLoader, epochs, lr, patience, 
                        selected_doc_ids : List[str], codes_sel : np.array,
                        eval_queries : pd.DataFrame, eval_qrels : pd.DataFrame, 
                        recon_batch_size : int,
@@ -389,7 +394,7 @@ class JPQTrainer:
                 torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
                 with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
                     json.dump({"M": self.pq_M, "nbits": self.pq_nbits, "d": self.d}, f)
-                cents0 = faiss.vector_to_array(pq.centroids).reshape(pq.M, pq.ksub, pq.dsub).astype('float32')
+                cents0 = centroids
                 np.save(os.path.join(model_dir, "pq_init_centroids.npy"), cents0)
             else:
                 bad += 1
