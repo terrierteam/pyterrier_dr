@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 import time
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, Any, Dict
 import numpy as np
 import os
 import pandas as pd
@@ -26,6 +26,34 @@ def dir_size_bytes(path: str) -> int:
         for f in files:
             total += os.path.getsize(os.path.join(root, f))
     return total
+
+# def merge_queries_into_docpairs(queries: pd.DataFrame, docpairs : Iterator[Any]):
+#     queries = {e.query_id : e.text for e in queries}
+#     for e in docpairs:
+#         e = e._asdict()
+#         e['query'] = queries[e['query_id']]
+#         yield e
+
+class _MergeQueriesIterator:
+    def __init__(self, queries: pd.DataFrame, docpairs: Iterator[Any]):
+        # Build lookup dict for queries
+        self.queries = {e.query_id: e.text for e in queries}
+        self.docpairs = iter(docpairs)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        e = next(self.docpairs)  # raises StopIteration automatically when done
+        e = e._asdict()
+        e['query'] = self.queries[e['query_id']]
+        return e
+
+def merge_queries_into_docpairs(queries: pd.DataFrame | Iterator[Any], docpairs: Iterator[Any]) -> Iterator[dict]:
+    """Return an iterator that merges queries into docpairs."""
+    if not isinstance(queries, pd.DataFrame):
+        queries = pd.DataFrame(queries)
+    return _MergeQueriesIterator(queries, docpairs)
 
 def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Iterator[Tuple[str, str, str, str]]:
     """

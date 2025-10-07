@@ -1,5 +1,5 @@
 import pyterrier_dr
-from typing import List, Optional, Tuple, Dict, Literal
+from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Iterator
 import pandas as pd
 import pyterrier as pt
 import numpy as np
@@ -10,9 +10,8 @@ from pyterrier import tqdm
 import os
 from .index import JPQIndex
 import math
-from datasets import IterableDataset
+from datasets import IterableDataset, DatasetInfo
 from pyterrier.measures import *
-import wandb
 import json
 
 from .model import *
@@ -70,7 +69,7 @@ class JPQTrainer:
             pq_impl: Literal['faiss'] | Literal['sklearn'] = 'sklearn', 
             pq_M: int = 8, 
             pq_nbits: int = 8,
-            wandb : wandb.Run | NullWanDBRun = NullWanDBRun()):
+            wandb : Union['wandb.Run', NullWanDBRun] = NullWanDBRun()):
         super().__init__()
         self.fitted = False
         self.existing_index = existing_index
@@ -87,7 +86,6 @@ class JPQTrainer:
     def fit(
             self,
             training_docpairs,
-            queries,
             code_batch_size: int = 200_000, 
             recon_batch_size: int = 20_000,
             pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
@@ -103,9 +101,6 @@ class JPQTrainer:
         
         rng = np.random.RandomState(42)
         full_docnos, vecs_mem, N, d = flex_payload(self.existing_index)
-
-        print(f"Ingesting query mapping ")
-        queries = {e.query_id : e.text for e in queries}
 
         id2idx = inv_map(self.existing_index)
         
@@ -168,7 +163,7 @@ class JPQTrainer:
         self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.pq_M, 2**self.pq_nbits, self.d // self.pq_M, centroids))
         
         # ------- dataloader -------
-        dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
+        dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, codes_sel)
         
         # ------- training the sub-id embeddings -------
         self._training_loop(self.model, centroids, dl, epochs, lr, patience, 
@@ -183,7 +178,6 @@ class JPQTrainer:
                     batch_size : int, # batch size for training
                     selected_doc_ids : list[str], # documents that we're using during training
                     sel_inv : dict[str,int], # map from str docid -> index into codes_sel 
-                    queries : dict[str,str], # map from str queryid -> query text
                     codes_sel : np.array) -> DataLoader: # PQ codes for selected documents
        
         # make it a set of easier dataset filtering below
@@ -191,16 +185,27 @@ class JPQTrainer:
         # bring codes to torch
         codes_sel = torch.from_numpy(codes_sel).long()
 
-        # bring over the dataloader stuff
-        def _gen():
-            for dp in training_docpairs:
-                yield dp._asdict()
+        # wrap training_docpairs iterator in an IterableDataset
+        # this is a big convoluted hack suggested by GPT, to avoid trying to pickle a generator
+        from datasets.iterable_dataset import ExamplesIterable
+        class _IteratorExamplesIterable(ExamplesIterable):
+            def __init__(self, iterator: Iterator[Dict[str, Any]]):
+                self.iterator = iterator
 
-        dataset = IterableDataset.from_generator(_gen)
+            def __iter__(self):
+                for x in self.iterator:
+                    yield x
+
+        class DocpairDataset(IterableDataset):
+            def __init__(self, iterator: Iterator[Dict[str, Any]]):
+                ex_iterable = _IteratorExamplesIterable(iterator)
+                super().__init__(ex_iterable=ex_iterable)
+        
+        dataset = DocpairDataset(training_docpairs)
 
         def queries_and_codes(x):
             return {
-                    'query_text': queries[x["query_id"]],
+                    'query_text': x["query"],
                     'pos_codes': codes_sel[sel_inv[x["doc_id_a"]]],
                     'neg_codes': codes_sel[sel_inv[x["doc_id_b"]]],
                 }
@@ -310,7 +315,7 @@ class JPQTrainer:
             print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             # model.passage.eval()
-            if eval_queries:
+            if eval_queries is not None:
                 val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
                 self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
                 print(f"[JPQ][val] steps={steps} {str(val_stats)}")
