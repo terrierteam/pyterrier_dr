@@ -111,10 +111,11 @@ class ProductQuantizerFAISS(ProductQuantizer):
     def encode(self, X):
         """Encode vectors into PQ codes (n, M)."""
         assert self.pq is not None, "Must call fit() first."
-        codes = np.zeros((X.shape[0], self.M), dtype=np.uint8)
+        #codes = np.zeros((X.shape[0], self.M), dtype=np.uint8)
         # TODO check packing when nbits != 8
         # if packed.shape[1] != pq_M:  # packed bytes when nbits != 8
-        self.pq.compute_codes(X.astype(np.float32), codes)
+        codes = self.pq.compute_codes(X.astype(np.float32))
+        assert codes.shape == (X.shape[0], self.M)
         return codes
 
     def decode(self, codes):
