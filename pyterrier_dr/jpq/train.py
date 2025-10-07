@@ -57,6 +57,8 @@ def _unpack_pq_codes_batch(packed: np.ndarray, M: int, nbits: int) -> np.ndarray
         out[i] = vals
     return out
 
+def _autodevice(device):
+    return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
 class JPQTrainer:
 
@@ -77,7 +79,7 @@ class JPQTrainer:
         self.pq_nbits = pq_nbits
         self.pq_impl = pq_impl
         self.wandb = wandb or NullWanDBRun()
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = _autodevice(device)
         print("[JPQTrainer] device=", self.device)
 
         self.query_encoder = QueryEncoder(existing_model, normalise=True, batch_size=64)
@@ -282,18 +284,20 @@ class JPQTrainer:
             model.passage.to(self.device).train()
             ep_loss = 0.0
             steps = 0
+            prev_w = None
             with timer(f"JPQ / epoch {ep}"):
                 for batch in tqdm(dl, unit="batch", desc=f"JPQ epoch batches"):
-                #for batch in dl:
                     optimizer.zero_grad()
                     base = loss_f(batch)
                     cur_w = torch.cat([emb.weight.flatten() for emb in model.passage.sub_embeddings])
+                    if prev_w is not None:
+                        print("moved...", torch.mean((prev_w - init_w.to(prev_w.device))**2).item())
+                    prev_w = cur_w
                     reg = lambda_reg * torch.mean((cur_w - init_w.to(cur_w.device))**2)
-                    print(reg)
                     loss = base + reg
                     loss.backward()
                     
-                    self.wandb.log({"train/base_loss": base, "train/reg_loss": reg, "train/loss": loss, "train/grad_norm": get_grad_norm(model.passage)}, step=total_steps)
+                    self.wandb.log({"train/base_loss": base.item(), "train/reg_from_centroids": reg.item(), "train/loss": loss.item(), "train/grad_norm": get_grad_norm(model.passage)}, step=total_steps)
                     optimizer.step()
                     ep_loss += float(base.item())
 
@@ -324,7 +328,7 @@ class JPQTrainer:
                 else:
                     bad += 1
                     if bad >= patience:
-                        print("[JPQ] Early stopping after {steps} steps, patience {patience}."); break
+                        print(f"[JPQ] Early stopping after {total_steps} steps, patience {patience}."); break
 
         if best_state is not None:
             model.passage.load_state_dict(best_state)
@@ -339,7 +343,7 @@ class JPQTrainer:
             from pyterrier_dr import FlexIndex
             import tempfile
             dstindex = tempfile.mkdtemp()
-            flex = FlexIndex(dstindex)
+            flex = FlexIndex(dstindex, verbose=False)
             pm = model.passage.to("cpu").eval()
             def _gen():
                 with torch.no_grad():
