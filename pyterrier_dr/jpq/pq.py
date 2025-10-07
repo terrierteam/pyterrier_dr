@@ -70,7 +70,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
         codes = np.empty((n, self.M), dtype=np.uint8)
         for m in range(self.M):
             X_sub = X[:, m * self.dsub:(m + 1) * self.dsub]
-            centers = self.codebooks[m]
+            centers = self.centroids[m]
             distances = np.linalg.norm(X_sub[:, None, :] - centers[None, :, :], axis=2)
             codes[:, m] = np.argmin(distances, axis=1)
         return codes
