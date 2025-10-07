@@ -9,7 +9,7 @@ from pyterrier import tqdm
 import os
 from .index import JPQIndex
 import math
-from datasets import IterableDataset, DatasetInfo
+from datasets import IterableDataset, DatasetInfo, Dataset
 from pyterrier.measures import *
 import json
 
@@ -184,23 +184,11 @@ class JPQTrainer:
         # bring codes to torch
         codes_sel = torch.from_numpy(codes_sel).long()
 
-        # wrap training_docpairs iterator in an IterableDataset
-        # this is a big convoluted hack suggested by GPT, to avoid trying to pickle a generator
-        from datasets.iterable_dataset import ExamplesIterable
-        class _IteratorExamplesIterable(ExamplesIterable):
-            def __init__(self, iterator: Iterator[Dict[str, Any]]):
-                self.iterator = iterator
+        # making a list smells bad
+        dataset = Dataset.from_list([x for x in training_docpairs])
 
-            def __iter__(self):
-                for x in self.iterator:
-                    yield x
-
-        class DocpairDataset(IterableDataset):
-            def __init__(self, iterator: Iterator[Dict[str, Any]]):
-                ex_iterable = _IteratorExamplesIterable(iterator)
-                super().__init__(ex_iterable=ex_iterable)
-        
-        dataset = DocpairDataset(training_docpairs)
+        def filter_in_sel(row):
+            return row['doc_id_a'] in selected_doc_ids and row['doc_id_b'] in selected_doc_ids
 
         def queries_and_codes(x):
             return {
@@ -214,9 +202,12 @@ class JPQTrainer:
                 'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
                 'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
             }
+        dataset = dataset.filter(filter_in_sel).map(queries_and_codes)
+        dataset.set_format(type='torch', columns=['pos_codes', 'neg_codes', 'query_text'])
+
         dl = DataLoader(
             # remove train queries for documents that arent in our selection
-            dataset.filter(lambda row: row['doc_id_a'] in selected_doc_ids and row['doc_id_b'] in selected_doc_ids).map(queries_and_codes), 
+            dataset, 
             batch_size=batch_size, 
             collate_fn=collate)
         return dl
@@ -251,7 +242,7 @@ class JPQTrainer:
         with timer("PQ / compute codes (selected)"):
             codes_sel = pq.encode_batch(l2_normalize_np(vecs_mem[sel_indices]), batch_size=code_batch_size)
         
-        #  TODO: we should check how the average/min/max codes are observed in sel_indices
+        # TODO: we should check how the average/min/max codes are observed in sel_indices
         # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
         # as a codes are centroids in the vector space defined in the small sample_size set, which
         # is a subset of the sel_indices set, it should be ok.
@@ -293,10 +284,12 @@ class JPQTrainer:
             steps = 0
             with timer(f"JPQ / epoch {ep}"):
                 for batch in tqdm(dl, unit="batch", desc=f"JPQ epoch batches"):
+                #for batch in dl:
                     optimizer.zero_grad()
                     base = loss_f(batch)
                     cur_w = torch.cat([emb.weight.flatten() for emb in model.passage.sub_embeddings])
                     reg = lambda_reg * torch.mean((cur_w - init_w.to(cur_w.device))**2)
+                    print(reg)
                     loss = base + reg
                     loss.backward()
                     
@@ -311,13 +304,14 @@ class JPQTrainer:
                         break
                     if steps >= (max_steps or math.inf):
                         break
+            assert total_steps > 0, "We didnt run any training steps - perhaps data iterator was empty?"
             print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             # model.passage.eval()
             if eval_queries is not None:
                 val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
                 self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
-                print(f"[JPQ][val] steps={steps} {str(val_stats)}")
+                print(f"[JPQ][val] steps={total_steps} {str(val_stats)}")
 
                 if val_stats['RR@10'] > best_mrr + 1e-5:
                     best_mrr = val_stats['RR@10']; bad = 0
