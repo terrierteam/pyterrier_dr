@@ -13,6 +13,7 @@ import math
 from datasets import IterableDataset
 from pyterrier.measures import *
 import wandb
+import json
 
 from .model import *
 from torch.utils.data import DataLoader
@@ -163,7 +164,7 @@ class JPQTrainer:
 
         # ------- initialise the model -------
         # using the centroids from PQ as the starting point for the sub-id embeddings
-        self.model = BiEncoder(self.query_encoder, JPQEmbeddingModel(self.d, self.pq_M, self.pq_nbits, centroids))
+        self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.d, self.pq_M, self.pq_nbits, centroids))
         
         # ------- dataloader -------
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
