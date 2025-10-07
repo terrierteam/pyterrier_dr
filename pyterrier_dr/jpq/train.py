@@ -98,6 +98,7 @@ class JPQTrainer:
             extra_neg_pool : int = 0,
             eval_queries : pd.DataFrame = None,
             eval_qrels : pd.DataFrame = None,
+            valid_every : int = 25,
             lr: float = 2e-5):
         
         rng = np.random.RandomState(42)
@@ -172,7 +173,8 @@ class JPQTrainer:
         # ------- training the sub-id embeddings -------
         self._training_loop(self.model, centroids, dl, epochs, lr, patience, 
                             selected_doc_ids, codes_sel,
-                            eval_queries, cut_qrels, recon_batch_size)
+                            eval_queries, cut_qrels, recon_batch_size, 
+                            valid_every=valid_every)
         self.fitted = True
 
     
@@ -332,7 +334,7 @@ class JPQTrainer:
     def _run_validation(self, model, val_queries, cut_qrels, selected_doc_ids, codes_sel, recon_batch_size, topk_eval=100):
         with timer(f"JPQ / validation over {len(val_queries)} queries"):
             with torch.no_grad():
-                Q_t = model.query.encode_texts(val_queries['query'], batch_size=256)
+                Q_t = model.query.encode_texts(val_queries['query'].tolist(), batch_size=256)
             Q = Q_t.detach().cpu().numpy().astype('float32')
             Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
             dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
