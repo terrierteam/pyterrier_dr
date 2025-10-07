@@ -93,7 +93,7 @@ class JPQTrainer:
             docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
             epochs: int = 3, 
             batch_size: int = 32, 
-            patience : int = 2,
+            patience : int = 2000,
             extra_neg_pool : int = 0,
             eval_queries : pd.DataFrame = None,
             eval_qrels : pd.DataFrame = None,
@@ -272,63 +272,62 @@ class JPQTrainer:
         
         lambda_reg = 1e-4
         best_state = None
-        total_steps = 0
+        step = 0
         best_mrr = 0.0
         bad = 0
+        running_loss = 0.0
+
 
         for ep in range(1, epochs + 1):
-            if total_steps >= (max_steps or math.inf):
+            if step >= (max_steps or math.inf):
                 print("[JPQ] reached max_steps"); 
                 break
             
             model.passage.to(self.device).train()
-            ep_loss = 0.0
-            steps = 0
-            prev_w = None
             with timer(f"JPQ / epoch {ep}"):
                 for batch in tqdm(dl, unit="batch", desc=f"JPQ epoch batches"):
                     optimizer.zero_grad()
                     base = loss_f(batch)
                     cur_w = torch.cat([emb.weight.flatten() for emb in model.passage.sub_embeddings])
-                    if prev_w is not None:
-                        print("moved...", torch.mean((prev_w - init_w.to(prev_w.device))**2).item())
-                    prev_w = cur_w
                     reg = lambda_reg * torch.mean((cur_w - init_w.to(cur_w.device))**2)
                     loss = base + reg
                     loss.backward()
                     
-                    self.wandb.log({"train/base_loss": base.item(), "train/reg_from_centroids": reg.item(), "train/loss": loss.item(), "train/grad_norm": get_grad_norm(model.passage)}, step=total_steps)
+                    if step % 100 == 0:
+                        running_loss = 0.0
+                        self.wandb.log({"train/base_loss": running_loss/100, "train/grad_norm": get_grad_norm(model.passage)}, step=step)
                     optimizer.step()
-                    ep_loss += float(base.item())
+                    running_loss += float(loss.item())
 
-                    # counting stuff
-                    steps += dl.batch_size
-                    total_steps += dl.batch_size
-                    if steps > valid_every:
+                    step += 1
+
+                    # validation
+                    if eval_queries is not None and step % valid_every == 0:
+                        val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
+                        model.passage.to(self.device).train()
+                        self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=step)
+                        print(f"[JPQ][val] steps={step} {str(val_stats)}")
+
+                        if val_stats['RR@10'] > best_mrr + 1e-5:
+                            best_mrr = val_stats['RR@10']; bad = 0
+                            best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
+                            torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
+                            with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
+                                json.dump({"M": self.pq_M, "nbits": self.pq_nbits, "d": self.d}, f)
+                            cents0 = centroids
+                            np.save(os.path.join(model_dir, "pq_init_centroids.npy"), cents0)
+                        else:
+                            bad += 1
+                            if bad >= patience:
+                                print(f"[JPQ] Early stopping after {step} steps, patience {patience}."); break
+                        
+                    if step >= (max_steps or math.inf):
                         break
-                    if steps >= (max_steps or math.inf):
-                        break
-            assert total_steps > 0, "We didnt run any training steps - perhaps data iterator was empty?"
-            print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
+            assert step > 0, "We didnt run any training steps - perhaps data iterator was empty?"
+            print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
             # model.passage.eval()
-            if eval_queries is not None:
-                val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
-                self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
-                print(f"[JPQ][val] steps={total_steps} {str(val_stats)}")
-
-                if val_stats['RR@10'] > best_mrr + 1e-5:
-                    best_mrr = val_stats['RR@10']; bad = 0
-                    best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
-                    torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
-                    with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
-                        json.dump({"M": self.pq_M, "nbits": self.pq_nbits, "d": self.d}, f)
-                    cents0 = centroids
-                    np.save(os.path.join(model_dir, "pq_init_centroids.npy"), cents0)
-                else:
-                    bad += 1
-                    if bad >= patience:
-                        print(f"[JPQ] Early stopping after {total_steps} steps, patience {patience}."); break
+            
 
         if best_state is not None:
             model.passage.load_state_dict(best_state)
