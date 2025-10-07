@@ -292,12 +292,14 @@ class JPQTrainer:
                     reg = lambda_reg * torch.mean((cur_w - init_w.to(cur_w.device))**2)
                     loss = base + reg
                     loss.backward()
+                    running_loss += float(loss.item())
                     
                     if step % 100 == 0:
-                        running_loss = 0.0
                         self.wandb.log({"train/base_loss": running_loss/100, "train/grad_norm": get_grad_norm(model.passage)}, step=step)
+                        running_loss = 0.0
+
                     optimizer.step()
-                    running_loss += float(loss.item())
+                    
 
                     step += 1
 
