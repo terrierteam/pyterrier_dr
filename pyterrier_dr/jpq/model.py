@@ -68,13 +68,12 @@ class QueryEncoder(nn.Module):
 
 class PassageEncoder(nn.Module):
     """Expose a JPQ embedding model for passage encoding as a Pytorch module"""
-    def __init__(self, pq: faiss.ProductQuantizer):
+    def __init__(self, M, ksub, dsub, cents):
         super().__init__()
-        self.M, self.k, self.dsub = pq.M, pq.ksub, pq.dsub
+        self.M, self.k, self.dsub = M, ksub, dsub
         self.sub_embeddings = nn.ModuleList(
             [nn.Embedding(self.k, self.dsub) for _ in range(self.M)]
         )
-        cents = faiss.vector_to_array(pq.centroids).reshape(self.M, self.k, self.dsub)
         for i in range(self.M):
             self.sub_embeddings[i].weight.data.copy_(torch.from_numpy(cents[i]).float())
 
