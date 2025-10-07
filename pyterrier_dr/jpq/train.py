@@ -164,7 +164,7 @@ class JPQTrainer:
 
         # ------- initialise the model -------
         # using the centroids from PQ as the starting point for the sub-id embeddings
-        self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.d, self.pq_M, self.pq_nbits, centroids))
+        self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.pq_M, 2**self.pq_nbits, self.d / self.pq_M, centroids))
         
         # ------- dataloader -------
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, queries, codes_sel)
