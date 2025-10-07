@@ -8,7 +8,7 @@ import pyterrier_dr, torch, pyterrier as pt
 
 class TestJPQ(unittest.TestCase):
     def test_jpq(self):
-        tct = pyterrier_dr.TctColBert(device=torch.device("mps"))
+        tct = pyterrier_dr.TctColBert()#device=torch.device("mps"))
         index = FlexIndex("./tests/fixtures/vaswani_tct.flex")
         from pyterrier_dr.jpq import JPQTrainer
         t = JPQTrainer(tct, index, pq_impl='sklearn', pq_M=4, pq_nbits=4)
