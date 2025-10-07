@@ -62,7 +62,7 @@ class ProductQuantizerSKLearn:
             X_sub = X[:, m * self.dsub:(m + 1) * self.dsub]
             kmeans = KMeans(n_clusters=self.Ks, random_state=self.random_state)
             kmeans.fit(X_sub)
-            self.centroids.append(kmeans.cluster_centers_)
+            centroids.append(kmeans.cluster_centers_)
         self.centroids = np.array(centroids)  # shape (M, Ks, dsub)
         
     def encode(self, X):

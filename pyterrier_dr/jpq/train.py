@@ -67,7 +67,7 @@ class JPQTrainer:
             existing_model : pyterrier_dr.BiEncoder,
             existing_index: pyterrier_dr.FlexIndex,
             device = None,
-            pq_impl = Literal['faiss'] | Literal['sklearn'], 
+            pq_impl: Literal['faiss'] | Literal['sklearn'] = 'sklearn', 
             pq_M: int = 8, 
             pq_nbits: int = 8,
             wandb : wandb.Run | NullWanDBRun = NullWanDBRun()):
@@ -222,12 +222,12 @@ class JPQTrainer:
                     vecs_mem : np.array, # vector store
                     rng # random state
                     ) -> Tuple[np.ndarray, np.ndarray]:
-        from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSklearn
+        from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSKLearn
         pq_class : ProductQuantizer = None
         if self.pq_impl == 'faiss':
             pq_class = ProductQuantizerFAISS
         elif self.pq_impl == 'sklearn':
-            pq_class = ProductQuantizerSklearn
+            pq_class = ProductQuantizerSKLearn
         else:
             raise ValueError(f"Unknown pq_impl {self.pq_impl}, must be 'faiss' or 'sklearn'")
         pq = pq_class(M=self.pq_M, Ks=2**self.pq_nbits)
