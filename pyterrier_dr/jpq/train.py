@@ -336,35 +336,32 @@ class JPQTrainer:
         if best_state is not None:
             model.passage.load_state_dict(best_state)
 
-    def _run_validation(self, model, val_queries, cut_qrels, selected_doc_ids, codes_sel, recon_batch_size, topk_eval=100):
+    def _run_validation(self, model, val_queries : pd.DataFrame, cut_qrels : pd.DataFrame, selected_doc_ids : List[str], codes_sel, recon_batch_size : int, topk_eval=100):
         with timer(f"JPQ / validation over {len(val_queries)} queries"):
             with torch.no_grad():
                 Q_t = model.query.encode_texts(val_queries['query'].tolist(), batch_size=256)
             Q = Q_t.detach().cpu().numpy().astype('float32')
             Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
             dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
-            index = faiss.IndexFlatIP(dim)
+            from pyterrier_dr import FlexIndex
+            import tempfile
+            flex = FlexIndex(tempfile.mkdtemp())
             pm = model.passage.to("cpu").eval()
-            with torch.no_grad():
-                for i in range(0, len(codes_sel), recon_batch_size):
-                    chunk = torch.from_numpy(codes_sel[i:i+recon_batch_size]).long()
-                    embs = pm(chunk)
-                    embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
-                    index.add(embs)
-            D, I = index.search(Q, topk_eval)
-
-            results = []
-            for qoffset in range(len(val_queries)):
-                qid = val_queries['qid'].iloc[qoffset]
-                retrieved_sel_docids = I[qoffset][:topk_eval].tolist()
-                retrieved_sel_docnos = [ selected_doc_ids[r] for r in retrieved_sel_docids]
-                scores = list(range(topk_eval, 0, -1)) # we do have scores in the I matrix, these ranks are sufficient
-                df = pd.DataFrame()
-                df["score"] = scores
-                df["docno"] = retrieved_sel_docnos
-                df["qid"] = [qid] * topk_eval
-                results.append(df)
-            return pt.Evaluate(pd.concat(results), cut_qrels, metrics=[RR@10, Recall@50, nDCG@10])
+            def _gen():
+                with torch.no_grad():
+                    for i in range(0, len(codes_sel), recon_batch_size):
+                        chunk = torch.from_numpy(codes_sel[i:i+recon_batch_size]).long()
+                        embs = pm(chunk)
+                        embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
+                        for j in range(embs.shape[0]):
+                            yield {'docno' : selected_doc_ids[i+j], 'doc_vec' : embs[j, :]}
+            flex.indexer(mode='overwrite').index(_gen())
+            val_queries = val_queries.copy()
+            val_queries["query_vec"] = [row for row in Q]
+            return pt.Evaluate(
+                flex.retriever()(val_queries), 
+                cut_qrels, 
+                metrics=[RR@10, Recall@50, nDCG@10])
 
     def faiss_index(self, index_out):
         if not self.fitted:
