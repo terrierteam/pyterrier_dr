@@ -29,7 +29,7 @@ def dir_size_bytes(path: str) -> int:
 
 def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Iterator[Tuple[str, str, str, str]]:
     """
-    Given a set of queries and qrels, yield (queryid, querytext, posdocid, negdocid) tuples
+    Given a set of queries and qrels, yield (qid, querytext, posdocno, negdocno) tuples
     suitable for training a bi-encoder with pairwise loss.
 
     Note that this does not ensure that the negative document is not also a positive document.
