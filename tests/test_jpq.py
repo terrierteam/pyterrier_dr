@@ -20,11 +20,13 @@ class TestJPQ(unittest.TestCase):
             pyterrier_dr.jpq.utils.sample_random_negatives( 
                 dataset.get_qrels(), 
                 1, 
-                index.payload(return_dvecs=False)[0].fwd))
+                index.payload(return_dvecs=False)[0].fwd),
+            max_neg=1
+            )
         
         t.fit(
             doc_pairs, 
-            epochs=5, 
+            epochs=500, patience=10000, 
             pq_sample_size=200, 
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), valid_every=64
