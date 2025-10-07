@@ -3,7 +3,6 @@ from typing import Any, Dict, List, Optional, Tuple, Literal, Union, Iterator
 import pandas as pd
 import pyterrier as pt
 import numpy as np
-import faiss
 from .utils import timer, l2_normalize_np, NullWanDBRun
 import torch
 from pyterrier import tqdm
@@ -345,7 +344,8 @@ class JPQTrainer:
             dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
             from pyterrier_dr import FlexIndex
             import tempfile
-            flex = FlexIndex(tempfile.mkdtemp())
+            dstindex = tempfile.mkdtemp()
+            flex = FlexIndex(dstindex)
             pm = model.passage.to("cpu").eval()
             def _gen():
                 with torch.no_grad():
@@ -358,10 +358,14 @@ class JPQTrainer:
             flex.indexer(mode='overwrite').index(_gen())
             val_queries = val_queries.copy()
             val_queries["query_vec"] = [row for row in Q]
-            return pt.Evaluate(
+            rtr = pt.Evaluate(
                 flex.retriever()(val_queries), 
                 cut_qrels, 
                 metrics=[RR@10, Recall@50, nDCG@10])
+            del(flex)
+            # TODO: dest index may still be open
+            #os.removedirs(dstindex)
+            return rtr
 
     def faiss_index(self, index_out):
         if not self.fitted:
