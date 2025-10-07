@@ -6,6 +6,13 @@ import pandas as pd
 import pyterrier as pt
 from pyterrier_dr import FlexIndex
 
+LIGHTNING_IR_AVAILIBLE = False
+try:
+    import lightning_ir
+    LIGHTNING_IR_AVAILIBLE = True
+except ImportError:
+    pass
+
 
 class TestModels(unittest.TestCase):
 
@@ -103,6 +110,26 @@ class TestModels(unittest.TestCase):
                     self.assertTrue('docno' in retr_res.columns)
                     self.assertTrue('score' in retr_res.columns)
                     self.assertTrue('rank' in retr_res.columns)
+
+    def _base_crossencoder_test(self, model):
+        dataset = pt.get_dataset('irds:vaswani')
+        topics = dataset.get_topics().head(10)
+
+        docs = list(itertools.islice(pt.get_dataset('irds:vaswani').get_corpus_iter(), 50))
+        docs_df = pd.DataFrame(docs)
+
+        with self.subTest('scorer_qtext_dtext'):
+            res_qtext_dtext = topics.head(2).merge(docs_df, how='cross')
+            scored_res_qtext_dtext = model(res_qtext_dtext)
+            self.assertTrue('score' in scored_res_qtext_dtext.columns)
+            self.assertTrue('rank' in scored_res_qtext_dtext.columns)
+            self.assertTrue(all(c in scored_res_qtext_dtext.columns for c in res_qtext_dtext.columns))
+
+        with self.subTest('scorer empty'):
+            enc_res_empty = model(pd.DataFrame(columns=['qid', 'query', 'docno', 'text']))
+            self.assertEqual(len(enc_res_empty), 0)
+            self.assertTrue('score' in enc_res_empty.columns)
+            self.assertTrue('rank' in enc_res_empty.columns)
     
     def _test_bgem3_multi(self, model, test_query_multivec_encoder=False, test_doc_multivec_encoder=False):
         dataset = pt.get_dataset('irds:vaswani')
@@ -179,12 +206,19 @@ class TestModels(unittest.TestCase):
         from pyterrier_dr import BGEM3
         # create BGEM3 instance
         bgem3 = BGEM3(max_length=1024)
-        
+
         self._base_test(bgem3.query_multi_encoder(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
         self._base_test(bgem3.doc_multi_encoder(), test_query_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
 
         self._test_bgem3_multi(bgem3.query_multi_encoder(), test_query_multivec_encoder=True)
         self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
+
+    @unittest.skipIf(not LIGHTNING_IR_AVAILIBLE, "lightning_ir is not installed")
+    def test_lightning_ir_mono_electra(self):
+        from pyterrier_dr import LightningIRMonoScorer
+        self._base_crossencoder_test(LightningIRMonoScorer(
+                            model_name='webis/monoelectra-base'
+                        ))
 
     def test_inspect(self):
         if not hasattr(pt, 'inspect') or not hasattr(pt.inspect, 'transformer_inputs') :
