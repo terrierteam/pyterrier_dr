@@ -313,7 +313,7 @@ class JPQTrainer:
             if eval_queries:
                 val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
                 self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
-                print(f"[JPQ][val] {str(val_stats)}")
+                print(f"[JPQ][val] steps={steps} {str(val_stats)}")
 
                 if val_stats['RR@10'] > best_mrr + 1e-5:
                     best_mrr = val_stats['RR@10']; bad = 0
@@ -326,7 +326,7 @@ class JPQTrainer:
                 else:
                     bad += 1
                     if bad >= patience:
-                        print("[JPQ] Early stopping."); break
+                        print("[JPQ] Early stopping after {steps} steps, patience {patience}."); break
 
         if best_state is not None:
             model.passage.load_state_dict(best_state)
