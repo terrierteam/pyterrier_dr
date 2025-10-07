@@ -38,14 +38,13 @@ class ProductQuantizer:
     def decode(self, codes):
         pass
 
-class ProductQuantizerSKLearn:
+class ProductQuantizerSKLearn(ProductQuantizer):
     def __init__(self, M=4, Ks=256, random_state=42):
         """
         M: number of subquantizers (splits of the vector)
         Ks: number of centroids per subquantizer
         """
-        self.M = M
-        self.Ks = Ks
+        super().__init__(M, Ks)
         self.random_state = random_state
         self.centroids = None
         self.dsub = None # dimensionality of each subvector
@@ -85,14 +84,13 @@ class ProductQuantizerSKLearn:
             X_recon[:, m * self.dsub:(m + 1) * self.dsub] = centers[codes[:, m]]
         return X_recon
 
-class ProductQuantizerFAISS:
+class ProductQuantizerFAISS(ProductQuantizer):
     def __init__(self, M=4, Ks=256):
         """
         M: number of subquantizers
         Ks: number of clusters per subquantizer
         """
-        self.M = M
-        self.Ks = Ks
+        super().__init__(M, Ks)
         self.dsub = None
         self.pq = None
         import faiss
