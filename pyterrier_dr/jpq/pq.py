@@ -22,7 +22,7 @@ class ProductQuantizer:
     def get_centroids(self):
         return self.centroids
 
-    def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.Array:
+    def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.array:
         n = X.shape[0]
         codes = np.empty((n, self.M), dtype=np.uint8)
         iter = range(0, n, batch_size)
