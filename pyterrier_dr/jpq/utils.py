@@ -37,7 +37,7 @@ def dir_size_bytes(path: str) -> int:
 class _MergeQueriesIterator:
     def __init__(self, queries: pd.DataFrame, docpairs: Iterator[Any]):
         # Build lookup dict for queries
-        self.queries = {e.query_id: e.text for e in queries}
+        self.queries = {e.qid: e.query for e in queries.itertuples(index=False)}
         self.docpairs = iter(docpairs)
 
     def __iter__(self):
@@ -52,7 +52,7 @@ class _MergeQueriesIterator:
 def merge_queries_into_docpairs(queries: pd.DataFrame | Iterator[Any], docpairs: Iterator[Any]) -> Iterator[dict]:
     """Return an iterator that merges queries into docpairs."""
     if not isinstance(queries, pd.DataFrame):
-        queries = pd.DataFrame(queries)
+        queries = pd.DataFrame(queries).rename(columns={'query_id' : 'qid', 'text' : 'query'})
     return _MergeQueriesIterator(queries, docpairs)
 
 def sample_random_negatives(qrels : pd.DataFrame, num_neg_per_query: int, docnos : List[str]) -> pd.DataFrame:
