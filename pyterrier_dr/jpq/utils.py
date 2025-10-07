@@ -48,3 +48,8 @@ def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_n
                 yield (qid, query_text, pos_doc, neg_doc)
                 if max_neg is not None and count_neg + 1 >= max_neg:
                     break
+
+class NullWanDBRun:
+    def log(self, *a, **kw): pass
+    def watch(self, *a, **kw): pass
+    def finish(self): pass

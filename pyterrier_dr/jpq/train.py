@@ -4,7 +4,7 @@ import pandas as pd
 import pyterrier as pt
 import numpy as np
 import faiss
-from .utils import timer, l2_normalize_np
+from .utils import timer, l2_normalize_np, NullWanDBRun
 import torch
 from pyterrier import tqdm
 import os
@@ -13,7 +13,16 @@ from .index import JPQIndex
 import math
 from datasets import IterableDataset
 from pyterrier.measures import *
+import wandb
 
+def get_grad_norm(model, norm_type=2):
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(norm_type)
+            total_norm += param_norm.item() ** norm_type
+    total_norm = total_norm ** (1. / norm_type)
+    return total_norm
 
 def flex_payload(flex_index: pyterrier_dr.FlexIndex):
     docnos_map, vecs, meta = flex_index.payload()
@@ -137,13 +146,15 @@ class JPQTrainer:
             existing_index: pyterrier_dr.FlexIndex,
             device = None,
             pq_M: int = 8, 
-            pq_nbits: int = 8):
+            pq_nbits: int = 8,
+            wandb : wandb.Run | NullWanDBRun = NullWanDBRun()):
         super().__init__()
         self.fitted = False
         self.existing_index = existing_index
         self.d = existing_index.payload()[2]['vec_size']
         self.pq_M = pq_M
         self.pq_nbits = pq_nbits
+        self.wandb = wandb or NullWanDBRun()
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print("[JPQTrainer] device=", self.device)
 
@@ -353,6 +364,8 @@ class JPQTrainer:
                     reg = lambda_reg * torch.mean((cur_w - init_w.to(cur_w.device))**2)
                     loss = base + reg
                     loss.backward()
+                    
+                    self.wandb.log({"train/base_loss": base, "train/reg_loss": reg, "train/loss": loss, "train/grad_norm": get_grad_norm(model.passage)}, step=total_steps)
                     optimizer.step()
                     ep_loss += float(base.item())
 
@@ -366,12 +379,12 @@ class JPQTrainer:
             print(f"[JPQ] epoch {ep}/{epochs} steps {steps} train_loss={ep_loss:.4f}")
 
             model.passage.eval()
-            stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
-            model.passage.to(self.device).train()
-            print(f"[JPQ][val] {str(stats)}")
+            val_stats = self._run_validation(model, eval_queries, eval_qrels, selected_doc_ids, codes_sel, recon_batch_size)
+            self.wandb.log({f"val/{k}": v for k, v in val_stats.items()}, step=total_steps)
+            print(f"[JPQ][val] {str(val_stats)}")
 
-            if stats['RR@10'] > best_mrr + 1e-5:
-                best_mrr = stats['RR@10']; bad = 0
+            if val_stats['RR@10'] > best_mrr + 1e-5:
+                best_mrr = val_stats['RR@10']; bad = 0
                 best_state = {k: v.detach().cpu().clone() for k, v in model.passage.state_dict().items()}
                 torch.save(model.passage.state_dict(), os.path.join(model_dir, "jpq_passage.pt"))
                 with open(os.path.join(model_dir, "pq_meta.json"), "w") as f:
@@ -415,30 +428,6 @@ class JPQTrainer:
                 df["qid"] = [qid] * topk_eval
                 results.append(df)
             return pt.Evaluate(pd.concat(results), cut_qrels, metrics=[RR@10, Recall@50, nDCG@10])
-    
-        #cut_qrels[qid] = [selected_doc_ids[i] for i in I[qoffset] if i < len(selected_doc_ids)]
-
-
-    # def _run_validation(model):
-    #     #val_qids = sorted([qid for qid in gt_idx.keys() if qid in training_queries])
-    #     #if not val_qids: return {"MRR@10":0.0,"Recall@50":0.0,"NDCG@10":0.0}
-    #     #texts = [training_queries[qid] for qid in val_qids]
-    #     with torch.no_grad():
-    #         Q_t = model.query.encode_texts(texts, batch_size=256)
-    #     Q = Q_t.detach().cpu().numpy().astype('float32')
-    #     Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
-
-    #     dim = model.passage.sub_embeddings[0].embedding_dim * model.passage.M
-    #     index = faiss.IndexFlatIP(dim)
-    #     pm = model.passage.to("cpu").eval()
-    #     with torch.no_grad():
-    #         for i in range(0, len(codes_sel), recon_batch_size):
-    #             chunk = torch.from_numpy(codes_sel[i:i+recon_batch_size]).long()
-    #             embs = pm(chunk)
-    #             embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
-    #             index.add(embs)
-    #     D, I = index.search(Q, topk_eval)
-    #     return _val_metrics(I, val_qids, gt_idx)
 
     def faiss_index(self, index_out):
         if not self.fitted:
