@@ -2,11 +2,10 @@ from abc import abstractmethod
 import numpy as np
 
 class ProductQuantizer:
-    def __init__(self, M=4, Ks=256, backend='faiss', random_state=42):
+    def __init__(self, M=4, Ks=256):
         """
         M: number of subquantizers (splits of the vector)
         Ks: number of centroids per subquantizer
-        backend: 'faiss' or 'sklearn'
         """
         self.M = M
         self.Ks = Ks
@@ -52,7 +51,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
     def fit(self, X):
         from sklearn.cluster import KMeans
         """Train PQ on data X (n_samples, d)."""
-        n, d = X.shape
+        n_samples, d = X.shape
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.dsub = d // self.M
         centroids = []
