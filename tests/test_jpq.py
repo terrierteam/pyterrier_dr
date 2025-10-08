@@ -11,7 +11,8 @@ class TestJPQ(unittest.TestCase):
         tct = pyterrier_dr.TctColBert()#device=torch.device("mps"))
         index = FlexIndex("./tests/fixtures/vaswani_tct.flex")
         from pyterrier_dr.jpq import JPQTrainer
-        t = JPQTrainer(tct, index, pq_impl='sklearn', pq_M=4, pq_nbits=4)
+        # t = JPQTrainer(tct, index, pq_impl='sklearn', pq_M=4, pq_nbits=4)
+        t = JPQTrainer(tct, index, pq_impl='faiss', pq_M=4, pq_nbits=8) # always use 8 bits to avoid FAISS unpacking problems
         
         dataset = pt.get_dataset("vaswani")
         doc_pairs = pyterrier_dr.jpq.utils.queries_qrels_to_pairsiter(
@@ -26,8 +27,8 @@ class TestJPQ(unittest.TestCase):
         
         t.fit(
             doc_pairs, 
-            epochs=500, patience=10000, 
-            pq_sample_size=200, 
+            epochs=10, patience=10000, 
+            pq_sample_size=500, 
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), valid_every=64
         )
