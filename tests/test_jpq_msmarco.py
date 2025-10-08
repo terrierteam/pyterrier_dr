@@ -29,7 +29,7 @@ class TestJPQ(unittest.TestCase):
         t = JPQTrainer(tct, index, pq_M=16, pq_nbits=8, pq_impl='faiss')
 
         t.fit(
-            merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()), 
+            merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:100000]), 
             docid_subset=100_000, 
             pq_sample_size=50_000,
             code_batch_size=5_000,

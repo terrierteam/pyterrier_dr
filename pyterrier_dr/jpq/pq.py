@@ -163,7 +163,6 @@ class ProductQuantizerFAISS(ProductQuantizer):
         self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)))
         self.pq.train(X.astype(np.float32))
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
-        print(self.centroids.shape)
         return self
 
     def encode(self, X):
@@ -172,8 +171,6 @@ class ProductQuantizerFAISS(ProductQuantizer):
         n_samples = X.shape[0]
         packed = self.pq.compute_codes(X.astype(np.float32))
         codes = _unpack_pq_codes_batch(packed, M=self.M, nbits=int(np.log2(self.Ks)))
-        print(codes.shape)
-        print((n_samples, self.M))
         assert codes.shape == (n_samples, self.M)
         return codes
 
