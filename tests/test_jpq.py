@@ -1,14 +1,19 @@
 import unittest
-import tempfile
-import numpy as np
-import pandas as pd
 from pyterrier_dr import FlexIndex
 import pyterrier_dr, torch, pyterrier as pt
 
 
 class TestJPQ(unittest.TestCase):
     def test_jpq(self):
-        tct = pyterrier_dr.TctColBert()#device=torch.device("mps"))
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+        elif torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
+        print(f"Using device: {device}")
+
+        tct = pyterrier_dr.TctColBert(device=device)#device=torch.device("mps"))
         index = FlexIndex("./tests/fixtures/vaswani_tct.flex")
         from pyterrier_dr.jpq import JPQTrainer
         # t = JPQTrainer(tct, index, pq_impl='sklearn', pq_M=4, pq_nbits=4)
