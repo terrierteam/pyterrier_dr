@@ -1,9 +1,12 @@
-from contextlib import contextmanager
-import time
-from typing import Iterator, Tuple, Any, List
-import numpy as np
 import os
+import time
+
+import numpy as np
 import pandas as pd
+
+from contextlib import contextmanager
+from typing import Iterator, Any
+
 
 @contextmanager
 def timer(name: str):
@@ -55,7 +58,7 @@ def merge_queries_into_docpairs(queries: pd.DataFrame | Iterator[Any], docpairs:
         queries = pd.DataFrame(queries).rename(columns={'query_id' : 'qid', 'text' : 'query'})
     return _MergeQueriesIterator(queries, docpairs)
 
-def sample_random_negatives(qrels : pd.DataFrame, num_neg_per_query: int, docnos : List[str]) -> pd.DataFrame:
+def sample_random_negatives(qrels : pd.DataFrame, num_neg_per_query: int, docnos : list[str]) -> pd.DataFrame:
     rtr = []
     for qid, group in qrels.groupby('qid'):
         # pos_docs = group[group['label'] > 0]['docno'].tolist()
@@ -68,7 +71,7 @@ def sample_random_negatives(qrels : pd.DataFrame, num_neg_per_query: int, docnos
         rtr.extend([{'qid': qid, 'docno': docnos[docid], 'label': 0} for docid in sampled_neg_docids])
     return pd.concat([qrels, pd.DataFrame(rtr)])
 
-def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Iterator[Tuple[str, str, str, str]]:
+def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Iterator[tuple[str, str, str, str]]:
     """
     Given a set of queries and qrels, yield (qid, querytext, posdocno, negdocno) tuples
     suitable for training a bi-encoder with pairwise loss.
@@ -94,8 +97,11 @@ def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_n
     if not seen_any:
         raise ValueError("No positive/negative pairs found - perhaps the qrels are empty or contain no negative judgements?")
 
+
 class NullWanDBRun:
     def log(self, *a, **kw): 
         print(*a, kw)
-    def watch(self, *a, **kw): pass
-    def finish(self): pass
+    def watch(self, *a, **kw): 
+        pass
+    def finish(self): 
+        pass
