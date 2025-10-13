@@ -1,4 +1,3 @@
-import faiss
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,7 +14,6 @@ class QueryEncoder(nn.Module):
         normalise: If True, L2-normalise output vectors row-wise.
         batch_size: Default batch size used inside `encode_texts`.
     """
-
     def __init__(
         self, 
         dr_model, 
