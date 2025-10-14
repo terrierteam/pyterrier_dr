@@ -195,8 +195,15 @@ def merge_top_k(item_score_ids_1: np.ndarray,
         item_scores_values_1[:] = top_k_scores
 
 class _PrunedScorer:
-    def __init__(self, centroids_per_split, inverted_index, item_codes, item_code_bytes,
-                 top_k=10, max_iterations=1000, ub_inflation=1.0, sub_ids_per_iteration=8):
+    def __init__(self, 
+                 centroids_per_split, 
+                 inverted_index, 
+                 item_codes, 
+                 item_code_bytes,
+                 top_k : int = 10, 
+                 max_iterations : int = 1000, 
+                 ub_inflation : float = 1.0, 
+                 sub_ids_per_iteration : int = 8):
         self.centroids_per_split = centroids_per_split
         self.item_codes = item_codes
         self.item_code_bytes = item_code_bytes
