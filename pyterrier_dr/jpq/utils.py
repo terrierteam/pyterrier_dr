@@ -52,11 +52,13 @@ class _MergeQueriesIterator:
         e['query'] = self.queries[e['query_id']]
         return e
 
+
 def merge_queries_into_docpairs(queries: pd.DataFrame | Iterator[Any], docpairs: Iterator[Any]) -> Iterator[dict]:
     """Return an iterator that merges queries into docpairs."""
     if not isinstance(queries, pd.DataFrame):
         queries = pd.DataFrame(queries).rename(columns={'query_id' : 'qid', 'text' : 'query'})
     return _MergeQueriesIterator(queries, docpairs)
+
 
 def sample_random_negatives(qrels : pd.DataFrame, num_neg_per_query: int, docnos : list[str]) -> pd.DataFrame:
     rtr = []
@@ -91,7 +93,7 @@ def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_n
         for pos_doc in pos_docs:
             for count_neg, neg_doc in enumerate(neg_docs):
                 seen_any = True
-                yield {'qid' :qid, 'query' : query_text, 'doc_id_a' : pos_doc, "doc_id_b": neg_doc}
+                yield {'qid' :qid, 'query' : query_text, 'doc_id_a' : pos_doc, "doc_id_b": neg_doc} # type: ignore
                 if max_neg is not None and count_neg + 1 >= max_neg:
                     break
     if not seen_any:

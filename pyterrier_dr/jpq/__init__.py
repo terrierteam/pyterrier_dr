@@ -1,3 +1,5 @@
 from .index import JPQIndex
-from .train import JPQTrainer
+from .train2 import JPQTrainer
+
+from . import utils
 

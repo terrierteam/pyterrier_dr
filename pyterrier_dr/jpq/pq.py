@@ -161,7 +161,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
 
         # Initialize FAISS PQ
         self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)))
-        self.pq.train(X.astype(np.float32))
+        self.pq.train(X.astype(np.float32)) # type: ignore
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
 
@@ -169,7 +169,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         """Encode vectors into PQ codes (n_samples, n_splits)."""
         assert self.pq is not None, "Must call fit() first."
         n_samples = X.shape[0]
-        packed = self.pq.compute_codes(X.astype(np.float32))
+        packed = self.pq.compute_codes(X.astype(np.float32)) # type: ignore
         codes = _unpack_pq_codes_batch(packed, M=self.M, nbits=int(np.log2(self.Ks)))
         assert codes.shape == (n_samples, self.M)
         return codes

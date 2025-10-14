@@ -1,60 +1,21 @@
-from typing import Literal
+import logging
+import math
+from typing import Any, Literal
 import numpy as np
+from pyterrier import tqdm
+import torch
 
 from pyterrier_dr import FlexIndex
+from pyterrier_dr.biencoder import BiEncoder
+from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
+from pyterrier_dr.jpq.model import JPQBiencoder, JPQLoss, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import l2_normalize_np, timer
 
-from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSKLearn
+from .pq import ProductQuantizerFAISS, ProductQuantizerSKLearn
 
 
-def get_pq_training_dataset(
-        flex_index: FlexIndex,
-        docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
-) ->tuple:
-    """
-    Build the (docno, docid) subset used to train PQ sub-embeddings.
-
-    Args:
-        flex_index: The dense index providing doc mappings and vectors.
-        docid_subset:
-            - None or empty: use all documents.
-            - int: sample that many random *internal* doc ids from [0, N).
-            - Sequence[int]: explicit list of *internal* doc ids.
-            - Sequence[str]: explicit list of docnos.
-        rng: Optional NumPy Generator for reproducible sampling.
-
-    Returns:
-        (selected_docnos, selected_docids)
-        where docnos are strings and docids are internal integer ids.
-    """
-    print(f"Ingesting docno mapping from index ")
-        
-    doc_map = flex_index.payload()[0]
-    N = len(flex_index)
-
-    if not docid_subset: # use all documents if not used or empty list
-        docid_subset = list(range(N))
-    if isinstance(docid_subset, int): # use a random subset of given size
-        if docid_subset > N:
-            raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
-        selected_docids = np.random.choice(N, size=docid_subset, replace=False) # type: ignore
-        selected_docnos = doc_map.fwd[selected_docids]
-        print(f"[SUBSET] using {len(selected_docnos)} random docs from index")        
-    elif isinstance(docid_subset, list):  
-        if isinstance(docid_subset[0], int): # use the provided list of int docid
-            selected_docids = docid_subset
-            selected_docnos = doc_map.rev(docid_subset)
-            print(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
-        elif isinstance(docid_subset[0], int): # use the provided list of str docnos
-            selected_docnos = doc_map.fwd[docid_subset]
-            print(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
-        else:
-            raise ValueError(f"list on integers or strings must be provided")
-        
-    selected_docnos = list(selected_docnos) # do we need this conversion?    
-    selected_docids = doc_map.inv[selected_docnos] # do we need this?
-    
-    return selected_docnos, selected_docids
+logging.basicConfig(level=logging.INFO, force=True)
+logger = logging.getLogger(__name__)
 
 
 def compute_PQ(
@@ -96,53 +57,107 @@ def compute_PQ(
     return codes, pq.get_centroids() # type: ignore
 
 
+def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
+    return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+
+class JPQTrainer:
+
+    def _training_step(self, batch, loss_f, optimizer) -> float:
+        """
+        Run one optimisation step and return the loss.
+        """
+        optimizer.zero_grad()
+        loss = loss_f(batch)
+        loss.backward()
+        optimizer.step()
+        return loss.item()
+
+    def _training_loop(
+        self,
+        model,
+        data_loader,
+        epochs,
+        lr,
+        max_steps_per_epoch: int = math.inf, # type: ignore
+    ):
+        loss_f = JPQLoss(model.query, model.passage).to(self.device)
+
+        # Freeze query encoder
+        model.query.eval()
+        for p in model.query.parameters():
+            p.requires_grad = False
+
+        # Create optimizer for passage encoder
+        optimizer = torch.optim.AdamW(list(model.passage.parameters()), lr=lr, weight_decay=0.0)
+
+        model.passage.to(self.device).train()
+        for ep in range(1, epochs + 1):
+            step = 0
+            running_loss = 0.0
+            with timer(f"JPQ / epoch {ep}"):
+                for batch in tqdm(data_loader, unit="batch", desc="JPQ epoch batches"):
+                    loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
+                    running_loss += loss
+                    step += 1
+
+                    if step == 100:
+                        logger.info(f"[JPQ] Training loss: {running_loss/step}")
+                        running_loss = 0.0
+                        step = 0
+
+                    # Validation: TODO
+
+                    if step >= max_steps_per_epoch:
+                        logger.info(f"[JPQ] reached max steps per epoch {max_steps_per_epoch}")
+                        step = 0
+                        break
 
 
+            if step:
+                logger.info(f"[JPQ] Training loss: {running_loss/step}")
+            print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
+
+        
+    def __init__(
+        self,
+        model : BiEncoder, # the backbone biencoder model
+        index: FlexIndex, # the index with documents
+        device = None,
+        pq_impl: Literal['faiss'] | Literal['sklearn'] = 'sklearn', # the PQ implementation
+        M: int = 8, # number of subquantizers (splits of the vector)
+        nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
+    ):
+        super().__init__()
+        self.fitted = False
+        self.query_encoder = model
+        self.index = index
+        self.d = index.payload()[2]['vec_size']
+        self.M = M
+        self.nbits = nbits
+        self.pq_impl = pq_impl
+        self.device = autodevice(device)
+        logger.info(f"[JPQTrainer] device={self.device}")
+
+        # self.query_encoder = QueryEncoder(existing_model, normalise=True, batch_size=64)
 
 
+    def fit(self,
+        training_docpairs,
+        pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
+        docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
+        batch_size: int = 32,
+        epochs: int = 3,
+        lr:float = 2e-5,
+        max_steps_per_epoch: int = math.inf, # type: ignore
+    ):
+        selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
+        codes, centroids = compute_PQ(self.M, self.nbits, pq_sample_size, batch_size, selected_docids, self.index.payload()[1])
+        model = JPQBiencoder(
+            QueryEncoder(self.query_encoder), 
+            PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
+        )
 
-
-
-
-
-
-def get_dataloader(
-    docpairs, 
-    docnos,
-):       
-
-    docnos_set = set(docnos)
-    def filter_in_sel(docpair) -> bool:
-        return docpair['doc_id_a'] in docnos_set and docpair['doc_id_b'] in docnos_set
-
-    def queries_and_codes(x):# -> dict[str, Any]:
-        return {
-            'query_text': x["query"],
-            'pos_codes': codes_sel[sel_inv[x["doc_id_a"]]],
-            'neg_codes': codes_sel[sel_inv[x["doc_id_b"]]],
-        }
-
-
-    selected_doc_ids = set(selected_doc_ids)
-    # bring codes to torch
-    codes_sel = torch.from_numpy(codes_sel).long()
-
-    # making a list smells bad
-    dataset = Dataset.from_list([x for x in training_docpairs])
-
-
-    def collate(batch):
-        return {
-            'query_text': [b['query_text'] for b in batch],
-            'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
-            'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
-        }
-    dataset = dataset.filter(filter_in_sel).map(queries_and_codes)
-    dataset.set_format(type='torch', columns=['pos_codes', 'neg_codes', 'query_text'])
-
-    dl = DataLoader(
-        # remove train queries for documents that arent in our selection
-        dataset, 
-        batch_size=batch_size, 
-        collate_fn=collate)
-    return dl
+        data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
+        
+        self._training_loop(model, data_loader, epochs, lr, max_steps_per_epoch)
+        self.fitted = True
