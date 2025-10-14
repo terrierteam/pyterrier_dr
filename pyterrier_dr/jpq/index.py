@@ -41,12 +41,12 @@ class JPQIndex(pt.Artifact):
     def build(path : str, 
               docnos : List[str], 
               codes : np.ndarray, # N x M
-              sub_embs : np.ndarray, # M x 2^nbits x dsub (aka the centroids)
+              embs : np.ndarray, # sub-item embeddings: M x 2^nbits x dsub (aka the centroids)
               mode = IndexingMode.create) -> "JPQIndex":
         index = JPQIndex(path)
         index.docnos = docnos
         index.codes = codes
-        index.embs = sub_embs
+        index.embs = embs
         path = Path(path)
         if path.exists():
             if mode == IndexingMode.overwrite:
