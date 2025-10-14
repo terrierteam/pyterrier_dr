@@ -189,6 +189,7 @@ class JPQTrainer:
                             valid_queries, valid_qrels, recon_batch_size, 
                             valid_every=valid_every)
         self.fitted = True
+        self.pq = pq
 
         if valid_queries is not None:
             from .retriever import build_from_flex
@@ -416,7 +417,13 @@ class JPQTrainer:
     def jpq_index(self, dest : str) -> JPQIndex:
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
-        return JPQIndex.build(dest)
+        docnos, original_embs, _ = self.existing_index.payload(return_docnos=True, return_dvecs=False)
+        return JPQIndex.build(
+            dest, 
+            docnos.fwd,
+            self.pq.encode_batch(original_embs),
+            self.model.passage.sub_embeddings.detach().cpu().numpy()
+            )
 
 
     # # ------- optional -------

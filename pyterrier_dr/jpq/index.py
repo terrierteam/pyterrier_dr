@@ -41,12 +41,12 @@ class JPQIndex(pt.Artifact):
     def build(path : str, 
               docnos : List[str], 
               codes : np.ndarray, # N x M
-              embs : np.ndarray, # M x 2^nbits x dsub (aka the centroids)
+              sub_embs : np.ndarray, # M x 2^nbits x dsub (aka the centroids)
               mode = IndexingMode.create) -> "JPQIndex":
         index = JPQIndex(path)
         index.docnos = docnos
         index.codes = codes
-        index.embs = embs
+        index.embs = sub_embs
         path = Path(path)
         if path.exists():
             if mode == IndexingMode.overwrite:
@@ -76,7 +76,7 @@ class JPQIndex(pt.Artifact):
         _, subembs, codes, docnos = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
         return JPQRetrieverFlat(docnos, codes, subembs, topk=1000, name="JPQ-Full")
     
-    def retriever_prunt(self, topk: int = 1000, ub_inflation : float =1.) -> "JPQRetrieverPrune":
+    def retriever_prune(self, topk: int = 1000, ub_inflation : float =1.) -> "JPQRetrieverPrune":
         _, subembs, codes, docnos = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
         return JPQRetrieverFlat(docnos, codes, subembs, topk=1000, name="JPQ-Full", ub_inflation=ub_inflation)
         
