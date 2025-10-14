@@ -79,42 +79,45 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
         
         return new_index
 
-class JPQRetrieverFlat(pt.Transformer):
-    """Subset-mode retriever (Flat-IP reconstructed from codes)."""
-    def __init__(self, docnos: List[str],
-                 codes: np.array,
-                 topk: int = 1000,
-                 name: Optional[str] = None):
+class JPQRetriever(pt.Transformer):
+    def __init__(self, docnos: List[str], # N
+                 codes: np.array, # N x M
+                 sub_embeddings : np.array, # M x 2^nbits x dsub (aka the centroids)
+                 topk: int = 1000):
         super().__init__()
         self.docnos = np.array(docnos)
-        self.codes = torch.from_numpy(codes).long()
+        self.codes = codes
+        self.M = codes.shape[2]
+        self.sub_embeddings = sub_embeddings
+        assert sub_embeddings.shape[0] == self.M
         self.topk = topk
+
+class JPQRetrieverFlat(JPQRetriever):
+    """Subset-mode retriever (Flat-IP reconstructed from codes)."""
+    def __init__(self, *args, name: Optional[str] = None, **kwargs):
+        super().__init__(*args, **kwargs)
         self._index = None
-        self._name = name or "JPQRetriever"
+        self._name = name or "JPQRetrieverFlat"
     
     def __str__(self): return self._name
 
     def _ensure(self, bs: int = 20000):
         if self._index is not None: return
-        dim = self.biencoder.passage.sub_embeddings[0].embedding_dim * self.biencoder.passage.M
+        dim = self.sub_embeddings.shape[2] * self.biencoder.passage.M
         import faiss
         index = faiss.IndexFlatIP(dim)
         pm = self.biencoder.passage.to("cpu").eval()
         with torch.no_grad():
             for i in tqdm(range(0, self.codes.size(0), bs), desc=f"{self._name} / build flat", leave=False):
-                chunk = self.codes[i:i+bs]
-                embs = pm(chunk)
+                chunk = self.codes[i:i+bs, :] # bs x M
+                embs = [self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)]
+                #embs = pm(chunk)
                 embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
                 index.add(embs)
         self._index = index
     
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         pt.validate.query_frame(topics, extra_cols=['query_vec'])
-
-        # with timer(f"{self._name} / encode_queries"):
-        #     Q_t = self.biencoder.query.to("cpu").encode_texts(texts, batch_size=64)
-        #     Q = Q_t.detach().cpu().numpy().astype('float32')
-        #     Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
         Q = topics["query_vec"].tolist()
         qids = topics['qid'].astype(str).tolist()
         self._ensure()
@@ -125,3 +128,175 @@ class JPQRetrieverFlat(pt.Transformer):
             for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
                 rows.append((qid, self.docnos[int(did)], float(s), r))
         return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+    
+class JPQRetrieverPrune(JPQRetriever):
+
+    """Subset-mode retriever - uses dynamic pruning."""
+    def __init__(self,
+                 *args,
+                 name: Optional[str] = None,
+                 ub_inflation : float = 1.,
+                 **kwargs
+                 ):
+        super().__init__(*args, **kwargs)
+        self._index = None
+        self._name = name or "JPQRetrieverPrune"
+        self.scorer = _PrunedScorer(
+            self.sub_embeddings.shape[1], #2**nbits
+            ...,#TODO
+            ...,#TODO
+            ...,#TODO
+            top_k=self.topk,
+            ub_inflation=ub_inflation
+        )
+
+    def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
+        pt.validate.query_frame(topics, extra_cols=['query_vec'])
+        Q = topics["query_vec"].to_numpy()
+        qids = topics['qid'].astype(str).tolist()
+        with timer(f"{self._name} / prune search"):
+            centroid_scores = Q @ self.sub_em
+            I, D = self.scorer(centroid_scores)
+        rows = []
+        for i, qid in enumerate(qids):
+            for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
+                rows.append((qid, self.docnos[int(did)], float(s), r))
+        return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+
+def merge_top_k(item_score_ids_1: np.ndarray,
+                item_scores_values_1: np.ndarray,
+                item_score_ids_2: np.ndarray,
+                item_scores_values_2: np.ndarray,
+                k: int,
+                need_items: int):
+    # Fast path: if the smallest in top-k is already larger than the largest new score, skip expensive merge
+    if item_scores_values_1[-1] < item_scores_values_2[0]:
+        # Create tiled versions to find duplicates
+        tiled_1 = np.tile(item_score_ids_1[np.newaxis, :], (need_items, 1))
+        tiled_2 = np.tile(item_score_ids_2[:, np.newaxis], (1, k))
+        non_unique_items = np.any(tiled_1 == tiled_2, axis=1)
+
+        # Penalize duplicate scores to avoid reselecting the same items
+        item_scores_values_2_updated = item_scores_values_2 - non_unique_items.astype(np.float32) * 1e9
+
+        # Combine old and new
+        combined_ids = np.concatenate([item_score_ids_1, item_score_ids_2])
+        combined_scores = np.concatenate([item_scores_values_1, item_scores_values_2_updated])
+
+        # Select top-k
+        sorted_idx = np.argpartition(-combined_scores, k)[:k]
+        sorted_idx = sorted_idx[np.argsort(-combined_scores[sorted_idx])]
+
+        top_k_ids = combined_ids[sorted_idx]
+        top_k_scores = combined_scores[sorted_idx]
+
+        # Update original arrays in place
+        item_score_ids_1[:] = top_k_ids
+        item_scores_values_1[:] = top_k_scores
+
+class _PrunedScorer:
+    def __init__(self, centroids_per_split, inverted_index, item_codes, item_code_bytes,
+                 top_k=10, max_iterations=1000, ub_inflation=1.0, sub_ids_per_iteration=8):
+        self.centroids_per_split = centroids_per_split
+        self.item_codes = item_codes
+        self.item_code_bytes = item_code_bytes
+        self.top_k = top_k
+        self.max_iterations = max_iterations
+        self.ub_inflation = ub_inflation
+        self.inverted_index = inverted_index
+        self.pointers = np.zeros(item_code_bytes, dtype=np.int32)
+        self.pointer_increments = np.eye(item_code_bytes, dtype=np.int32) * sub_ids_per_iteration
+        self.sub_ids_per_iteration = sub_ids_per_iteration
+        self.iteration = 0
+        self.upper_bound = float("inf")
+        self.bound_tensor = np.full((item_code_bytes, 1), float("-inf"), dtype=np.float32)
+        self.num_scored_items = 0
+        self.last_lower_bound_update = 0
+        self.threshold = float("-inf")
+        self.old_lower_bound = float("-inf")
+        self.best_items = np.zeros(top_k, dtype=np.int32)
+        self.best_values = np.zeros(top_k, dtype=np.float32)
+        self.scores_with_lower_bound = np.zeros((item_code_bytes, centroids_per_split + 1), dtype=np.float32)
+        self.centroid_scores = np.zeros(item_code_bytes * centroids_per_split, dtype=np.float32)
+        self.items_per_sub_id = inverted_index.shape[1]
+        self.sorted_scores_indices = np.zeros((item_code_bytes, centroids_per_split), dtype=np.int32)
+
+    def score_top_k(self, items, top_k):
+        # filter out negative (padding) items
+        valid_mask = items >= 0
+        valid_items = items[valid_mask]
+
+        # gather scores
+        item_codes = self.item_codes[np.maximum(valid_items, 0)]
+        item_score_full = np.sum(self.centroid_scores[item_codes], axis=1)
+
+        # assign large negative value to masked (invalid) items
+        full_scores = np.full(items.shape, -1e9, dtype=np.float32)
+        full_scores[valid_mask] = item_score_full
+
+        # get top-k
+        top_k_idx = np.argpartition(-full_scores, top_k)[:top_k]
+        top_k_idx = top_k_idx[np.argsort(-full_scores[top_k_idx])]
+
+        return items[top_k_idx].astype(np.int32), full_scores[top_k_idx]
+
+    def __call__(self, centroid_scores):
+        self.centroid_scores[:] = centroid_scores
+
+        # reshape and sort
+        centroid_scores_reshaped = centroid_scores.reshape(self.item_code_bytes, self.centroids_per_split)
+        sorted_scores_indices = np.argsort(-centroid_scores_reshaped, axis=1)
+        sorted_scores_values = np.take_along_axis(centroid_scores_reshaped, sorted_scores_indices, axis=1)
+
+        self.sorted_scores_indices[:] = sorted_scores_indices
+        self.pointers[:] = 0
+        self.upper_bound = float("inf")
+        self.threshold = float("-inf")
+        self.iteration = 0
+        self.num_scored_items = 0
+        self.last_lower_bound_update = 0
+
+        self.scores_with_lower_bound = np.concatenate([sorted_scores_values, self.bound_tensor], axis=1)
+        top_scores = self.scores_with_lower_bound[np.arange(self.item_code_bytes), self.pointers]
+
+        need_items = self.top_k
+
+        while (1 / (1 + np.exp(-self.upper_bound)) >
+               (1 / (1 + np.exp(-self.threshold))) * self.ub_inflation) and (self.iteration < self.max_iterations):
+
+            top_scored_centroid_split_num = np.argmax(top_scores)
+            top_scored_centroid_num = self.pointers[top_scored_centroid_split_num]
+
+            self.pointers[top_scored_centroid_split_num] += self.sub_ids_per_iteration
+
+            # get top centroids for this split
+            top_scored_centroids = (
+                self.sorted_scores_indices[top_scored_centroid_split_num,
+                                           top_scored_centroid_num:top_scored_centroid_num + self.sub_ids_per_iteration]
+                + top_scored_centroid_split_num * self.centroids_per_split
+            )
+
+            items_with_centroids = self.inverted_index[top_scored_centroids].reshape(-1)
+
+            if self.iteration == 0:
+                items, vals = self.score_top_k(items_with_centroids, need_items)
+                self.best_items[:] = items
+                self.best_values[:] = vals
+            else:
+                items, vals = self.score_top_k(items_with_centroids, need_items)
+                merge_top_k(self.best_items, self.best_values, items, vals, self.top_k, need_items)
+
+            self.old_lower_bound = self.threshold
+            self.threshold = self.best_values[-1]
+            self.num_scored_items += len(items_with_centroids)
+            self.iteration += 1
+
+            top_scores = self.scores_with_lower_bound[np.arange(self.item_code_bytes), self.pointers]
+            self.upper_bound = np.sum(top_scores)
+            n_safe_items = np.sum(self.best_values > self.upper_bound)
+            need_items = self.top_k - n_safe_items
+
+            if self.old_lower_bound != self.threshold:
+                self.last_lower_bound_update = self.iteration
+
+        return self.best_items, self.best_values
