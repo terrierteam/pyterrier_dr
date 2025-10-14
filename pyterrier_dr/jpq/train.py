@@ -417,13 +417,23 @@ class JPQTrainer:
     def jpq_index(self, dest : str) -> JPQIndex:
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
+        
+        # information from the original index
         docnos, original_embs, _ = self.existing_index.payload(return_docnos=True, return_dvecs=True)
+
+        # compute codes for _all_ of the original index
+        all_codes = self.pq.encode_batch(original_embs)
+        assert len(all_codes.shape) == 2, all_codes.shape
+        assert all_codes.shape[0] == len(self.existing_index)
+        
+        # gather the trained sub-id representations
         centroids = torch.cat([ self.model.passage.sub_embeddings[i].weight for i in range(self.pq_M) ]).detach().cpu().numpy() # M x Ks x dsub
         assert len(centroids.shape) == 3, centroids.shape
+        
         return JPQIndex.build(
             dest, 
             docnos.fwd,
-            self.pq.encode_batch(original_embs),
+            all_codes,
             centroids
             )
 
