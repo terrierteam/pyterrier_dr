@@ -60,6 +60,7 @@ class JPQIndex(pt.Artifact):
         with open(path/'subvecs.f4', 'wb') as fout:
             for split in range(embs.shape[0]):
                 for code in range(embs.shape[1]):
+                    vec = embs[split, code, :] # dim: dsub
                     vec = vec.astype(np.float32)
                     fout.write(vec.tobytes())
         with open(path/'pt_meta.json', 'wt') as f_meta:
