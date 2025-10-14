@@ -1,7 +1,7 @@
 from typing import List, Optional
 import pandas as pd
 import numpy as np
-import pyterrier as pt
+import pyterrier as pt, pyterrier_alpha as pta
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.jpq.pq import ProductQuantizer
 import torch
@@ -153,7 +153,7 @@ class JPQRetrieverFlat(JPQRetriever):
         self._index = index
     
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pt.validate.query_frame(topics, extra_cols=['query_vec'])
+        pta.validate.query_frame(topics, extra_cols=['query_vec'])
         Q = topics["query_vec"].tolist()
         qids = topics['qid'].astype(str).tolist()
         self._ensure()
@@ -188,7 +188,7 @@ class JPQRetrieverPrune(JPQRetriever):
         )
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pt.validate.query_frame(topics, extra_cols=['query_vec'])
+        pta.validate.query_frame(topics, extra_cols=['query_vec'])
         Q = topics["query_vec"].to_numpy()
         qids = topics['qid'].astype(str).tolist()
         with timer(f"{self._name} / prune search"):
