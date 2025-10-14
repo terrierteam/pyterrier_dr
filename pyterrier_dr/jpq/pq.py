@@ -67,7 +67,7 @@ class ProductQuantizer:
         """
         self.M = M
         self.Ks = Ks
-        self.centroids = None
+        self.centroids = []
     
     @abstractmethod
     def fit(self, X):
@@ -77,7 +77,7 @@ class ProductQuantizer:
     def encode(self, X):
         pass
 
-    def get_centroids(self) -> np.ndarray | None:
+    def get_centroids(self) -> np.ndarray | list:
         return self.centroids
 
     def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.ndarray:
@@ -104,7 +104,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
         """
         super().__init__(M, Ks)
         self.random_state = random_state
-        self.dsub = None # dimensionality of each subvector
+        self.dsub = 0 # dimensionality of each subvector
 
     def fit(self, X):
         from sklearn.cluster import KMeans
@@ -121,7 +121,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
             centroids.append(kmeans.cluster_centers_)
         self.centroids = np.array(centroids)  # shape (M, Ks, dsub)
         
-    def encode(self, X):
+    def encode(self, X) -> np.ndarray:
         """Encode each vector into M integer codes."""
         n_samples = X.shape[0]
         codes = np.empty((n_samples, self.M), dtype=np.uint8)
@@ -132,7 +132,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
             codes[:, m] = np.argmin(distances, axis=1)
         return codes
     
-    def decode(self, codes):
+    def decode(self, codes) -> np.ndarray:
         """Reconstruct vectors from PQ codes."""
         n_samples = codes.shape[0]
         X_recon = np.empty((n_samples, self.M * self.dsub), dtype=np.float32)
@@ -149,7 +149,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         Ks: number of clusters per subquantizer
         """
         super().__init__(M, Ks)
-        self.dsub = None
+        self.dsub = 0
         self.pq = None
 
     def fit(self, X):
@@ -165,7 +165,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
 
-    def encode(self, X):
+    def encode(self, X) -> np.ndarray:
         """Encode vectors into PQ codes (n_samples, n_splits)."""
         assert self.pq is not None, "Must call fit() first."
         n_samples = X.shape[0]
@@ -174,7 +174,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         assert codes.shape == (n_samples, self.M)
         return codes
 
-    def decode(self, codes):
+    def decode(self, codes) -> np.ndarray:
         """Decode PQ codes back to approximate vectors."""
         n_samples = codes.shape[0]
         assert self.pq is not None, "Must call fit() first."
