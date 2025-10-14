@@ -85,10 +85,10 @@ class JPQIndex(pt.Artifact):
         return JPQIndex(str(path))
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
-        _, subembs, codes, docnos = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
-        return JPQRetrieverFlat(docnos, codes, subembs, topk=1000, name="JPQ-Full")
+        docnos, codes, subembs, _ = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
+        return JPQRetrieverFlat(docnos, codes, subembs, topk=topk, name="JPQ-Full")
     
     def retriever_prune(self, topk: int = 1000, ub_inflation : float =1.) -> "JPQRetrieverPrune":
-        _, subembs, codes, docnos = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
-        return JPQRetrieverFlat(docnos, codes, subembs, topk=1000, name="JPQ-Full", ub_inflation=ub_inflation)
+        docnos, codes, subembs, _ = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
+        return JPQRetrieverPrune(docnos, codes, subembs, topk=topk, name="JPQ-Full", ub_inflation=ub_inflation)
         
