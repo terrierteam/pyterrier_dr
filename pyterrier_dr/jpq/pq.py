@@ -67,6 +67,7 @@ class ProductQuantizer:
         """
         self.M = M
         self.Ks = Ks
+        self.centroids = None
     
     @abstractmethod
     def fit(self, X):
@@ -76,10 +77,10 @@ class ProductQuantizer:
     def encode(self, X):
         pass
 
-    def get_centroids(self):
+    def get_centroids(self) -> np.ndarray | None:
         return self.centroids
 
-    def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.array:
+    def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.ndarray:
         n = X.shape[0]
         codes = np.empty((n, self.M), dtype=np.uint8)
         iter = range(0, n, batch_size)
@@ -103,7 +104,6 @@ class ProductQuantizerSKLearn(ProductQuantizer):
         """
         super().__init__(M, Ks)
         self.random_state = random_state
-        self.centroids = None
         self.dsub = None # dimensionality of each subvector
 
     def fit(self, X):

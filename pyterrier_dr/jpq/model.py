@@ -95,10 +95,11 @@ class JPQLoss(nn.Module):
         # Encode queries on CPU, then move to the same device
         with torch.no_grad():
             q = self.query_encoder.encode_texts(batch["query_text"])
-        q = q.to(device, non_blocking=True)
+        q = q.to(device)
         # Bring positive/negative PQ codes to same device
-        pos = batch["pos_codes"].to(device, non_blocking=True)
-        neg = batch["neg_codes"].to(device, non_blocking=True)        
+        pos = batch["pos_codes"].to(device) #, non_blocking=True ONLY use if pin_memory=True is set for DataLoader
+        neg = batch["neg_codes"].to(device) #, non_blocking=True
+
         # Reconstruct document embeddings on the passage encoder’s device
         pos = self.passage_encoder(pos)
         neg = self.passage_encoder(neg)
