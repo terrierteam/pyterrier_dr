@@ -419,6 +419,7 @@ class JPQTrainer:
             raise ValueError("JPQTrainer not fitted")
         docnos, original_embs, _ = self.existing_index.payload(return_docnos=True, return_dvecs=True)
         centroids = torch.cat([ self.model.passage.sub_embeddings[i].weight for i in range(self.pq_M) ]).detach().cpu().numpy() # M x Ks x dsub
+        assert len(centroids.shape) == 3, centroids.shape
         return JPQIndex.build(
             dest, 
             docnos.fwd,
