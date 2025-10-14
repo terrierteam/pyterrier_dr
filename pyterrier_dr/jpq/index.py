@@ -68,6 +68,11 @@ class JPQIndex(pt.Artifact):
                     vec = embs[split, code, :] # dim: dsub
                     vec = vec.astype(np.float32)
                     fout.write(vec.tobytes())
+        with open(path/'codes.f4', 'wb') as fout:
+            for docid in range(count):
+                vec = codes[docid,:]
+                vec = vec.astype(np.uint8) # assumes Ks <= 256
+                fout.write(vec.tobytes())
         with open(path/'pt_meta.json', 'wt') as f_meta:
             json.dump({
                 "type": JPQIndex.ARTIFACT_TYPE,
