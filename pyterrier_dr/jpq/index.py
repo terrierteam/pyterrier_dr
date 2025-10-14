@@ -19,7 +19,7 @@ class JPQIndex(pt.Artifact):
         self._dvecs = None
         self._codes = None
         self._docnos = None
-        self.index_path = path
+        self.index_path = Path(path)
     
     def payload(self, return_dvecs=True, return_docnos=True, return_codes=True):
         if self._meta is None:
