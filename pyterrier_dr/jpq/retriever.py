@@ -79,7 +79,7 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
         
         return new_index
 
-def build_inverted_index(item_codes, pq_type_name, dataset_models_config, current_dir, k : int = 256):
+def build_inverted_index(item_codes, pq_type_name, dataset_models_config, current_dir, k : int = 256) -> np.array:
     #dir = current_dir / "inverted_indexes" / pq_type_name / dataset_models_config.config_name
     #dir.mkdir(parents=True, exist_ok=True)
     #cache_filename = dir / "inverted_index.npy"
@@ -234,8 +234,8 @@ def merge_top_k(item_score_ids_1: np.ndarray,
 class _PrunedScorer:
     def __init__(self, 
                  centroids_per_split : int, 
-                 inverted_index, 
-                 item_codes, 
+                 inverted_index : np.array, 
+                 item_codes : np.array, 
                  item_code_bytes : int,
                  top_k : int = 10, 
                  max_iterations : int = 1000, 
