@@ -72,7 +72,7 @@ class JPQIndex(pt.Artifact):
             json.dump({
                 "type": JPQIndex.ARTIFACT_TYPE,
                 "format": JPQIndex.ARTIFACT_FORMAT,
-                "M" : embs.shape[0]
+                "M" : embs.shape[0],
                 "Ks": embs.shape[1],
                 "dsub" : embs.shape[2],
                 "doc_count": count
