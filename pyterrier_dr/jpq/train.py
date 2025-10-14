@@ -427,7 +427,7 @@ class JPQTrainer:
         assert all_codes.shape[0] == len(self.existing_index)
         
         # gather the trained sub-id representations
-        centroids = torch.cat([ self.model.passage.sub_embeddings[i].weight for i in range(self.pq_M) ]).detach().cpu().numpy() # M x Ks x dsub
+        centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.pq_M) ]).detach().cpu().numpy() # M x Ks x dsub
         assert len(centroids.shape) == 3, centroids.shape
         
         return JPQIndex.build(
