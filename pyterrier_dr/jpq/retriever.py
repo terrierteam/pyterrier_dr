@@ -118,14 +118,14 @@ def build_inverted_index(item_codes, pq_type_name, dataset_models_config, curren
 class JPQRetriever(pt.Transformer):
     def __init__(self, docnos: List[str], # N
                  codes: np.array, # N x M
-                 sub_embeddings : np.array, # M x 2^nbits x dsub (aka the centroids)
+                 sub_embeddings : np.array, # M x ks=2^nbits x dsub (aka the centroids)
                  topk: int = 1000):
         super().__init__()
         self.docnos = np.array(docnos)
         self.codes = codes
-        self.M = codes.shape[2]
+        self.M = codes.shape[1]
         self.sub_embeddings = sub_embeddings
-        assert sub_embeddings.shape[0] == self.M
+        assert sub_embeddings.shape[0] == self.M, (sub_embeddings.shape, self.M)
         self.topk = topk
 
 class JPQRetrieverFlat(JPQRetriever):
