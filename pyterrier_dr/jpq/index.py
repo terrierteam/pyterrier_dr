@@ -30,11 +30,11 @@ class JPQIndex(pt.Artifact):
         res = [self._meta]
         if return_dvecs:
             if self._dvecs is None:
-                self._dvecs = np.memmap(self.index_path/'subvecs.f4', mode='r', dtype=np.float32, shape=(self._meta['doc_count'], self._meta['code_size'], self._meta['subvec_size']))
+                self._dvecs = np.memmap(self.index_path/'subvecs.f4', mode='r', dtype=np.float32, shape=(self._meta['M'], self._meta['Ks'], self._meta['dsub']))
             res.insert(0, self._dvecs)
         if return_codes:
             if self._codes is None:
-                self._codes = np.memmap(self.index_path/'codes.f4', mode='r', dtype=np.uint8, shape=(self._meta['doc_count'], self._meta['code_size']))
+                self._codes = np.memmap(self.index_path/'codes.f4', mode='r', dtype=np.uint8, shape=(self._meta['doc_count'], self._meta['M']))
             res.insert(0, self._codes)
         if return_docnos:
             if self._docnos is None:
@@ -72,8 +72,9 @@ class JPQIndex(pt.Artifact):
             json.dump({
                 "type": JPQIndex.ARTIFACT_TYPE,
                 "format": JPQIndex.ARTIFACT_FORMAT,
-                "code_size": embs.shape[1],
-                "subvec_size" : embs.shape[2],
+                "M" : embs.shape[0]
+                "Ks": embs.shape[1],
+                "dsub" : embs.shape[2],
                 "doc_count": count
             }, f_meta)
         return JPQIndex(str(path))
