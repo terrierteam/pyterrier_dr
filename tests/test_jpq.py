@@ -1,6 +1,7 @@
 import unittest
 from pyterrier_dr import FlexIndex
 import pyterrier_dr, torch, pyterrier as pt
+from pyterrier.measures import *
 
 
 class TestJPQ(unittest.TestCase):
@@ -45,7 +46,6 @@ class TestJPQ(unittest.TestCase):
 
         (tct >> jpqindex.retriever()).search("chemical reactions")
         (tct >> jpqindex.retriever_prune()).search("chemical reactions")
-        from pyterrier.measures import *
         print(pt.Experiment(
             [tct >> index,
             tct >> jpqindex.retriever(),
