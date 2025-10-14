@@ -139,7 +139,7 @@ class JPQRetrieverFlat(JPQRetriever):
 
     def _ensure(self, bs: int = 20000):
         if self._index is not None: return
-        dim = self.sub_embeddings.shape[2] * self.biencoder.passage.M
+        dim = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
         import faiss
         index = faiss.IndexFlatIP(dim)
         pm = self.biencoder.passage.to("cpu").eval()
