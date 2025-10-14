@@ -264,11 +264,13 @@ class JPQTrainer:
         sample_size = min(pq_sample_size, len(sel_indices))
         print("[PQ] training on %d documents..." % sample_size)
         sample_idx = rng.choice(sel_indices, size=sample_size, replace=False)
+        sample_idx = np.sort(sample_idx) # vector lookups from np.memmap are quicker when sorted
         with timer(f"PQ / train (samples={len(sample_idx):,})"):
             xb = l2_normalize_np(vecs_mem[sample_idx])
             pq.fit(xb)
 
         print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(sel_indices), code_batch_size))
+        sel_indices = np.sort(sel_indices) # vector lookups from np.memmap are quicker when sorted
         codes_sel = np.empty((len(sel_indices), self.pq_M), dtype=np.uint8)
         with timer("PQ / compute codes (selected)"):
             codes_sel = pq.encode_batch(l2_normalize_np(vecs_mem[sel_indices]), batch_size=code_batch_size)
