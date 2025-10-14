@@ -142,12 +142,11 @@ class JPQRetrieverFlat(JPQRetriever):
         dim = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
         import faiss
         index = faiss.IndexFlatIP(dim)
-        with torch.no_grad():
-            for i in tqdm(range(0, self.codes.shape[0], bs), desc=f"{self._name} / build flat", leave=False):
-                chunk = self.codes[i:i+bs, :] # bs x M
-                embs = torch.cat([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)])
-                embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).astype('float32')
-                index.add(embs)
+        for i in tqdm(range(0, self.codes.shape[0], bs), desc=f"{self._name} / build flat", leave=False):
+            chunk = self.codes[i:i+bs, :] # bs x M
+            embs = np.concatenate([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)])
+            embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).astype('float32')
+            index.add(embs)
         self._index = index
     
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
