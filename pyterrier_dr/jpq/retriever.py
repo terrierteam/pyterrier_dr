@@ -79,6 +79,42 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
         
         return new_index
 
+def build_inverted_index(item_codes, pq_type_name, dataset_models_config, current_dir, k : int = 256):
+    #dir = current_dir / "inverted_indexes" / pq_type_name / dataset_models_config.config_name
+    #dir.mkdir(parents=True, exist_ok=True)
+    #cache_filename = dir / "inverted_index.npy"
+
+    if False:# os.path.exists(cache_filename):
+        pass #code_items = np.load(cache_filename, allow_pickle=True)
+    else:
+        # Convert to NumPy if it's a tensor-like object
+        target_codes = np.array(item_codes)
+        num_items, num_splits = target_codes.shape
+        code_items = [[] for _ in range(num_splits * k)]
+
+        for split in range(num_splits):
+            print(f"split:{split+1}/{num_splits}", split)
+            for item in tqdm.tqdm(range(num_items)):
+                code = target_codes[item, split]
+                code_items[split * k + code].append(item)
+
+        # Compute padding
+        items_per_code = [len(code_items[i]) for i in range(len(code_items))]
+        max_items_per_code = max(items_per_code)
+
+        # Pad each list with -1 so all arrays are the same length
+        for code in range(len(code_items)):
+            padding = max_items_per_code - len(code_items[code])
+            if padding > 0:
+                code_items[code] = [-1] * padding + code_items[code]
+
+        # Convert to NumPy array
+        code_items = np.array(code_items, dtype=np.int32)
+        #np.save(cache_filename, code_items)
+
+    index_int32 = code_items.astype(np.int32)
+    return index_int32
+
 class JPQRetriever(pt.Transformer):
     def __init__(self, docnos: List[str], # N
                  codes: np.array, # N x M
@@ -141,11 +177,12 @@ class JPQRetrieverPrune(JPQRetriever):
         super().__init__(*args, **kwargs)
         self._index = None
         self._name = name or "JPQRetrieverPrune"
+        ks = self.sub_embeddings.shape[1] #2**nbits
         self.scorer = _PrunedScorer(
-            self.sub_embeddings.shape[1], #2**nbits
-            ...,#TODO
-            ...,#TODO
-            ...,#TODO
+            ks, 
+            build_inverted_index(self.codes, ..., ..., ..., k=ks),
+            self.codes,
+            self.codes.shape[-1], 
             top_k=self.topk,
             ub_inflation=ub_inflation
         )
@@ -196,10 +233,10 @@ def merge_top_k(item_score_ids_1: np.ndarray,
 
 class _PrunedScorer:
     def __init__(self, 
-                 centroids_per_split, 
+                 centroids_per_split : int, 
                  inverted_index, 
                  item_codes, 
-                 item_code_bytes,
+                 item_code_bytes : int,
                  top_k : int = 10, 
                  max_iterations : int = 1000, 
                  ub_inflation : float = 1.0, 
