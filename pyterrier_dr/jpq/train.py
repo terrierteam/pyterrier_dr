@@ -417,7 +417,7 @@ class JPQTrainer:
     def jpq_index(self, dest : str) -> JPQIndex:
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
-        docnos, original_embs, _ = self.existing_index.payload(return_docnos=True, return_dvecs=False)
+        docnos, original_embs, _ = self.existing_index.payload(return_docnos=True, return_dvecs=True)
         return JPQIndex.build(
             dest, 
             docnos.fwd,
