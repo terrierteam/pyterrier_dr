@@ -1,10 +1,14 @@
 import logging
 import math
 from typing import Any, Literal
+from ir_measures import RR, Recall, nDCG
 import numpy as np
+import pandas as pd
 from pyterrier import tqdm
+import tempfile
 import torch
 
+import pyterrier as pt
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
@@ -60,6 +64,38 @@ def compute_PQ(
 def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
     return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
+
+def prepare_validation_data(
+    eval_queries: pd.DataFrame | None,
+    eval_qrels: pd.DataFrame | None,
+    selected_docnos: list[str],
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """
+    Filter evaluation queries and qrels to include only queries
+    that still have relevant documents among `selected_docnos`.
+    Note that we remove queries that have no remaining relevant
+    documents (label > 0).
+    """
+    if eval_queries is None:
+        return None, None
+
+    assert eval_qrels is not None, "eval_qrels must be provided when eval_queries is not None"
+
+    # Keep qrels with documents used in training
+    eval_qrels = eval_qrels[eval_qrels["docno"].isin(selected_docnos)]
+
+    # Find queries that still have relevant docs
+    valid_qids = set(eval_qrels.loc[eval_qrels["label"] > 0, "qid"])
+
+    # Filter to only those queries/qrels
+    eval_qrels = eval_qrels[eval_qrels["qid"].isin(valid_qids)]
+    eval_queries = eval_queries[eval_queries["qid"].isin(valid_qids)]
+
+    print(f"[VAL] using {len(eval_queries)} queries with {len(eval_qrels)} qrels for validation")
+
+    return eval_queries, eval_qrels
+
+
 class JPQTrainer:
 
     def _training_step(self, batch, loss_f, optimizer) -> float:
@@ -78,7 +114,12 @@ class JPQTrainer:
         data_loader,
         epochs,
         lr,
+        selected_docnos,
+        codes,
         max_steps_per_epoch: int = math.inf, # type: ignore
+        eval_queries: pd.DataFrame | None = None,
+        eval_qrels: pd.DataFrame | None = None,
+        valid_every: int = 10,
     ):
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
 
@@ -105,19 +146,58 @@ class JPQTrainer:
                         running_loss = 0.0
                         step = 0
 
-                    # Validation: TODO
+                    if eval_queries is not None and step % valid_every == 0:
+                        val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
+                        print(f"[JPQ][val] steps={step} {str(val_stats)}")
 
                     if step >= max_steps_per_epoch:
                         logger.info(f"[JPQ] reached max steps per epoch {max_steps_per_epoch}")
                         step = 0
                         break
 
-
             if step:
                 logger.info(f"[JPQ] Training loss: {running_loss/step}")
             print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
-        
+
+    def _validation_step(self, model, eval_queries, eval_qrels, selected_docnos, codes, topk_eval=100):
+        with timer(f"JPQ / validation over {len(eval_queries)} queries"):
+            with torch.no_grad():
+                Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
+            Q = Q_t.detach().cpu().numpy().astype('float32')
+            Q = l2_normalize_np(Q) # Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
+
+            dstindex = tempfile.mkdtemp()
+            flex = FlexIndex(dstindex, verbose=False)
+
+            device = next(model.passage.parameters()).device
+            passage_encoder = model.passage.to("cpu").eval()
+            def _gen():
+                with torch.no_grad():
+                    for i in range(0, len(codes), 16384): # magic number to replace recon_batch_size
+                        chunk = torch.from_numpy(codes[i:i+16384]).long()
+                        embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
+                        embs = l2_normalize_np(embs) # embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
+                        for j in range(embs.shape[0]):
+                            yield {'docno' : selected_docnos[i+j], 'doc_vec' : embs[j, :]}
+            flex.indexer(mode='overwrite').index(_gen())
+
+            eval_queries = eval_queries.copy()
+            eval_queries["query_vec"] = [row for row in Q]
+            rtr = pt.Evaluate(
+                flex.retriever()(eval_queries),  # type: ignore
+                eval_qrels, 
+                metrics=[RR@10, Recall@1000, nDCG@10])
+
+            del(flex)
+
+            # TODO: dest index may still be open
+            # os.removedirs(dstindex)
+
+            passage_encoder.to(device).train()
+            return rtr
+
+
     def __init__(
         self,
         model : BiEncoder, # the backbone biencoder model
@@ -149,6 +229,9 @@ class JPQTrainer:
         epochs: int = 3,
         lr:float = 2e-5,
         max_steps_per_epoch: int = math.inf, # type: ignore
+        eval_queries : pd.DataFrame = None,
+        eval_qrels : pd.DataFrame = None,
+        valid_every : int = 25,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids = compute_PQ(self.M, self.nbits, pq_sample_size, batch_size, selected_docids, self.index.payload()[1])
@@ -158,6 +241,7 @@ class JPQTrainer:
         )
 
         data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
-        
-        self._training_loop(model, data_loader, epochs, lr, max_steps_per_epoch)
+        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
+
+        self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
         self.fitted = True
