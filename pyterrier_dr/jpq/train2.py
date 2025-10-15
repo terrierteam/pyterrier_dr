@@ -157,6 +157,9 @@ class JPQTrainer:
 
             if step:
                 logger.info(f"[JPQ] Training loss: {running_loss/step}")
+                val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
+                print(f"[JPQ][val] steps={step} {str(val_stats)}")
+
             print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
 
@@ -241,6 +244,7 @@ class JPQTrainer:
         )
 
         data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
+        # print(len(data_loader))
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
 
         self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)

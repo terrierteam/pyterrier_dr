@@ -17,7 +17,7 @@ def timer(name: str):
 
 def l2_normalize_np(arr: np.ndarray) -> np.ndarray:
     X = np.array(arr, dtype=np.float32, copy=True)
-    X /= (np.linalg.norm(X, axis=1, keepdims=True).astype(np.float32) + 1e-12)
+#    X /= (np.linalg.norm(X, axis=1, keepdims=True).astype(np.float32) + 1e-12)
     return X
 
 def bytes_to_gb(nbytes: int) -> float:

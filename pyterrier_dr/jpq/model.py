@@ -36,13 +36,16 @@ class QueryEncoder(nn.Module):
         self.batch_size = batch_size
 
         # Make it clear this module is frozen
-        for p in self.parameters():
-            p.requires_grad = False
-        self.eval()
+#        for p in self.parameters():
+#            p.requires_grad = False
+#        self.eval()
 
-    def parameters(self):  # type: ignore[override]
-        # No trainable params; return an empty iterator
-        return iter(())
+#    def parameters(self):  # type: ignore[override]
+#        # No trainable params; return an empty iterator
+#        return iter(())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.dr(x)
 
     @torch.no_grad()
     def encode_texts(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:

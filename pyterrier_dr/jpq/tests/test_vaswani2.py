@@ -34,7 +34,8 @@ class TestJPQ(unittest.TestCase):
         t.fit(
             doc_pairs, 
             epochs=100, 
-            pq_sample_size=750, 
+            pq_sample_size=1000, 
+            batch_size=1024,
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), valid_every=25
         )

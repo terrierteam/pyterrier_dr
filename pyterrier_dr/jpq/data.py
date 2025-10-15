@@ -91,18 +91,25 @@ def get_dataloader(
         }
 
     docpairs = list(docpairs) # in case docpairs is an iterator...
+
+#    xx = [x['doc_id_a'] for x in docpairs]
+#    xx += [x['doc_id_b'] for x in docpairs]
+#    xx = set(xx)
+#    print(f"we have {len(set(xx))} documents for training")
+#    print(f"we have {len(docnos_set)} documents used for PQ training")
+#    print(f"they have {len(docnos_set.intersection(xx))} elements in common")
     ds = Dataset.from_list(docpairs)
-    #print(ds)
+#    print(ds)
     ds = ds.filter(filter_in_sel)
-    #print(ds)
-    #print(docnos_set)
+#    print(ds)
+    print(f"[DATA] After filtering, we have {len(ds)} documents left")
     ds = ds.map(
         queries_and_codes,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes")],
     )
-    #print(ds)
+#    print(ds)
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes"])
-    #print(ds)
+#    print(ds)
 
     return DataLoader(
         ds,  # type: ignore
