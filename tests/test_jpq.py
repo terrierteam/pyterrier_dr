@@ -1,6 +1,7 @@
 import unittest
 from pyterrier_dr import FlexIndex
 import pyterrier_dr, torch, pyterrier as pt
+from pyterrier.measures import *
 
 
 class TestJPQ(unittest.TestCase):
@@ -37,3 +38,22 @@ class TestJPQ(unittest.TestCase):
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), valid_every=64
         )
+        from tempfile import mkdtemp
+        import os, shutil
+        dest = mkdtemp()
+        os.rmdir(dest)
+        jpqindex = t.jpq_index(dest)
+
+        (tct >> jpqindex.retriever_flat()).search("chemical reactions")
+        (tct >> jpqindex.retriever_prune()).search("chemical reactions")
+        print(pt.Experiment(
+            [tct >> index,
+            tct >> jpqindex.retriever(),
+            tct >> jpqindex.retriever_prune()
+            ],
+            dataset.get_topics(),
+            dataset.get_qrels(),
+            eval_metrics=[RR@100, MAP, nDCG@10]
+        ))
+        del(jpqindex)
+        shutil.rmtree(dest)

@@ -172,6 +172,7 @@ class JPQTrainer:
                             eval_queries, cut_qrels, recon_batch_size, 
                             valid_every=valid_every)
         self.fitted = True
+        self.pq = pq
 
     
     def _dataloader(self, 
@@ -235,11 +236,13 @@ class JPQTrainer:
         sample_size = min(pq_sample_size, len(sel_indices))
         print("[PQ] training on %d documents..." % sample_size)
         sample_idx = rng.choice(sel_indices, size=sample_size, replace=False)
+        sample_idx = np.sort(sample_idx) # vector lookups from np.memmap are quicker when sorted
         with timer(f"PQ / train (samples={len(sample_idx):,})"):
             xb = l2_normalize_np(vecs_mem[sample_idx])
             pq.fit(xb)
 
         print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(sel_indices), code_batch_size))
+        sel_indices = np.sort(sel_indices) # vector lookups from np.memmap are quicker when sorted
         codes_sel = np.empty((len(sel_indices), self.pq_M), dtype=np.uint8)
         with timer("PQ / compute codes (selected)"):
             codes_sel = pq.encode_batch(l2_normalize_np(vecs_mem[sel_indices]), batch_size=code_batch_size)
@@ -385,7 +388,25 @@ class JPQTrainer:
     def jpq_index(self, dest : str) -> JPQIndex:
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
-        return JPQIndex.build(dest)
+        
+        # information from the original index
+        docnos, original_embs, _ = self.existing_index.payload(return_docnos=True, return_dvecs=True)
+
+        # compute codes for _all_ of the original index
+        all_codes = self.pq.encode_batch(original_embs)
+        assert len(all_codes.shape) == 2, all_codes.shape
+        assert all_codes.shape[0] == len(self.existing_index)
+        
+        # gather the trained sub-id representations
+        centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.pq_M) ]).detach().cpu().numpy() # M x Ks x dsub
+        assert len(centroids.shape) == 3, centroids.shape
+        
+        return JPQIndex.build(
+            dest, 
+            docnos.fwd,
+            all_codes,
+            centroids
+            )
 
 
     # # ------- optional -------
