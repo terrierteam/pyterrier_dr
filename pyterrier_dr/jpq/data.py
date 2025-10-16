@@ -102,7 +102,7 @@ def get_dataloader(
     if not len(ds):
         raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 pairs left. \n"
                          "Try increasing size of training dataset, or value of docid_subset")
-    print(f"[DATA] After filtering, we have {len(ds)} pairs left")
+    print(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
     ds = ds.map(
         queries_and_codes,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes")],
