@@ -13,6 +13,7 @@ from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
 from pyterrier_dr.jpq.model import JPQBiencoder, JPQLoss, PassageEncoder, QueryEncoder
+from pyterrier_dr.jpq.utils import timer
 from pyterrier_dr.jpq.index import JPQIndex
 
 from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSKLearn
@@ -122,14 +123,11 @@ class JPQTrainer:
     ):
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
 
-        # Freeze query encoder
-        model.query.eval()
-        for p in model.query.parameters():
-            p.requires_grad = False
+        # Create optimizer for passage encoder AND query encoder
+        optimizer = torch.optim.AdamW(list(model.passage.parameters()) + list(model.query.dr.model.parameters()), lr=lr, weight_decay=0.0)
 
-        # Create optimizer for passage encoder
-        optimizer = torch.optim.AdamW(list(model.passage.parameters()), lr=lr, weight_decay=0.0)
-
+        # set both models to train
+        model.query.dr.model.train()
         model.passage.to(self.device).train()
         for ep in range(1, epochs + 1):
             step = 0
@@ -140,10 +138,9 @@ class JPQTrainer:
                     running_loss += loss
                     step += 1
 
-                    if step == 100:
+                    if step % 1 == 0:
                         logger.info(f"[JPQ] Training loss: {running_loss/step}")
                         running_loss = 0.0
-                        step = 0
 
                     if eval_queries is not None and step % valid_every == 0:
                         val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
@@ -154,7 +151,7 @@ class JPQTrainer:
                         step = 0
                         break
 
-            if step:
+            if step % valid_every == 0:
                 logger.info(f"[JPQ] Training loss: {running_loss/step}")
                 val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
                 print(f"[JPQ][val] steps={step} {str(val_stats)}")
@@ -217,9 +214,6 @@ class JPQTrainer:
         self.pq_impl = pq_impl
         self.device = autodevice(device)
         logger.info(f"[JPQTrainer] device={self.device}")
-
-        # self.query_encoder = QueryEncoder(existing_model, normalise=True, batch_size=64)
-
 
     def fit(self,
         training_docpairs,

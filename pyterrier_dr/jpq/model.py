@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import pyterrier_dr
 
 class QueryEncoder(nn.Module):
     """Frozen wrapper that adapts a pyterrier_dr-style model into a query encoder.
@@ -26,13 +27,11 @@ class QueryEncoder(nn.Module):
     """
     def __init__(
         self, 
-        dr_model, 
-        normalise: bool = True, 
+        dr_model : pyterrier_dr.BiEncoder, 
         batch_size: int = 64
     ) -> None:
         super().__init__()
         self.dr = dr_model
-        self.normalise = normalise
         self.batch_size = batch_size
 
         # Make it clear this module is frozen
@@ -46,6 +45,34 @@ class QueryEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.dr(x)
+    
+    def encode_texts_torch(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
+        """Encode a list of texts into a Torch tensor (float32), optionally L2-normalised."""
+        if not texts:
+            return torch.empty((0, 0), dtype=torch.float32)
+        return self.dr.encode_queries_torch(texts, batch_size=batch_size)
+
+        # bs = batch_size or self.batch_size
+        # outputs: list[torch.Tensor] = []
+
+        # for i in range(0, len(texts), bs):
+        #     chunk = texts[i:i + bs]
+
+        #     arr = self.dr.encode_queries_torch(chunk, batch_size=bs)
+        #     # # Try direct API first
+        #     # if hasattr(self.dr, "encode_queries"):
+        #     #     arr = self.dr.encode_queries(chunk, batch_size=bs)
+        #     # else:
+        #     #     # Fallback: nested query_encoder().encode(...)
+        #     #     qe = getattr(self.dr, "query_encoder", lambda **kw: None)(batch_size=bs)
+        #     #     if qe is None or not hasattr(qe, "encode"):
+        #     #         raise RuntimeError("dr_model must expose `encode_queries` or `query_encoder().encode`")
+        #     #     arr = qe.encode(chunk, batch_size=bs)
+
+        #     t = torch.from_numpy(np.asarray(arr, dtype=np.float32, order="C"))
+        #     outputs.append(t)
+
+        # return torch.cat(outputs, dim=0)
 
     @torch.no_grad()
     def encode_texts(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
@@ -157,8 +184,7 @@ class JPQLoss(nn.Module):
         # Find the device from the passage encoder (the model we are training)
         device = next(self.passage_encoder.parameters()).device
         # Encode queries on CPU, then move to the same device
-        with torch.no_grad():
-            q = self.query_encoder.encode_texts(batch["query_text"])
+        q = self.query_encoder.encode_texts_torch(batch["query_text"])
         q = q.to(device)
         # Bring positive/negative PQ codes to same device
         pos = batch["pos_codes"].to(device)
