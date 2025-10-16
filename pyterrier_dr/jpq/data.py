@@ -100,9 +100,9 @@ def get_dataloader(
     ds = Dataset.from_list(docpairs)
     ds = ds.filter(filter_in_sel).shuffle()
     if not len(ds):
-        raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 documents left. \n"
+        raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 pairs left. \n"
                          "Try increasing size of training dataset, or value of docid_subset")
-    print(f"[DATA] After filtering, we have {len(ds)} documents left")
+    print(f"[DATA] After filtering, we have {len(ds)} pairs left")
     ds = ds.map(
         queries_and_codes,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes")],
