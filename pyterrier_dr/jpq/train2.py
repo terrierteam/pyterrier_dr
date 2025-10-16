@@ -9,6 +9,7 @@ import tempfile
 import torch
 
 import pyterrier as pt
+import shutil
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
@@ -166,14 +167,13 @@ class JPQTrainer:
                         break
 
             if eval_queries is not None: # always evaluate at the end of the epoch
-                logger.info(f"[JPQ] Training loss: {running_loss/step}")
                 val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
                 print(f"[JPQ][val] steps={step} {str(val_stats)}")
 
             print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
 
-    def _validation_step(self, model, eval_queries, eval_qrels, selected_docnos, codes, topk_eval=100):
+    def _validation_step(self, model, eval_queries, eval_qrels, selected_docnos, codes, topk_eval=1000):
         with timer(f"JPQ / validation over {len(eval_queries)} queries"):
             with torch.no_grad():
                 Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
@@ -196,15 +196,15 @@ class JPQTrainer:
             eval_queries = eval_queries.copy()
             eval_queries["query_vec"] = [row for row in Q]
             rtr = pt.Evaluate(
-                flex.retriever()(eval_queries),  # type: ignore
+                flex.retriever(num_results=topk_eval)(eval_queries),  # type: ignore
                 eval_qrels, 
                 metrics=[RR@10, Recall@1000, nDCG@10])
 
             del(flex)
 
-            # TODO: dest index may still be open
-            # os.removedirs(dstindex)
-
+            # dest index may still be open
+            shutil.rmtree(dstindex, ignore_errors=True)
+            
             passage_encoder.to(device).train()
             return rtr
 
