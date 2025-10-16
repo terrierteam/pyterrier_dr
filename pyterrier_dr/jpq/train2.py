@@ -230,7 +230,7 @@ class JPQTrainer:
         valid_every : int = 25,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
-        codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, batch_size, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl)
+        codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl)
         self.pq = pq
         model = JPQBiencoder(
             QueryEncoder(self.query_encoder), 
