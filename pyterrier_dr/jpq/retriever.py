@@ -8,53 +8,6 @@ import torch
 from .utils import timer
 from pyterrier import tqdm
 
-# class JPQRetrieverFlatEncoder(pt.Transformer):
-#     """Subset-mode retriever (Flat-IP reconstructed from codes)."""
-#     def __init__(self, biencoder: BiEncoder, docnos: List[str],
-#                  codes: np.array,
-#                  topk: int = 1000,
-#                  name: Optional[str] = None):
-#         super().__init__()
-#         self.biencoder = biencoder
-#         self.docnos = np.array(docnos)
-#         self.codes = torch.from_numpy(codes).long()
-#         self.topk = topk
-#         self._index = None
-#         self._name = name or "JPQRetriever"
-    
-#     def __str__(self): return self._name
-
-#     def _ensure(self, bs: int = 20000):
-#         if self._index is not None: return
-#         dim = self.biencoder.passage.sub_embeddings[0].embedding_dim * self.biencoder.passage.M
-#         index = faiss.IndexFlatIP(dim)
-#         pm = self.biencoder.passage.to("cpu").eval()
-#         with torch.no_grad():
-#             for i in tqdm(range(0, self.codes.size(0), bs), desc=f"{self._name} / build flat", leave=False):
-#                 chunk = self.codes[i:i+bs]
-#                 embs = pm(chunk)
-#                 embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
-#                 index.add(embs)
-#         self._index = index
-    
-#     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-#         pt.validate.query_frame(topics)
-#         qids = topics['qid'].astype(str).tolist()
-#         texts = topics['query'].astype(str).tolist()
-#         with timer(f"{self._name} / encode_queries"):
-#             Q_t = self.biencoder.query.to("cpu").encode_texts(texts, batch_size=64)
-#             Q = Q_t.detach().cpu().numpy().astype('float32')
-#             Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
-#         self._ensure()
-#         with timer(f"{self._name} / flat search"):
-#             D, I = self._index.search(Q, min(self.topk, len(self.docnos)))
-#         rows = []
-#         for i, qid in enumerate(qids):
-#             for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
-#                 rows.append((qid, self.docnos[int(did)], float(s), r))
-#         return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
-
-
 def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder, dest_folder : str, bs : int = 20_000) -> FlexIndex:
 
         docnos, original_vec, _ = existing_index.payload()
@@ -94,7 +47,7 @@ def build_inverted_index(item_codes, pq_type_name, dataset_models_config, curren
 
         for split in range(num_splits):
             print(f"split:{split+1}/{num_splits}", split)
-            for item in tqdm.tqdm(range(num_items)):
+            for item in tqdm(range(num_items)):
                 code = target_codes[item, split]
                 code_items[split * k + code].append(item)
 
@@ -145,7 +98,6 @@ class JPQRetrieverFlat(JPQRetriever):
         for i in tqdm(range(0, self.codes.shape[0], bs), desc=f"{self._name} / build flat", leave=False):
             chunk = self.codes[i:i+bs, :] # bs x M
             embs = np.concatenate([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)])
-            embs = (embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-12)).astype('float32')
             index.add(embs)
         self._index = index
     
@@ -175,6 +127,8 @@ class JPQRetrieverPrune(JPQRetriever):
         self._index = None
         self._name = name or "JPQRetrieverPrune"
         ks = self.sub_embeddings.shape[1] #2**nbits
+        self.d = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
+        self.dsub = self.sub_embeddings.shape[2]
         self.scorer = _PrunedScorer(
             ks, 
             build_inverted_index(self.codes, ..., ..., ..., k=ks),
@@ -186,10 +140,16 @@ class JPQRetrieverPrune(JPQRetriever):
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(topics, extra_columns=['query_vec'])
+        num_q = len(topics)
         Q = topics["query_vec"].to_numpy()
         qids = topics['qid'].astype(str).tolist()
         with timer(f"{self._name} / prune search"):
-            centroid_scores = Q @ self.sub_em
+            # split query_vec into M sub-vecs
+            Q = Q.view(num_q, self.M, self.dsub)
+            assert Q.shape == (num_q, self.M, self.dsub), Q.shape
+            centroid_scores = torch.einsum("mbd,md->mb", self.sub_embeddings, Q)
+            assert centroid_scores.shape == (num_q, self.M, self.ks), centroid_scores.shape
+            # TODO: does self.scorer work for multiple queries concurrently? 
             I, D = self.scorer(centroid_scores)
         rows = []
         for i, qid in enumerate(qids):
