@@ -80,8 +80,8 @@ class ProductQuantizer:
     def get_centroids(self) -> np.ndarray | list:
         return self.centroids
 
-    def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.ndarray:
-        n = X.shape[0]
+    def encode_batch(self, veclookup, indices, batch_size=10_000, verbose=True) -> np.ndarray:
+        n = len(indices)
         codes = np.empty((n, self.M), dtype=np.uint8)
         iter = range(0, n, batch_size)
         if verbose:
@@ -89,7 +89,8 @@ class ProductQuantizer:
             iter = tqdm(iter, desc="Encoding PQ batches")
         for start in iter:
             end = min(start + batch_size, n)
-            codes[start:end] = self.encode(X[start:end])
+            vecs = veclookup[indices[start:end]]
+            codes[start:end] = self.encode(vecs)
         return codes
 
     @abstractmethod

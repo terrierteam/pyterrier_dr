@@ -54,7 +54,7 @@ def compute_PQ(
     codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
     docids = np.sort(docids) # vector lookups from np.memmap are quicker when sorted
     with timer("PQ / compute codes (selected)"):
-        codes = pq.encode_batch(vecs[docids], batch_size)
+        codes = pq.encode_batch(vecs, docids, batch_size)
     
     # TODO: we should check how the average/min/max codes are observed in sel_indices
     # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
@@ -140,7 +140,7 @@ class JPQTrainer:
                     running_loss += loss
                     step += 1
 
-                    if step % 1 == 0:
+                    if step % 100 == 0:
                         logger.info(f"[JPQ] Training loss: {running_loss/step}")
                         running_loss = 0.0
 
@@ -253,7 +253,7 @@ class JPQTrainer:
         docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
 
         # compute codes for _all_ of the original index
-        all_codes = self.pq.encode_batch(original_embs)
+        all_codes = self.pq.encode_batch(original_embs, list(range(len(self.index))))
         assert len(all_codes.shape) == 2, all_codes.shape
         assert all_codes.shape[0] == len(self.index)
         
