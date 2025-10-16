@@ -98,9 +98,10 @@ def get_dataloader(
 #    print(f"we have {len(docnos_set)} documents used for PQ training")
 #    print(f"they have {len(docnos_set.intersection(xx))} elements in common")
     ds = Dataset.from_list(docpairs)
-#    print(ds)
     ds = ds.filter(filter_in_sel).shuffle()
-#    print(ds)
+    if not len(ds):
+        raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 documents left. \n"
+                         "Try increasing size of training dataset, or value of docid_subset")
     print(f"[DATA] After filtering, we have {len(ds)} documents left")
     ds = ds.map(
         queries_and_codes,
