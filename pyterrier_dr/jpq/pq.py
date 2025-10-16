@@ -84,13 +84,34 @@ class ProductQuantizer:
         n = len(indices)
         codes = np.empty((n, self.M), dtype=np.uint8)
         iter = range(0, n, batch_size)
+        total_error = 0.0
+
         if verbose:
             from tqdm import tqdm
             iter = tqdm(iter, desc="[PQ] Encoding PQ batches")
         for start in iter:
             end = min(start + batch_size, n)
             vecs = veclookup[indices[start:end]]
-            codes[start:end] = self.encode(vecs)
+            batch_codes = self.encode(vecs)      # [B, M]
+            codes[start:end] = batch_codes
+            
+            if verbose:
+                # --- Reconstruction ---
+                # Look up centroids to reconstruct vector
+                # self.centroids shape: [M, Ks, D_sub]
+                _, _, D_sub = self.centroids.shape
+
+                # Reconstruct each subvector from its centroid
+                reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
+                for m in range(self.M):
+                    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]]
+
+                # Compute reconstruction error (e.g. mean squared error)
+                errors = np.square(vecs - reconstructed).sum(axis=1)  # [B]
+                total_error += errors.sum()
+        
+        root_mean_recon_error = np.sqrt(total_error / n)
+        print(f"[PQ] Root Mean reconstruction error: {root_mean_recon_error:.6f}")
         return codes
 
     @abstractmethod
