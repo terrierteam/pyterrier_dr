@@ -144,6 +144,10 @@ class JPQTrainer:
         # set both models to train
         model.query.dr.model.train()
         model.passage.to(self.device).train()
+        if eval_queries is not None: # always evaluate at the end of the epoch
+            val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
+            print(f"[JPQ][val] initial {str(val_stats)}")
+
         for ep in range(1, epochs + 1):
             step = 0
             running_loss = 0.0
@@ -168,7 +172,7 @@ class JPQTrainer:
 
             if eval_queries is not None: # always evaluate at the end of the epoch
                 val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-                print(f"[JPQ][val] steps={step} {str(val_stats)}")
+                print(f"[JPQ][val] epoch {ep} {str(val_stats)}")
 
             print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
