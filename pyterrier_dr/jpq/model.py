@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import pyterrier_dr
 
 class QueryEncoder(nn.Module):
     """Frozen wrapper that adapts a pyterrier_dr-style model into a query encoder.
@@ -26,23 +27,52 @@ class QueryEncoder(nn.Module):
     """
     def __init__(
         self, 
-        dr_model, 
-        normalise: bool = True, 
+        dr_model : pyterrier_dr.BiEncoder, 
         batch_size: int = 64
     ) -> None:
         super().__init__()
         self.dr = dr_model
-        self.normalise = normalise
         self.batch_size = batch_size
 
         # Make it clear this module is frozen
-        for p in self.parameters():
-            p.requires_grad = False
-        self.eval()
+#        for p in self.parameters():
+#            p.requires_grad = False
+#        self.eval()
 
-    def parameters(self):  # type: ignore[override]
-        # No trainable params; return an empty iterator
-        return iter(())
+#    def parameters(self):  # type: ignore[override]
+#        # No trainable params; return an empty iterator
+#        return iter(())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.dr(x)
+    
+    def encode_texts_torch(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
+        """Encode a list of texts into a Torch tensor (float32), optionally L2-normalised."""
+        if not texts:
+            return torch.empty((0, 0), dtype=torch.float32)
+        return self.dr.encode_queries_torch(texts, batch_size=batch_size)
+
+        # bs = batch_size or self.batch_size
+        # outputs: list[torch.Tensor] = []
+
+        # for i in range(0, len(texts), bs):
+        #     chunk = texts[i:i + bs]
+
+        #     arr = self.dr.encode_queries_torch(chunk, batch_size=bs)
+        #     # # Try direct API first
+        #     # if hasattr(self.dr, "encode_queries"):
+        #     #     arr = self.dr.encode_queries(chunk, batch_size=bs)
+        #     # else:
+        #     #     # Fallback: nested query_encoder().encode(...)
+        #     #     qe = getattr(self.dr, "query_encoder", lambda **kw: None)(batch_size=bs)
+        #     #     if qe is None or not hasattr(qe, "encode"):
+        #     #         raise RuntimeError("dr_model must expose `encode_queries` or `query_encoder().encode`")
+        #     #     arr = qe.encode(chunk, batch_size=bs)
+
+        #     t = torch.from_numpy(np.asarray(arr, dtype=np.float32, order="C"))
+        #     outputs.append(t)
+
+        # return torch.cat(outputs, dim=0)
 
     @torch.no_grad()
     def encode_texts(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
@@ -67,8 +97,6 @@ class QueryEncoder(nn.Module):
                 arr = qe.encode(chunk, batch_size=bs)
 
             t = torch.from_numpy(np.asarray(arr, dtype=np.float32, order="C"))
-            if self.normalise:
-                t /= (t.norm(dim=1, keepdim=True) + 1e-12)
             outputs.append(t)
 
         return torch.cat(outputs, dim=0)
@@ -150,15 +178,13 @@ class JPQLoss(nn.Module):
         super().__init__()
         self.query_encoder = query_encoder
         self.passage_encoder = passage_encoder
-        self.cos_sim = nn.CosineSimilarity(dim=-1)
         self.loss_f = nn.CrossEntropyLoss()
 
     def forward(self, batch):
         # Find the device from the passage encoder (the model we are training)
         device = next(self.passage_encoder.parameters()).device
         # Encode queries on CPU, then move to the same device
-        with torch.no_grad():
-            q = self.query_encoder.encode_texts(batch["query_text"])
+        q = self.query_encoder.encode_texts_torch(batch["query_text"])
         q = q.to(device)
         # Bring positive/negative PQ codes to same device
         pos = batch["pos_codes"].to(device)
@@ -166,11 +192,11 @@ class JPQLoss(nn.Module):
         # Reconstruct document embeddings on the passage encoder’s device
         pos = self.passage_encoder(pos)
         neg = self.passage_encoder(neg)
-        # Compute cosine similarities
-        s_pos = self.cos_sim(q, pos)
-        s_neg = self.cos_sim(q, neg)
+        # Compute dot products
+        s_pos = torch.sum(q * pos, dim=-1)  # dot product per sample
+        s_neg = torch.sum(q * neg, dim=-1)
         # Stack [s_pos, s_neg] and create 0 labels for CrossEntropy
-        scores = torch.stack([s_pos, s_neg], dim=1)
+        scores = torch.stack([s_pos, s_neg], dim=1) # [batch, 2]
         labels = torch.zeros(scores.size(0), dtype=torch.long, device=device)
 
         return self.loss_f(scores, labels)

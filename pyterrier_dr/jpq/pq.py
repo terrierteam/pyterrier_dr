@@ -80,16 +80,39 @@ class ProductQuantizer:
     def get_centroids(self) -> np.ndarray | list:
         return self.centroids
 
-    def encode_batch(self, X, batch_size=10_000, verbose=True) -> np.ndarray:
-        n = X.shape[0]
+    def encode_batch(self, veclookup, indices, batch_size=10_000, verbose=True, error=True) -> np.ndarray:
+        n = len(indices)
         codes = np.empty((n, self.M), dtype=np.uint8)
         iter = range(0, n, batch_size)
+        total_error = 0.0
+
         if verbose:
             from tqdm import tqdm
-            iter = tqdm(iter, desc="Encoding PQ batches")
+            iter = tqdm(iter, desc="[PQ] Encoding PQ batches")
         for start in iter:
             end = min(start + batch_size, n)
-            codes[start:end] = self.encode(X[start:end])
+            vecs = veclookup[indices[start:end]]
+            batch_codes = self.encode(vecs)      # [B, M]
+            codes[start:end] = batch_codes
+            
+            if error:
+                # --- Reconstruction ---
+                # Look up centroids to reconstruct vector
+                # self.centroids shape: [M, Ks, D_sub]
+                _, _, D_sub = self.centroids.shape
+
+                # Reconstruct each subvector from its centroid
+                reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
+                for m in range(self.M):
+                    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]]
+
+                # Compute reconstruction error (e.g. mean squared error)
+                errors = np.square(vecs - reconstructed).sum(axis=1)  # [B]
+                total_error += errors.sum()
+        
+        root_mean_recon_error = np.sqrt(total_error / n)
+        if error:
+            print(f"[PQ] Reconstruction RMSE: {root_mean_recon_error:.6f}")
         return codes
 
     @abstractmethod
@@ -160,7 +183,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         import faiss
 
         # Initialize FAISS PQ
-        self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)))
+        self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)), faiss.METRIC_INNER_PRODUCT )
         self.pq.train(X.astype(np.float32)) # type: ignore
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self

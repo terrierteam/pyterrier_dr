@@ -12,7 +12,7 @@ import math
 from datasets import IterableDataset, DatasetInfo, Dataset
 from pyterrier.measures import *
 import json
-from .pq import ProductQuantizer
+
 from .model import *
 from torch.utils.data import DataLoader
 
@@ -144,64 +144,35 @@ class JPQTrainer:
         if eval_queries is not None:
             assert eval_qrels is not None
             # reduce qrels to those with docs in selected_doc_ids
-            valid_qrels = eval_qrels[eval_qrels.docno.isin(selected_doc_ids)]
+            eval_qrels = eval_qrels[eval_qrels.docno.isin(selected_doc_ids)]
 
             # identify qid that still have relevant documents
-            eval_qids = set(valid_qrels[valid_qrels['label'] > 0]['qid'].tolist())
+            eval_qids = set(eval_qrels[eval_qrels['label'] > 0]['qid'].tolist())
 
             # cut queries and qrels to only those that have relevant documents
-            valid_qrels = valid_qrels[valid_qrels['qid'].isin(eval_qids)]
-            valid_queries = eval_queries[eval_queries['qid'].isin(eval_qids)]
-            print(f"[VAL] using {len(eval_qids)} queries with {len(valid_qrels)} qrels for validation")
+            cut_qrels = eval_qrels[eval_qrels['qid'].isin(eval_qids)]
+            eval_queries = eval_queries[eval_queries['qid'].isin(eval_qids)]
+            print(f"[VAL] using {len(eval_qids)} queries with {len(cut_qrels)} qrels for validation")
         else:
-            valid_queries = None
-            valid_qrels = None
+            cut_qrels = None
 
         # ------- PQ -------
-        pq, codes_sel, centroids = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
+        codes_sel, centroids = self._compute_PQ(pq_sample_size, code_batch_size, sel_indices, vecs_mem, rng)
 
         # ------- initialise the model -------
         # using the centroids from PQ as the starting point for the sub-id embeddings
         self.model = JPQBiencoder(self.query_encoder, PassageEncoder(self.pq_M, 2**self.pq_nbits, self.d // self.pq_M, centroids))
-
-        # --------- initial evaluation on full dataset --------
-        if valid_queries is not None:
-            from .retriever import build_from_flex
-            from tempfile import mkdtemp
-            new_flex = build_from_flex(self.existing_index, pq, self.model, mkdtemp())
-            from pyterrier.measures import RR, Recall, nDCG
-            query_encoder = pt.apply.query_vec(lambda qrow: self.model.query.encode_texts([qrow["query"]])[0])
-            jpq_pipe = query_encoder >> new_flex.retriever()
-            eval_0 = pt.Experiment(
-                [query_encoder >> self.existing_index.retriever(), jpq_pipe],
-                eval_queries, 
-                eval_qrels, 
-                eval_metrics=[RR@10, Recall@50, nDCG@10],
-                names=["Baseline flat", "JPQ initial"])
-            print(f"Initial JPQ eval\n {eval_0}")
-
+        
         # ------- dataloader -------
         dl = self._dataloader(training_docpairs, batch_size, selected_doc_ids, sel_inv, codes_sel)
         
         # ------- training the sub-id embeddings -------
         self._training_loop(self.model, centroids, dl, epochs, lr, patience, 
                             selected_doc_ids, codes_sel,
-                            valid_queries, valid_qrels, recon_batch_size, 
+                            eval_queries, cut_qrels, recon_batch_size, 
                             valid_every=valid_every)
         self.fitted = True
         self.pq = pq
-
-        if valid_queries is not None:
-            from .retriever import build_from_flex
-            from tempfile import mkdtemp
-            new_flex = build_from_flex(self.existing_index, pq, self.model, mkdtemp())
-            from pyterrier.measures import RR, Recall, nDCG
-            retr_pipe = pt.apply.query_vec(lambda qrow: self.model.query.encode_texts([qrow["query"]])[0]) >> new_flex.retriever()
-            eval_final = pt.Evaluate(
-                retr_pipe(eval_queries), 
-                eval_qrels, 
-                metrics=[RR@10, Recall@50, nDCG@10])
-            print(f"Final JPQ eval {eval_final}")
 
     
     def _dataloader(self, 
@@ -250,8 +221,8 @@ class JPQTrainer:
                     sel_indices : np.array, # which document indices (into full vecs_mem) to compute codes for
                     vecs_mem : np.array, # vector store
                     rng # random state
-                    ) -> Tuple[ProductQuantizer, np.ndarray, np.ndarray]:
-        from .pq import ProductQuantizerFAISS, ProductQuantizerSKLearn
+                    ) -> Tuple[np.ndarray, np.ndarray]:
+        from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSKLearn
         pq_class : ProductQuantizer = None
         if self.pq_impl == 'faiss':
             pq_class = ProductQuantizerFAISS
@@ -280,7 +251,7 @@ class JPQTrainer:
         # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
         # as a codes are centroids in the vector space defined in the small sample_size set, which
         # is a subset of the sel_indices set, it should be ok.
-        return pq, codes_sel, pq.get_centroids()
+        return codes_sel, pq.get_centroids()
     
     def _training_loop(self, model, centroids, dl : DataLoader, epochs, lr, patience, 
                        selected_doc_ids : List[str], codes_sel : np.array,

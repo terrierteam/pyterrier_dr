@@ -15,11 +15,6 @@ def timer(name: str):
     dt = time.perf_counter() - t0
     print(f"[TIMER] {name}: {dt/60:.2f} min ({dt:.1f} s)")
 
-def l2_normalize_np(arr: np.ndarray) -> np.ndarray:
-    X = np.array(arr, dtype=np.float32, copy=True)
-    X /= (np.linalg.norm(X, axis=1, keepdims=True).astype(np.float32) + 1e-12)
-    return X
-
 def bytes_to_gb(nbytes: int) -> float:
     return nbytes / (1024**3)
 
