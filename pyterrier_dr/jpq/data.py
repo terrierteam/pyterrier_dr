@@ -28,7 +28,6 @@ def get_pq_training_dataset(
         where docnos are strings and docids are internal integer ids.
     """
     print(f"Ingesting docno mapping from index ")
-        
     doc_map = flex_index.payload()[0]
     N = len(flex_index)
 
@@ -100,7 +99,7 @@ def get_dataloader(
 #    print(f"they have {len(docnos_set.intersection(xx))} elements in common")
     ds = Dataset.from_list(docpairs)
 #    print(ds)
-    ds = ds.filter(filter_in_sel)
+    ds = ds.filter(filter_in_sel).shuffle()
 #    print(ds)
     print(f"[DATA] After filtering, we have {len(ds)} documents left")
     ds = ds.map(
