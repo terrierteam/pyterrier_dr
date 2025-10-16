@@ -153,7 +153,7 @@ class JPQTrainer:
                         step = 0
                         break
 
-            if step % valid_every == 0:
+            if eval_queries: # always evaluate at the end of the epoch
                 logger.info(f"[JPQ] Training loss: {running_loss/step}")
                 val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
                 print(f"[JPQ][val] steps={step} {str(val_stats)}")
