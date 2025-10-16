@@ -46,13 +46,12 @@ def compute_PQ(
     print("[PQ] training on %d documents..." % sample_size)
     sample_docids = np.random.choice(docids, size=sample_size, replace=False) # type: ignore
     with timer(f"PQ / train (samples={len(sample_docids):,})"):
-        xb = l2_normalize_np(vecs[sample_docids])
-        pq.fit(xb)
+        pq.fit(vecs[sample_docids])
 
     print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(docids), batch_size))
     codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
     with timer("PQ / compute codes (selected)"):
-        codes = pq.encode_batch(l2_normalize_np(vecs[docids]), batch_size)
+        codes = pq.encode_batch(vecs[docids], batch_size)
     
     # TODO: we should check how the average/min/max codes are observed in sel_indices
     # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
@@ -168,7 +167,6 @@ class JPQTrainer:
             with torch.no_grad():
                 Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
             Q = Q_t.detach().cpu().numpy().astype('float32')
-            Q = l2_normalize_np(Q) # Q /= (np.linalg.norm(Q, axis=1, keepdims=True) + 1e-12)
 
             dstindex = tempfile.mkdtemp()
             flex = FlexIndex(dstindex, verbose=False)
@@ -180,7 +178,6 @@ class JPQTrainer:
                     for i in range(0, len(codes), 16384): # magic number to replace recon_batch_size
                         chunk = torch.from_numpy(codes[i:i+16384]).long()
                         embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
-                        embs = l2_normalize_np(embs) # embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
                         for j in range(embs.shape[0]):
                             yield {'docno' : selected_docnos[i+j], 'doc_vec' : embs[j, :]}
             flex.indexer(mode='overwrite').index(_gen())

@@ -70,8 +70,6 @@ class QueryEncoder(nn.Module):
                 arr = qe.encode(chunk, batch_size=bs)
 
             t = torch.from_numpy(np.asarray(arr, dtype=np.float32, order="C"))
-            if self.normalise:
-                t /= (t.norm(dim=1, keepdim=True) + 1e-12)
             outputs.append(t)
 
         return torch.cat(outputs, dim=0)
@@ -153,7 +151,6 @@ class JPQLoss(nn.Module):
         super().__init__()
         self.query_encoder = query_encoder
         self.passage_encoder = passage_encoder
-        self.cos_sim = nn.CosineSimilarity(dim=-1)
         self.loss_f = nn.CrossEntropyLoss()
 
     def forward(self, batch):
@@ -169,11 +166,11 @@ class JPQLoss(nn.Module):
         # Reconstruct document embeddings on the passage encoder’s device
         pos = self.passage_encoder(pos)
         neg = self.passage_encoder(neg)
-        # Compute cosine similarities
-        s_pos = self.cos_sim(q, pos)
-        s_neg = self.cos_sim(q, neg)
+        # Compute dot products
+        s_pos = torch.sum(q * pos, dim=-1)  # dot product per sample
+        s_neg = torch.sum(q * neg, dim=-1)
         # Stack [s_pos, s_neg] and create 0 labels for CrossEntropy
-        scores = torch.stack([s_pos, s_neg], dim=1)
+        scores = torch.stack([s_pos, s_neg], dim=1) # [batch, 2]
         labels = torch.zeros(scores.size(0), dtype=torch.long, device=device)
 
         return self.loss_f(scores, labels)
