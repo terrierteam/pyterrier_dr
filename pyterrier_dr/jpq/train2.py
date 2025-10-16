@@ -13,9 +13,9 @@ from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
 from pyterrier_dr.jpq.model import JPQBiencoder, JPQLoss, PassageEncoder, QueryEncoder
-from pyterrier_dr.jpq.utils import l2_normalize_np, timer
+from pyterrier_dr.jpq.index import JPQIndex
 
-from .pq import ProductQuantizerFAISS, ProductQuantizerSKLearn
+from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerSKLearn
 
 
 logging.basicConfig(level=logging.INFO, force=True)
@@ -30,7 +30,7 @@ def compute_PQ(
     docids: np.ndarray, # which document indices (into full vecs_mem) to compute codes for
     vecs: np.ndarray, # vector store
     pq_impl: Literal["faiss", "sklearn"] = "faiss",
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, ProductQuantizer]:
 
     if pq_impl == 'faiss':
         pq_class = ProductQuantizerFAISS
@@ -58,7 +58,7 @@ def compute_PQ(
     # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
     # as a codes are centroids in the vector space defined in the small sample_size set, which
     # is a subset of the sel_indices set, it should be ok.
-    return codes, pq.get_centroids() # type: ignore
+    return codes, pq.get_centroids(), pq # type: ignore
 
 
 def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
@@ -237,15 +237,40 @@ class JPQTrainer:
         valid_every : int = 25,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
-        codes, centroids = compute_PQ(self.M, self.nbits, pq_sample_size, batch_size, selected_docids, self.index.payload()[1])
+        codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, batch_size, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl)
+        self.pq = pq
         model = JPQBiencoder(
             QueryEncoder(self.query_encoder), 
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
-        )
+        ).to(self.device)
 
         data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
         # print(len(data_loader))
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
 
         self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
+        self.model = model
         self.fitted = True
+
+    def jpq_index(self, dest : str) -> JPQIndex:
+        if not self.fitted:
+            raise ValueError("JPQTrainer not fitted")
+        
+        # information from the original index
+        docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
+
+        # compute codes for _all_ of the original index
+        all_codes = self.pq.encode_batch(original_embs)
+        assert len(all_codes.shape) == 2, all_codes.shape
+        assert all_codes.shape[0] == len(self.index)
+        
+        # gather the trained sub-id representations
+        centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.M) ]).detach().cpu().numpy() # M x Ks x dsub
+        assert len(centroids.shape) == 3, centroids.shape
+        
+        return JPQIndex.build(
+            dest, 
+            docnos.fwd,
+            all_codes,
+            centroids
+            )
