@@ -44,7 +44,7 @@ def compute_PQ(
 
     # train PQ on a random sample of the selected docs
     sample_size = min(sample_size, len(docids))
-    print("[PQ] training on %d documents..." % sample_size)
+    print(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
     sample_docids = np.random.choice(docids, size=sample_size, replace=False) # type: ignore
     sample_docids = np.sort(sample_docids) # vector lookups from np.memmap are quicker when sorted
     with timer(f"PQ / train (samples={len(sample_docids):,})"):
@@ -126,8 +126,20 @@ class JPQTrainer:
         loss_f = JPQLoss(model.query, model.passage).to(self.device)
 
         # Create optimizer for passage encoder AND query encoder
-        optimizer = torch.optim.AdamW(list(model.passage.parameters()) + list(model.query.dr.model.parameters()), lr=lr, weight_decay=0.0)
+        if self.M in [16, 24]:
+            lr = 5e-6
+        elif self.M in [32]:
+            lr = 2e-5
+        elif self.M > 32:
+            lr = 1e-4
 
+        # separate learning rates, as per paper
+        optimizer = torch.optim.AdamW(
+            [
+                {'params' : model.passage.parameters(), 'lr': lr},
+                {'params' : model.query.dr.model.parameters(), 'lr' : 5e-6}
+            ], weight_decay=0.0)
+        
         # set both models to train
         model.query.dr.model.train()
         model.passage.to(self.device).train()
