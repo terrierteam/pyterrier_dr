@@ -80,7 +80,7 @@ class ProductQuantizer:
     def get_centroids(self) -> np.ndarray | list:
         return self.centroids
 
-    def encode_batch(self, veclookup, indices, batch_size=10_000, verbose=True) -> np.ndarray:
+    def encode_batch(self, veclookup, indices, batch_size=10_000, verbose=True, error=True) -> np.ndarray:
         n = len(indices)
         codes = np.empty((n, self.M), dtype=np.uint8)
         iter = range(0, n, batch_size)
@@ -95,7 +95,7 @@ class ProductQuantizer:
             batch_codes = self.encode(vecs)      # [B, M]
             codes[start:end] = batch_codes
             
-            if verbose:
+            if error:
                 # --- Reconstruction ---
                 # Look up centroids to reconstruct vector
                 # self.centroids shape: [M, Ks, D_sub]
@@ -111,7 +111,8 @@ class ProductQuantizer:
                 total_error += errors.sum()
         
         root_mean_recon_error = np.sqrt(total_error / n)
-        print(f"[PQ] Root Mean reconstruction error: {root_mean_recon_error:.6f}")
+        if error:
+            print(f"[PQ] Reconstruction RMSE: {root_mean_recon_error:.6f}")
         return codes
 
     @abstractmethod
