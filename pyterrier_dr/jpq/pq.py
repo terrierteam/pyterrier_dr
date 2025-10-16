@@ -164,15 +164,38 @@ class ProductQuantizerFAISS(ProductQuantizer):
         self.pq.train(X.astype(np.float32)) # type: ignore
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
-
+    
     def encode(self, X) -> np.ndarray:
-        """Encode vectors into PQ codes (n_samples, n_splits)."""
+        """
+        Encode vectors into PQ codes (n_samples, M).
+        Uses FAISS native API (no custom unpacking).
+        """
+        import faiss
         assert self.pq is not None, "Must call fit() first."
+        X = X.astype(np.float32)
         n_samples = X.shape[0]
-        packed = self.pq.compute_codes(X.astype(np.float32)) # type: ignore
-        codes = _unpack_pq_codes_batch(packed, M=self.M, nbits=int(np.log2(self.Ks)))
-        assert codes.shape == (n_samples, self.M)
+    
+        # Prepare an empty array for the codes
+        codes = np.zeros((n_samples, self.M), dtype=np.uint8)
+    
+        # Compute PQ codes directly into the array
+        faiss_pq = self.pq
+        faiss_pq.compute_codes(
+            faiss.swig_ptr(X),
+            faiss.swig_ptr(codes),
+            n_samples
+        )
+    
         return codes
+
+    # def encode(self, X) -> np.ndarray:
+    #     """Encode vectors into PQ codes (n_samples, n_splits)."""
+    #     assert self.pq is not None, "Must call fit() first."
+    #     n_samples = X.shape[0]
+    #     packed = self.pq.compute_codes(X.astype(np.float32)) # type: ignore
+    #     codes = _unpack_pq_codes_batch(packed, M=self.M, nbits=int(np.log2(self.Ks)))
+    #     assert codes.shape == (n_samples, self.M)
+    #     return codes
 
     def decode(self, codes) -> np.ndarray:
         """Decode PQ codes back to approximate vectors."""
@@ -183,3 +206,17 @@ class ProductQuantizerFAISS(ProductQuantizer):
         return X_recon
     
 
+class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
+    def fit(self, X):
+        """Train FAISS PQ on data X (n_samples, d)."""
+        n_samples, d = X.shape
+        assert d % self.M == 0, "Dimensionality must be divisible by M."
+        self.dsub = d // self.M
+        import faiss
+        pqi = faiss.IndexPQ(d, self.M, int(np.log2(self.Ks)), faiss.METRIC_INNER_PRODUCT)
+
+        # Initialize FAISS PQ
+        pqi.train(X.astype(np.float32)) # type: ignore
+        self.pq = pqi.pq
+        self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
+        return self

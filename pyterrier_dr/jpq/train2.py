@@ -11,7 +11,7 @@ from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
 from pyterrier_dr.jpq.model import JPQBiencoder, JPQLoss, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import l2_normalize_np, timer
 
-from .pq import ProductQuantizerFAISS, ProductQuantizerSKLearn
+from .pq import ProductQuantizerFAISS, ProductQuantizerFAISSIndexPQ, ProductQuantizerSKLearn
 
 
 logging.basicConfig(level=logging.INFO, force=True)
@@ -30,6 +30,8 @@ def compute_PQ(
 
     if pq_impl == 'faiss':
         pq_class = ProductQuantizerFAISS
+    elif pq_impl == 'faiss2':
+        pq_class = ProductQuantizerFAISSIndexPQ
     elif pq_impl == 'sklearn':
         pq_class = ProductQuantizerSKLearn
     else:
