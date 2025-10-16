@@ -88,7 +88,7 @@ def get_dataloader(
             'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
             'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
         }
-
+    print("[DATA] Preparing training data")
     docpairs = list(docpairs) # in case docpairs is an iterator...
 
 #    xx = [x['doc_id_a'] for x in docpairs]

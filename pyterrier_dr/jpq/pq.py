@@ -86,7 +86,7 @@ class ProductQuantizer:
         iter = range(0, n, batch_size)
         if verbose:
             from tqdm import tqdm
-            iter = tqdm(iter, desc="Encoding PQ batches")
+            iter = tqdm(iter, desc="[PQ] Encoding PQ batches")
         for start in iter:
             end = min(start + batch_size, n)
             vecs = veclookup[indices[start:end]]
