@@ -188,7 +188,33 @@ class ProductQuantizerFAISS(ProductQuantizer):
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
     
-    def encode(self, X) -> np.ndarray:
+    def encode(self, X: np.ndarray) -> np.ndarray:
+        """Assign PQ codes for X using dot product, return (codes [N, M], recon [N, D])."""
+        # X: (N, D)
+        N, D = X.shape
+        dsub = D // self.M
+        codes = np.empty((N, self.M), dtype=np.int64)
+        #recon_parts = []
+        
+        for m in range(self.M):
+            x_m = X[:, m * dsub : (m + 1) * dsub]  # (N, dsub)
+            C_m = self.centroids[m]                # (K, dsub)
+    
+            # Calculate the dot product using numpy.dot or the @ operator.
+            # This performs a batched matrix multiplication.
+            # (N, K) = (N, dsub) @ (dsub, K)
+            # Note: In NumPy, the '@' operator is preferred for matrix multiplication over the older `np.dot` function for 2D arrays.
+            similarity = x_m @ C_m.T
+    
+            # Find the index with the *maximum* dot product (highest similarity).
+            idx = np.argmax(similarity, axis=1)    # (N,)
+            codes[:, m] = idx
+            #recon_parts.append(C_m[idx])           # (N, dsub)
+            
+        #recon = np.concatenate(recon_parts, axis=-1)  # (N, D)
+        return codes #, recon
+    
+    def encode_(self, X) -> np.ndarray:
         """
         Encode vectors into PQ codes (n_samples, M).
         Uses FAISS native API (no custom unpacking).
