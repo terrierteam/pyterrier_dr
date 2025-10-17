@@ -37,23 +37,25 @@ def get_pq_training_dataset(
         if docid_subset > N:
             raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
         selected_docids = np.random.choice(N, size=docid_subset, replace=False) # type: ignore
+        selected_docids = np.sort(selected_docids)
         selected_docnos = doc_map.fwd[selected_docids]
         print(f"[SUBSET] using {len(selected_docnos)} random docs from index")        
     elif isinstance(docid_subset, list):  
         if isinstance(docid_subset[0], int): # use the provided list of int docid
-            selected_docids = docid_subset
+            selected_docids = np.sort(docid_subset)
             selected_docnos = doc_map.fwd[docid_subset]
             print(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
         elif isinstance(docid_subset[0], str): # use the provided list of str docnos
             selected_docnos = docid_subset
             selected_docids = doc_map.inv[selected_docnos] # do we need this?
+            selected_docids = np.sort(selected_docids)
             print(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
         else:
             raise ValueError(f"list on integers or strings must be provided")
         
     selected_docnos = list(selected_docnos) # do we need this conversion?    
     #print(f"-----{selected_docnos}")
-    docnos2pos = {docno: i for i, docno in enumerate(selected_docnos)} # map from docno to position in selected_docnos (for dataloading)
+    docnos2pos = {docno: i for i, docno in enumerate(selected_docnos)} # map from docno to position in selected_docnos (for aligning with codes_sel)
 
     return selected_docnos, selected_docids, docnos2pos
 

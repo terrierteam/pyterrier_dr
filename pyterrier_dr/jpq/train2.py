@@ -49,13 +49,14 @@ def compute_PQ(
     sample_size = min(sample_size, len(docids))
     print(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
     sample_docids = np.random.choice(docids, size=sample_size, replace=False) # type: ignore
-    sample_docids = np.sort(sample_docids) # vector lookups from np.memmap are quicker when sorted
+    # vector lookups from np.memmap are quicker when sorted
+    # this sort is safe because we just want the vectors
+    sample_docids = np.sort(sample_docids)
     with timer(f"PQ / train (samples={len(sample_docids):,})"):
         pq.fit(vecs[sample_docids])
 
     print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(docids), batch_size))
     codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
-    docids = np.sort(docids) # vector lookups from np.memmap are quicker when sorted
     with timer("PQ / compute codes (selected)"):
         codes = pq.encode_batch(vecs, docids, batch_size)
     
