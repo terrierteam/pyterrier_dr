@@ -55,7 +55,7 @@ def compute_PQ(
     with timer(f"PQ / train (samples={len(sample_docids):,})"):
         pq.fit(vecs[sample_docids])
 
-    print("[PQ] computing codes for %d selected docs in chunks of %d..." % (len(docids), batch_size))
+    print(f"[PQ] computing codes for {len(docids):,} selected docs in chunks of {batch_size:,}...")
     codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
     with timer("PQ / compute codes (selected)"):
         codes = pq.encode_batch(vecs, docids, batch_size)
