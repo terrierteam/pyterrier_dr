@@ -66,6 +66,11 @@ def compute_PQ(
     # is a subset of the sel_indices set, it should be ok.
     return codes, pq.get_centroids(), pq # type: ignore
 
+def compute_from_pq_index(M, indexpq,docids):
+
+    codes = np.empty((len(docids), M), dtype=np.uint8)
+
+    return codes, pq.get_centroids(), pq
 
 def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
     return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
@@ -235,6 +240,35 @@ class JPQTrainer:
         self.pq_impl = pq_impl
         self.device = autodevice(device)
         logger.info(f"[JPQTrainer] device={self.device}")
+
+    def fit_from_indexpq(self, 
+        training_docpairs, 
+        index_pq, 
+        batch_size: int = 32,
+        epochs: int = 3,
+        lr:float = 2e-5,
+        max_steps_per_epoch: int = math.inf, # type: ignore
+        eval_queries : pd.DataFrame = None,
+        eval_qrels : pd.DataFrame = None,
+        valid_every : int = 25
+    ):
+        selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, None)
+        codes, centroids, pq = compute_from_pq_index(self.M, index_pq, selected_docids)
+
+        self.pq = pq
+        model = JPQBiencoder(
+            QueryEncoder(self.query_encoder), 
+            PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
+        ).to(self.device)
+
+        data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
+        # print(len(data_loader))
+        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
+
+        self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
+        self.model = model
+        self.fitted = True
+
 
     def fit(self,
         training_docpairs,
