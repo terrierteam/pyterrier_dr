@@ -48,6 +48,8 @@ def compute_PQ(
     # train PQ on a random sample of the selected docs
     sample_size = min(sample_size, len(docids))
     print(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
+    # set seed for reproducibility
+    np.random.seed(42)
     sample_docids = np.random.choice(docids, size=sample_size, replace=False) # type: ignore
     # vector lookups from np.memmap are quicker when sorted
     # this sort is safe because we just want the vectors
