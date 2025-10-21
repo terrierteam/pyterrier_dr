@@ -197,7 +197,7 @@ class JPQLoss(nn.Module):
         s_neg = torch.sum(q * neg, dim=-1)
         # Stack [s_pos, s_neg] and create 0 labels for CrossEntropy
         scores = torch.stack([s_pos, s_neg], dim=1) # [batch, 2]
-        labels = torch.zeros(scores.size(0), dtype=torch.long, device=device)
+        labels = torch.zeros(scores.size(0), dtype=torch.long, device=device) # positive score as position 0 in scores
 
         return self.loss_f(scores, labels)
 

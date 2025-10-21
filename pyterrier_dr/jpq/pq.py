@@ -183,7 +183,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         import faiss
 
         # Initialize FAISS PQ
-        self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)), faiss.METRIC_INNER_PRODUCT )
+        self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)))#, faiss.METRIC_INNER_PRODUCT )
         self.pq.train(X.astype(np.float32)) # type: ignore
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
