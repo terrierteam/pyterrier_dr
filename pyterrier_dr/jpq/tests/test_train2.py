@@ -162,7 +162,7 @@ class TestComputePQSklearn(unittest.TestCase):
         self.batch_size = 4
 
     def test_shapes_and_ranges(self):
-        codes, cents = compute_PQ(
+        codes, cents = compute_PQ( # type: ignore
             M=self.M,
             n_bits=self.n_bits,
             sample_size=self.sample_size,
@@ -185,7 +185,7 @@ class TestComputePQSklearn(unittest.TestCase):
 
     def test_sample_size_cap_and_order_preserved(self):
         # sample_size > len(docids) should cap to len(docids) internally
-        codes, cents = compute_PQ(
+        codes, cents = compute_PQ( # type: ignore
             M=self.M,
             n_bits=self.n_bits,
             sample_size=len(self.docids) + 100,  # ask more than available
@@ -216,7 +216,7 @@ class TestComputePQFaiss(unittest.TestCase):
 
     @unittest.skipUnless(HAS_FAISS, "faiss not installed")
     def test_shapes_and_ranges(self):
-        codes, cents = compute_PQ(
+        codes, cents = compute_PQ( # type: ignore
             M=self.M,
             n_bits=self.n_bits,
             sample_size=self.sample_size,
@@ -235,7 +235,7 @@ class TestComputePQFaiss(unittest.TestCase):
 
     @unittest.skipUnless(HAS_FAISS, "faiss not installed")
     def test_sample_size_cap_and_order_preserved(self):
-        codes, cents = compute_PQ(
+        codes, cents = compute_PQ( # type: ignore
             M=self.M,
             n_bits=self.n_bits,
             sample_size=len(self.docids) + 10,  # ask more than available

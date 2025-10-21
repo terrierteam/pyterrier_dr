@@ -44,13 +44,13 @@ class QueryEncoder(nn.Module):
 #        return iter(())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.dr(x)
+        return self.dr(x) # type: ignore
     
     def encode_texts_torch(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
         """Encode a list of texts into a Torch tensor (float32), optionally L2-normalised."""
         if not texts:
             return torch.empty((0, 0), dtype=torch.float32)
-        return self.dr.encode_queries_torch(texts, batch_size=batch_size)
+        return self.dr.encode_queries_torch(texts, batch_size=batch_size) # type: ignore
 
         # bs = batch_size or self.batch_size
         # outputs: list[torch.Tensor] = []
