@@ -162,7 +162,8 @@ class JPQTrainer:
             step = 0
             running_loss = 0.0
             #with timer(f"JPQ / epoch {ep}"):
-            for batch in tqdm(data_loader, unit="batch", desc="JPQ epoch batches"):
+            total = max_steps_per_epoch if max_steps_per_epoch < math.inf else None
+            for batch in tqdm(data_loader, unit="batch", total=total, desc="JPQ epoch batches"):
                 loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
                 running_loss += loss
                 step += 1
