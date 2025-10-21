@@ -154,7 +154,7 @@ class JPQTrainer:
         model.passage.to(self.device).train()
         if eval_queries is not None: # always evaluate at the end of the epoch
             val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-            print(f"[JPQ][val] initial {str(val_stats)}")
+            logger.info(f"[JPQ][val] initial {str(val_stats)}")
 
         for ep in range(1, epochs + 1):
             step = 0
@@ -171,7 +171,7 @@ class JPQTrainer:
 
                 if eval_queries is not None and step % valid_every == 0:
                     val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-                    print(f"[JPQ][val] steps={step} {str(val_stats)}")
+                    logger.info(f"[JPQ][val] steps={step} {str(val_stats)}")
 
                 if step >= max_steps_per_epoch:
                     logger.info(f"[JPQ] reached max steps per epoch {max_steps_per_epoch}")
@@ -180,9 +180,9 @@ class JPQTrainer:
 
             if eval_queries is not None: # always evaluate at the end of the epoch
                 val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-                print(f"[JPQ][val] epoch {ep} {str(val_stats)}")
+                logger.info(f"[JPQ][val] epoch {ep} {str(val_stats)}")
 
-            print(f"[JPQ] epoch {ep}/{epochs} steps {step}")
+            logger.info(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
 
     def _validation_step(self, model, eval_queries, eval_qrels, selected_docnos, codes, topk_eval=1000):
