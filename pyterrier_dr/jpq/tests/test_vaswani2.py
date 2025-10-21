@@ -17,7 +17,7 @@ class TestJPQ(unittest.TestCase):
         index = FlexIndex("./tests/fixtures/vaswani_tct.flex")
 
         from pyterrier_dr.jpq import JPQTrainer
-        t = JPQTrainer(tct, index, pq_impl='faiss', M=4, nbits=4)
+        t = JPQTrainer(tct, index, pq_impl='faiss2', M=4, nbits=4)
 
         dataset = pt.get_dataset("vaswani")
         from pyterrier_dr.jpq import utils
@@ -35,7 +35,7 @@ class TestJPQ(unittest.TestCase):
             doc_pairs, 
             epochs=100, 
             pq_sample_size=1000, 
-            batch_size=1024,
+            batch_size=512,
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), valid_every=25
         )

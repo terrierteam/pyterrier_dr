@@ -31,7 +31,7 @@ def compute_PQ(
     batch_size: int, # how many doc vectors from sample to process in a batch when computing PQ codes
     docids: np.ndarray, # which document indices (into full vecs_mem) to compute codes for
     vecs: np.ndarray, # vector store
-    pq_impl: Literal["faiss", "sklearn"] = "faiss",
+    pq_impl: Literal["faiss", "sklearn", "faiss2"] = "faiss",
     ) -> tuple[np.ndarray, np.ndarray, ProductQuantizer]:
 
     if pq_impl == 'faiss':
@@ -66,11 +66,11 @@ def compute_PQ(
     # is a subset of the sel_indices set, it should be ok.
     return codes, pq.get_centroids(), pq # type: ignore
 
-def compute_from_pq_index(M, indexpq,docids):
+def compute_from_pq_index(M, indexpq, docids):
 
     codes = np.empty((len(docids), M), dtype=np.uint8)
 
-    return codes, pq.get_centroids(), pq
+    return codes, pq.get_centroids(), pq # type: ignore
 
 def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
     return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
@@ -226,7 +226,7 @@ class JPQTrainer:
         model : BiEncoder, # the backbone biencoder model
         index: FlexIndex, # the index with documents
         device = None,
-        pq_impl: Literal['faiss'] | Literal['sklearn'] = 'sklearn', # the PQ implementation
+        pq_impl: Literal['faiss','sklearn','faiss2'] = 'sklearn', # the PQ implementation
         M: int = 8, # number of subquantizers (splits of the vector)
         nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
     ):
@@ -248,8 +248,8 @@ class JPQTrainer:
         epochs: int = 3,
         lr:float = 2e-5,
         max_steps_per_epoch: int = math.inf, # type: ignore
-        eval_queries : pd.DataFrame = None,
-        eval_qrels : pd.DataFrame = None,
+        eval_queries : pd.DataFrame | None= None,
+        eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, None)
@@ -278,12 +278,12 @@ class JPQTrainer:
         epochs: int = 3,
         lr:float = 2e-5,
         max_steps_per_epoch: int = math.inf, # type: ignore
-        eval_queries : pd.DataFrame = None,
-        eval_qrels : pd.DataFrame = None,
+        eval_queries : pd.DataFrame | None = None,
+        eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
-        codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl)
+        codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
         self.pq = pq
         model = JPQBiencoder(
             QueryEncoder(self.query_encoder), 
@@ -292,7 +292,7 @@ class JPQTrainer:
 
         data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
         # print(len(data_loader))
-        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
+        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
 
         self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
         self.model = model
@@ -311,7 +311,7 @@ class JPQTrainer:
         assert all_codes.shape[0] == len(self.index)
         
         # gather the trained sub-id representations
-        centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.M) ]).detach().cpu().numpy() # M x Ks x dsub
+        centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.M) ]).detach().cpu().numpy() # type: ignore # M x Ks x dsub
         assert len(centroids.shape) == 3, centroids.shape
         
         return JPQIndex.build(

@@ -99,12 +99,12 @@ class ProductQuantizer:
                 # --- Reconstruction ---
                 # Look up centroids to reconstruct vector
                 # self.centroids shape: [M, Ks, D_sub]
-                _, _, D_sub = self.centroids.shape
+                _, _, D_sub = self.centroids.shape # type: ignore
 
                 # Reconstruct each subvector from its centroid
                 reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
                 for m in range(self.M):
-                    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]]
+                    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
 
                 # Compute reconstruction error (e.g. mean squared error)
                 errors = np.square(vecs - reconstructed).sum(axis=1)  # [B]
@@ -183,7 +183,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         import faiss
 
         # Initialize FAISS PQ
-        self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)), faiss.METRIC_INNER_PRODUCT )
+        self.pq = faiss.ProductQuantizer(d, self.M, int(np.log2(self.Ks)))#, faiss.METRIC_INNER_PRODUCT )
         self.pq.train(X.astype(np.float32)) # type: ignore
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
