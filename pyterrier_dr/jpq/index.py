@@ -20,6 +20,9 @@ class JPQIndex(pt.Artifact):
         self._codes = None
         self._docnos = None
         self.index_path = Path(path)
+
+    def __len__(self):
+        return self.payload(return_codes=False, return_docnos=False, return_dvecs=False)[0]['doc_count']
     
     def payload(self, return_dvecs=True, return_docnos=True, return_codes=True):
         if self._meta is None:
