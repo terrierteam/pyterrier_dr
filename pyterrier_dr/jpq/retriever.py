@@ -18,8 +18,8 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
             with torch.no_grad():
                 for i in tqdm(range(0, len(existing_index), bs), desc=f"build flat", leave=False):
                     codes_batch = pq.encode(original_vec[i:i+bs])
-                    embs = pm(torch.Tensor(codes_batch).int())
-                    embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
+                    embs = pm(torch.Tensor(codes_batch).int()).detach().cpu().numpy().astype('float32')
+                    #embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
                     for j in range(codes_batch.shape[0]):
                         running_se += np.sum((embs[j] - original_vec[i+j])**2)
                         yield {'docno' : docnos[i+j], 'doc_vec' : embs[j]}
@@ -188,6 +188,7 @@ def merge_top_k(item_score_ids_1: np.ndarray,
         item_score_ids_1[:] = top_k_ids
         item_scores_values_1[:] = top_k_scores
 
+# port of https://github.com/asash/recjpq_dp_pruning/blob/main/pruned_score_batch.py to PyTorch
 class _PrunedScorer:
     def __init__(self, 
                  centroids_per_split : int, 
