@@ -96,7 +96,7 @@ class JPQRetrieverFlat(JPQRetriever):
         index = faiss.IndexFlatIP(dim)
         for i in tqdm(range(0, self.codes.shape[0], bs), desc=f"{self._name} / build flat", leave=False):
             chunk = self.codes[i:i+bs, :] # bs x M
-            embs = np.concatenate([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)])
+            embs = np.concatenate([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)], axis=-1)
             index.add(embs)
         self._index = index
     
