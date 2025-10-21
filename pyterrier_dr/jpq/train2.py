@@ -159,24 +159,24 @@ class JPQTrainer:
         for ep in range(1, epochs + 1):
             step = 0
             running_loss = 0.0
-            with timer(f"JPQ / epoch {ep}"):
-                for batch in tqdm(data_loader, unit="batch", desc="JPQ epoch batches"):
-                    loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
-                    running_loss += loss
-                    step += 1
+            #with timer(f"JPQ / epoch {ep}"):
+            for batch in tqdm(data_loader, unit="batch", desc="JPQ epoch batches"):
+                loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
+                running_loss += loss
+                step += 1
 
-                    if step % 100 == 0:
-                        logger.info(f"[JPQ] Training loss: {running_loss/step}")
-                        running_loss = 0.0
+                if step % 100 == 0:
+                    logger.info(f"[JPQ] Training loss: {running_loss/step}")
+                    running_loss = 0.0
 
-                    if eval_queries is not None and step % valid_every == 0:
-                        val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-                        print(f"[JPQ][val] steps={step} {str(val_stats)}")
+                if eval_queries is not None and step % valid_every == 0:
+                    val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
+                    print(f"[JPQ][val] steps={step} {str(val_stats)}")
 
-                    if step >= max_steps_per_epoch:
-                        logger.info(f"[JPQ] reached max steps per epoch {max_steps_per_epoch}")
-                        step = 0
-                        break
+                if step >= max_steps_per_epoch:
+                    logger.info(f"[JPQ] reached max steps per epoch {max_steps_per_epoch}")
+                    step = 0
+                    break
 
             if eval_queries is not None: # always evaluate at the end of the epoch
                 val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
