@@ -26,14 +26,14 @@ class TestJPQ(unittest.TestCase):
 
         from pyterrier_dr.jpq.utils import merge_queries_into_docpairs
         from pyterrier_dr.jpq import JPQTrainer
-        t = JPQTrainer(tct, index, M=16, nbits=8, pq_impl='faiss')
+        t = JPQTrainer(tct, index, M=64, nbits=8, pq_impl='faiss2')
 
         t.fit(
-            merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:1000000]), 
-            docid_subset=1_000_000, 
-            pq_sample_size=100_000,
-            epochs=100_000,
-            batch_size=1024,
+            merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:2_000_000]), 
+            # docid_subset=1_000_000, 
+            pq_sample_size=159_744,
+            epochs=10,
+            batch_size=512,
             eval_queries = pt.get_dataset('msmarco_passage').get_topics('test-2019'),
-            eval_qrels = pt.get_dataset('msmarco_passage').get_qrels('test-2019'), valid_every=100
+            eval_qrels = pt.get_dataset('msmarco_passage').get_qrels('test-2019'), valid_every=500
         ) 
