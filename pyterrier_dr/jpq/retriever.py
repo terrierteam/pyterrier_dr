@@ -147,9 +147,15 @@ class JPQRetrieverPrune(JPQRetriever):
             # split query_vec into M sub-vecs
             Q = Q.view(num_q, self.M, self.dsub)
             assert Q.shape == (num_q, self.M, self.dsub), Q.shape
+            # TODO check this works batch as the first dimension...?
             centroid_scores = torch.einsum("mbd,md->mb", self.sub_embeddings, Q)
             assert centroid_scores.shape == (num_q, self.M, self.ks), centroid_scores.shape
-            # TODO: does self.scorer work for multiple queries concurrently? 
+            Is = []
+            Ds = []
+            for qoffset in range(centroid_scores.shape[0]):
+                I_q, D_q = self.scorer(centroid_scores[qoffset])
+                Is.append(I_q)
+                Ds.append(D_q)
             I, D = self.scorer(centroid_scores)
         rows = []
         for i, qid in enumerate(qids):
