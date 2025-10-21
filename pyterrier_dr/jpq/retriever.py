@@ -140,7 +140,7 @@ class JPQRetrieverPrune(JPQRetriever):
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(topics, extra_columns=['query_vec'])
         num_q = len(topics)
-        Q = topics["query_vec"].to_numpy()
+        Q = np.stack(topics["query_vec"].to_list())
         qids = topics['qid'].astype(str).tolist()
         with timer(f"{self._name} / prune search"):
             # split query_vec into M sub-vecs
