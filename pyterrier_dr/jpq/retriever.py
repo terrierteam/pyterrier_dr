@@ -102,7 +102,7 @@ class JPQRetrieverFlat(JPQRetriever):
     
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(topics, extra_columns=['query_vec'])
-        Q = topics["query_vec"].to_numpy()
+        Q = np.stack(topics["query_vec"].to_list())
         qids = topics['qid'].astype(str).tolist()
         self._ensure()
         with timer(f"{self._name} / flat search"):
