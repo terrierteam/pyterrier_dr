@@ -186,39 +186,39 @@ class JPQTrainer:
 
 
     def _validation_step(self, model, eval_queries, eval_qrels, selected_docnos, codes, topk_eval=1000):
-        with timer(f"JPQ / validation over {len(eval_queries)} queries"):
+        #with timer(f"JPQ / validation over {len(eval_queries)} queries"):
+        with torch.no_grad():
+            Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
+        Q = Q_t.detach().cpu().numpy().astype('float32')
+
+        dstindex = tempfile.mkdtemp()
+        flex = FlexIndex(dstindex, verbose=False)
+
+        device = next(model.passage.parameters()).device
+        passage_encoder = model.passage.to("cpu").eval()
+        def _gen():
             with torch.no_grad():
-                Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
-            Q = Q_t.detach().cpu().numpy().astype('float32')
+                for i in range(0, len(codes), 16384): # magic number to replace recon_batch_size
+                    chunk = torch.from_numpy(codes[i:i+16384]).long()
+                    embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
+                    for j in range(embs.shape[0]):
+                        yield {'docno' : selected_docnos[i+j], 'doc_vec' : embs[j, :]}
+        flex.indexer(mode='overwrite').index(_gen())
 
-            dstindex = tempfile.mkdtemp()
-            flex = FlexIndex(dstindex, verbose=False)
+        eval_queries = eval_queries.copy()
+        eval_queries["query_vec"] = [row for row in Q]
+        rtr = pt.Evaluate(
+            flex.retriever(num_results=topk_eval)(eval_queries),  # type: ignore
+            eval_qrels, 
+            metrics=[RR@10, Recall@1000, nDCG@10])
 
-            device = next(model.passage.parameters()).device
-            passage_encoder = model.passage.to("cpu").eval()
-            def _gen():
-                with torch.no_grad():
-                    for i in range(0, len(codes), 16384): # magic number to replace recon_batch_size
-                        chunk = torch.from_numpy(codes[i:i+16384]).long()
-                        embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
-                        for j in range(embs.shape[0]):
-                            yield {'docno' : selected_docnos[i+j], 'doc_vec' : embs[j, :]}
-            flex.indexer(mode='overwrite').index(_gen())
+        del(flex)
 
-            eval_queries = eval_queries.copy()
-            eval_queries["query_vec"] = [row for row in Q]
-            rtr = pt.Evaluate(
-                flex.retriever(num_results=topk_eval)(eval_queries),  # type: ignore
-                eval_qrels, 
-                metrics=[RR@10, Recall@1000, nDCG@10])
-
-            del(flex)
-
-            # dest index may still be open
-            shutil.rmtree(dstindex, ignore_errors=True)
-            
-            passage_encoder.to(device).train()
-            return rtr
+        # dest index may still be open
+        shutil.rmtree(dstindex, ignore_errors=True)
+        
+        passage_encoder.to(device).train()
+        return rtr
 
 
     def __init__(
