@@ -220,7 +220,9 @@ class JPQCELossInBatchNegs(nn.Module):
 
         # 3. Encode negatives (if present)
         if "neg_codes" in batch:
-            neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, N, D]
+            neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, D]
+            # we only have ONE negative per batch, so hack in a unsqueeze here, to fit rest of code.
+            neg = neg.unsqueeze(1)  # [B, 1, D]
             B, N, D = neg.shape
 
             # Flatten negatives for similarity computation
