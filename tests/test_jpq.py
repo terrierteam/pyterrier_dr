@@ -17,7 +17,7 @@ class TestJPQ(unittest.TestCase):
         tct = pyterrier_dr.TctColBert(device=device)#device=torch.device("mps"))
         index = FlexIndex("./tests/fixtures/vaswani_tct.flex")
         from pyterrier_dr.jpq import JPQTrainer
-        t = JPQTrainer(tct, index, pq_impl='sklearn', pq_M=4, pq_nbits=4)
+        t = JPQTrainer(tct, index, pq_impl='sklearn', M=4, nbits=4)
         #t = JPQTrainer(tct, index, pq_impl='faiss', pq_M=4, pq_nbits=4)
         
         dataset = pt.get_dataset("vaswani")
