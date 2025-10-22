@@ -184,7 +184,7 @@ class JPQRetrieverPrune(JPQRetriever):
         qids = topics['qid'].astype(str).tolist()
         with timer(f"{self._name} / prune search"):
             # split query_vec into M sub-vecs
-            Q = Q.view((num_q, self.M, self.dsub))
+            Q = Q.reshape((num_q, self.M, self.dsub))
             assert Q.shape == (num_q, self.M, self.dsub), Q.shape
             # TODO check this works query as the first dimension...?
             centroid_scores = torch.einsum("mbd,md->mb", self.sub_embeddings, Q)
