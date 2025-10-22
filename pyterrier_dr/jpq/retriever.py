@@ -67,6 +67,46 @@ def build_inverted_index(item_codes, pq_type_name, dataset_models_config, curren
     index_int32 = code_items.astype(np.int32)
     return index_int32
 
+# THIS DOES NOT YET WORK
+def build_inverted_index_fast(item_codes, pq_type_name, dataset_models_config, current_dir, k: int = 256) -> np.ndarray:
+    target_codes = np.asarray(item_codes, dtype=np.int32)
+    num_items, num_splits = target_codes.shape
+    num_codes = num_splits * k
+
+    # Compute global code IDs (combine split + local code)
+    global_codes = np.arange(num_splits) * k + target_codes  # shape = (num_items, num_splits)
+
+    # Flatten for grouping
+    flat_codes = global_codes.ravel()
+    flat_items = np.repeat(np.arange(num_items, dtype=np.int32), num_splits)
+
+    # Sort by code to make grouping fast
+    order = np.argsort(flat_codes)
+    flat_codes = flat_codes[order]
+    flat_items = flat_items[order]
+
+    # Find group boundaries
+    unique_codes, start_idx = np.unique(flat_codes, return_index=True)
+    end_idx = np.append(start_idx[1:], len(flat_codes))
+
+    # Prepare result container
+    code_items = [[] for _ in range(num_codes)]
+
+    # Fill groups (only for existing codes)
+    for code, s, e in zip(unique_codes, start_idx, end_idx):
+        code_items[code] = flat_items[s:e]
+
+    # Pad for uniform shape
+    max_items_per_code = max(len(v) for v in code_items)
+    padded = np.full((num_codes, max_items_per_code), -1, dtype=np.int32)
+
+    for i, arr in enumerate(code_items):
+        if len(arr) > 0:
+            padded[i, -len(arr):] = arr  # right-align padding like before
+
+    return padded
+
+
 class JPQRetriever(pt.Transformer):
     def __init__(self, docnos: List[str], # N
                  codes: np.array, # N x M
