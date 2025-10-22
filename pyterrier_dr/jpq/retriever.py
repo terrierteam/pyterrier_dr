@@ -187,7 +187,7 @@ class JPQRetrieverPrune(JPQRetriever):
             Q = Q.reshape((num_q, self.M, self.dsub))
             assert Q.shape == (num_q, self.M, self.dsub), Q.shape
             # TODO check this works query as the first dimension...?
-            centroid_scores = torch.einsum("mbd,md->mb", self.sub_embeddings, Q)
+            centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q)
             assert centroid_scores.shape == (num_q, self.M, self.ks), centroid_scores.shape
             Is = []
             Ds = []
