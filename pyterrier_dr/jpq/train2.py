@@ -13,7 +13,7 @@ import shutil
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
-from pyterrier_dr.jpq.model import JPQBiencoder, JPQLoss, PassageEncoder, QueryEncoder
+from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer
 from pyterrier_dr.jpq.index import JPQIndex
 
@@ -133,8 +133,10 @@ class JPQTrainer:
         eval_queries: pd.DataFrame | None = None,
         eval_qrels: pd.DataFrame | None = None,
         valid_every: int = 10,
+        in_batch : bool = False
     ):
-        loss_f = JPQLoss(model.query, model.passage).to(self.device)
+        lossclz = JPQCELossInBatchNegs if in_batch else JPQCELoss
+        loss_f = lossclz(model.query, model.passage).to(self.device)
 
         # Create optimizer for passage encoder AND query encoder
         if self.M in [16, 24]:
@@ -194,7 +196,8 @@ class JPQTrainer:
             Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
         Q = Q_t.detach().cpu().numpy().astype('float32')
 
-        dstindex = tempfile.mkdtemp()
+        # as the rmtree doesnt work, lets just try to use the same folder each time
+        dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
         flex = FlexIndex(dstindex, verbose=False)
 
         device = next(model.passage.parameters()).device
@@ -284,6 +287,7 @@ class JPQTrainer:
         eval_queries : pd.DataFrame | None = None,
         eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25,
+        in_batch : bool = False,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
@@ -297,7 +301,7 @@ class JPQTrainer:
         # print(len(data_loader))
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
 
-        self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
+        self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every, in_batch)
         self.model = model
         self.fitted = True
 

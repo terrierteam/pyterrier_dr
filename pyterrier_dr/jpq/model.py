@@ -142,7 +142,7 @@ class PassageEncoder(nn.Module):
         return torch.cat(parts, dim=1)
 
 
-class JPQLoss(nn.Module):
+class JPQCELoss(nn.Module):
     """
     A pairwise contrastive loss module for JPQ-based bi-encoder training.
 
@@ -201,6 +201,49 @@ class JPQLoss(nn.Module):
 
         return self.loss_f(scores, labels)
 
+class JPQCELossInBatchNegs(nn.Module):
+    def __init__(self, query_encoder, passage_encoder):
+        super().__init__()
+        self.query_encoder = query_encoder
+        self.passage_encoder = passage_encoder
+        self.loss_f = nn.CrossEntropyLoss()
+
+    def forward(self, batch):
+        device = next(self.passage_encoder.parameters()).device
+        B = len(batch["query_text"])
+
+        # 1. Encode queries
+        q = self.query_encoder.encode_texts_torch(batch["query_text"]).to(device)  # [B, D]
+
+        # 2. Encode positives
+        pos = self.passage_encoder(batch["pos_codes"].to(device))  # [B, D]
+
+        # 3. Encode negatives (if present)
+        if "neg_codes" in batch:
+            neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, N, D]
+            B, N, D = neg.shape
+
+            # Flatten negatives for similarity computation
+            neg = neg.view(B * N, D)  # [B*N, D]
+
+            # 4. Compute similarity scores
+            # a) positives & in-batch negatives
+            pos_scores = torch.matmul(q, pos.T)  # [B, B]
+
+            # b) explicit negatives
+            neg_scores = torch.matmul(q, neg.T)  # [B, B*N]
+
+            # 5. Concatenate all scores
+            scores = torch.cat([pos_scores, neg_scores], dim=1)  # [B, B + B*N]
+        else:
+            # only in-batch negatives
+            scores = torch.matmul(q, pos.T)  # [B, B]
+
+        # 6. Label for each query = its own positive index
+        labels = torch.arange(B, dtype=torch.long, device=device)
+
+        # 7. Compute loss
+        return self.loss_f(scores, labels)
 
 class JPQBiencoder:
     """
