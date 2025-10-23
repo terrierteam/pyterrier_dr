@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import Any, Literal
+from typing import Any, Callable, Literal, Tuple
 from ir_measures import RR, Recall, nDCG
 import numpy as np
 import pandas as pd
@@ -12,7 +12,7 @@ import pyterrier as pt
 import shutil
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
-from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset
+from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
 from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer
 from pyterrier_dr.jpq.index import JPQIndex
@@ -124,7 +124,7 @@ class JPQTrainer:
     def _training_loop(
         self,
         model,
-        data_loader,
+        dataset,
         epochs,
         lr,
         selected_docnos,
@@ -133,7 +133,9 @@ class JPQTrainer:
         eval_queries: pd.DataFrame | None = None,
         eval_qrels: pd.DataFrame | None = None,
         valid_every: int = 10,
-        in_batch : bool = False
+        in_batch : bool = False,
+        batch_size : int = 32,
+        jpq_negs : int = 0,
     ):
         lossclz = JPQCELossInBatchNegs if in_batch else JPQCELoss
         loss_f = lossclz(model.query, model.passage).to(self.device)
@@ -156,15 +158,32 @@ class JPQTrainer:
         # set both models to train
         model.query.dr.model.train()
         model.passage.to(self.device).train()
-        if eval_queries is not None: # always evaluate at the end of the epoch
-            val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-            logger.info(f"[JPQ][val] initial {str(val_stats)}")
-
+        
         for ep in range(1, epochs + 1):
             step = 0
             running_loss = 0.0
+
+            # add the jpq negs to the dataset; validate if so requested
+            if jpq_negs > 0 or eval_queries is not None:
+                retr, cleanup = self._currentindex(model, selected_docnos, codes)
+                # always evaluate at the _start_ of the epoch (we may need for jpq_negs anyway)
+                if eval_queries is not None:
+                    val_stats = self._validation_step(retr, eval_queries, eval_qrels)
+                    logger.info(f"[JPQ][val] before epoch {ep} {str(val_stats)}")
+                if jpq_negs > 0:
+                    dataset_jpq = add_jpq_negs(dataset, jpq_negs, retr, codes)
+                    data_loader = get_dataloader(dataset_jpq, batch_size)
+                # remove the index
+                del(retr)
+                cleanup()
+
+            # no additional negs to add, apply normal dataset -> dataloader 
+            if jpq_negs == 0:
+                data_loader = get_dataloader(dataset, batch_size)
+
             #with timer(f"JPQ / epoch {ep}"):
             total = max_steps_per_epoch if max_steps_per_epoch < math.inf else None
+
             for batch in tqdm(data_loader, unit="batch", total=total, desc="JPQ epoch batches"):
                 loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
                 running_loss += loss
@@ -175,7 +194,9 @@ class JPQTrainer:
                     running_loss = 0.0
 
                 if eval_queries is not None and step % valid_every == 0:
-                    val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
+                    retr, cleanup = self._currentindex(model, selected_docnos, codes)
+                    val_stats = self._validation_step(retr, eval_queries, eval_qrels)
+                    cleanup()
                     logger.info(f"[JPQ][val] steps={step} {str(val_stats)}")
 
                 if step >= max_steps_per_epoch:
@@ -183,19 +204,9 @@ class JPQTrainer:
                     step = 0
                     break
 
-            if eval_queries is not None: # always evaluate at the end of the epoch
-                val_stats = self._validation_step(model, eval_queries, eval_qrels, selected_docnos, codes)
-                logger.info(f"[JPQ][val] epoch {ep} {str(val_stats)}")
-
             logger.info(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
-
-    def _validation_step(self, model, eval_queries, eval_qrels, selected_docnos, codes, topk_eval=1000):
-        #with timer(f"JPQ / validation over {len(eval_queries)} queries"):
-        with torch.no_grad():
-            Q_t = model.query.encode_texts(eval_queries['query'].tolist(), batch_size=256)
-        Q = Q_t.detach().cpu().numpy().astype('float32')
-
+    def _currentindex(self, model,  selected_docnos, codes, verbose=True) -> Tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
         flex = FlexIndex(dstindex, verbose=False)
@@ -204,26 +215,42 @@ class JPQTrainer:
         passage_encoder = model.passage.to("cpu").eval()
         def _gen():
             with torch.no_grad():
-                for i in range(0, len(codes), 16384): # magic number to replace recon_batch_size
+                iter = range(0, len(codes), 16384) # magic number to replace recon_batch_size
+                iter = tqdm(iter, unit='batch', desc='Validation index construction')
+                for i in iter:
                     chunk = torch.from_numpy(codes[i:i+16384]).long()
                     embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
                     for j in range(embs.shape[0]):
                         yield {'docno' : selected_docnos[i+j], 'doc_vec' : embs[j, :]}
         flex.indexer(mode='overwrite').index(_gen())
 
-        eval_queries = eval_queries.copy()
-        eval_queries["query_vec"] = [row for row in Q]
+        def _queryencoder(inp : pd.DataFrame):
+            with torch.no_grad():
+                Q_t = model.query.encode_texts(inp['query'].tolist(), batch_size=256)
+            Q = Q_t.detach().cpu().numpy().astype('float32')
+            rtr = inp.copy()
+            rtr["query_vec"] = [row for row in Q]
+            return rtr
+        
+        def _cleanup():
+            # dest index may still be open
+            shutil.rmtree(dstindex, ignore_errors=True)    
+            passage_encoder.to(device).train()
+
+        return (pt.apply.generic(_queryencoder) >> flex.retriever(num_results=1000)), _cleanup
+
+    def _validation_step(
+            self, 
+            retr_pipe : pt.Transformer, 
+            eval_queries : pd.DataFrame, 
+            eval_qrels : pd.DataFrame, 
+            topk_eval : int = 1000):
+        
         rtr = pt.Evaluate(
-            flex.retriever(num_results=topk_eval)(eval_queries),  # type: ignore
+            (retr_pipe%topk_eval)(eval_queries),  # type: ignore
             eval_qrels, 
             metrics=[RR@10, Recall@1000, nDCG@10])
-
-        del(flex)
-
-        # dest index may still be open
-        shutil.rmtree(dstindex, ignore_errors=True)
         
-        passage_encoder.to(device).train()
         return rtr
 
 
@@ -256,7 +283,8 @@ class JPQTrainer:
         max_steps_per_epoch: int = math.inf, # type: ignore
         eval_queries : pd.DataFrame | None= None,
         eval_qrels : pd.DataFrame | None = None,
-        valid_every : int = 25
+        valid_every : int = 25,
+        jpq_negs : int = 0
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, None)
         codes, centroids, pq = compute_from_pq_index(self.M, index_pq, selected_docids)
@@ -267,11 +295,10 @@ class JPQTrainer:
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
-        data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
-        # print(len(data_loader))
+        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
 
-        self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
+        self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)
         self.model = model
         self.fitted = True
 
@@ -288,6 +315,7 @@ class JPQTrainer:
         eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25,
         in_batch : bool = False,
+        jpq_negs : int = 0
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
@@ -297,11 +325,10 @@ class JPQTrainer:
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
-        data_loader = get_dataloader(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
-        # print(len(data_loader))
+        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
 
-        self._training_loop(model, data_loader, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every, in_batch)
+        self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every, in_batch, batch_size=batch_size, jpq_negs=jpq_negs)
         self.model = model
         self.fitted = True
 

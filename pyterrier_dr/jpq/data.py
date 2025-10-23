@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from datasets import Dataset
 from torch.utils.data import DataLoader
-
+import pyterrier as pt, pandas as pd
 from pyterrier_dr.flex.core import FlexIndex
 
 
@@ -59,13 +59,28 @@ def get_pq_training_dataset(
 
     return selected_docnos, selected_docids, docnos2pos
 
-
 def get_dataloader(
+        ds : Dataset,
+        batch_size: int
+) -> Dataset: 
+    
+    def collate(batch) -> dict[str, Any]:
+        return {
+            'query_text': [b['query_text'] for b in batch],
+            'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
+            'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
+        }
+    print(f"[DATA] Collating")
+    return DataLoader(
+        ds,  # type: ignore
+        batch_size=batch_size, 
+        collate_fn=collate)
+
+def get_dataset(
     docpairs: list[dict[str, Any]], # training docpairs to use
     docnos: list[str], # documents we use during training
     codes: np.ndarray, # PQ codes for used documents
     docno2pos, # map from code position to docno
-    batch_size: int,
 ) -> DataLoader:       
 
     # we discard training pair where pos or neg documents were not used during PQ training
@@ -80,25 +95,15 @@ def get_dataloader(
     def queries_and_codes(docpair: dict[str, Any]) -> dict[str, Any]:
         return {
             'query_text': docpair["query"],
+            'pos_docno': docpair["doc_id_a"],
             'pos_codes': codes_t[docno2pos[docpair["doc_id_a"]]],
+            'neg_docno' : docpair["doc_id_b"],
             'neg_codes': codes_t[docno2pos[docpair["doc_id_b"]]],
         }
 
-    def collate(batch) -> dict[str, Any]:
-        return {
-            'query_text': [b['query_text'] for b in batch],
-            'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
-            'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
-        }
     print("[DATA] Preparing training data")
     docpairs = list(docpairs) # in case docpairs is an iterator...
 
-#    xx = [x['doc_id_a'] for x in docpairs]
-#    xx += [x['doc_id_b'] for x in docpairs]
-#    xx = set(xx)
-#    print(f"we have {len(set(xx))} documents for training")
-#    print(f"we have {len(docnos_set)} documents used for PQ training")
-#    print(f"they have {len(docnos_set.intersection(xx))} elements in common")
     ds = Dataset.from_list(docpairs)
     ds = ds.filter(filter_in_sel).shuffle()
     if not len(ds):
@@ -107,14 +112,26 @@ def get_dataloader(
     print(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
     ds = ds.map(
         queries_and_codes,
-        remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes")],
+        remove_columns=[c for c in ds.column_names if c not in ("query_text", 'pos_docno', "pos_codes", 'neg_docno', "neg_codes")],
     )
-#    print(ds)
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes"])
-#    print(ds)
-
-    return DataLoader(
-        ds,  # type: ignore
-        batch_size=batch_size, 
-        collate_fn=collate)
+    return ds
     
+def add_jpq_negs(ds : Dataset, top_k : int, retr_pipe : pt.Transformer, codes: np.ndarray) -> Dataset:
+
+    retr_pipe = (retr_pipe % top_k).compile()
+    codes_t = torch.as_tensor(codes, dtype=torch.long)
+    def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
+        res : pd.DataFrame = retr_pipe.search(docpair['query_text'])
+        res = res[~res["docno"].isin([docpair['pos_docno'], docpair['neg_docno']])]
+        codes_negs = codes_t[res["docid"].to_list()]
+        docpair["neg_jpq_codes"] = codes_negs
+        return docpair
+
+    print("[DATA] Adding %d top_k negs to %d training samples" % (top_k, len(ds)))
+    ds = ds.map(
+        _add_neg,
+        remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
+    )
+    ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes", "neg_jpq_codes"])
+    return ds
