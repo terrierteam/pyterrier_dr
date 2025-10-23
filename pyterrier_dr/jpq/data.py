@@ -128,7 +128,7 @@ def add_jpq_negs(ds : Dataset, top_k : int, retr_pipe : pt.Transformer, codes: n
         docpair["neg_jpq_codes"] = codes_negs
         return docpair
 
-    print("[DATA] Adding %d top_k negs to %d training samples" % (top_k, len(ds)))
+    print("[DATA] Adding %d top_k negs to %d training examples" % (top_k, len(ds)))
     ds = ds.map(
         _add_neg,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
