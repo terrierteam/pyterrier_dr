@@ -38,6 +38,7 @@ class TestJPQ(unittest.TestCase):
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), valid_every=64,
             jpq_negs = 10,
+            in_batch=True
         )
         from tempfile import mkdtemp
         import os, shutil

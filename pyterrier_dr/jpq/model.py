@@ -220,9 +220,15 @@ class JPQCELossInBatchNegs(nn.Module):
 
         # 3. Encode negatives (if present)
         if "neg_codes" in batch:
-            neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, D]
-            # we only have ONE negative per batch, so hack in a unsqueeze here, to fit rest of code.
-            neg = neg.unsqueeze(1)  # [B, 1, D]
+            
+            if "neg_jpq_codes" in batch: # jpq_negs from the last epoch
+                all_neg_codes = torch.cat((batch["neg_codes"], batch["neg_jpq_codes"]))
+                neg = self.passage_encoder(all_neg_codes.to(device))  # [B, 1+jpg_negs, D]
+            else:
+                neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, D]
+                # we only have ONE negative per batch, so hack in a unsqueeze here, to fit rest of code.
+                neg = neg.unsqueeze(1)  # [B, 1, D]
+            
             B, N, D = neg.shape
 
             # Flatten negatives for similarity computation
