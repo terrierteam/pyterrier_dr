@@ -1,3 +1,5 @@
+import logging
+
 from typing import Any
 import numpy as np
 import torch
@@ -6,6 +8,8 @@ from torch.utils.data import DataLoader
 import pyterrier as pt, pandas as pd
 from pyterrier_dr.flex.core import FlexIndex
 
+logging.basicConfig(level=logging.INFO, force=True)
+logger = logging.getLogger(__name__)
 
 def get_pq_training_dataset(
         flex_index: FlexIndex,
@@ -27,7 +31,7 @@ def get_pq_training_dataset(
         (selected_docnos, selected_docids, docnos2pos)
         where docnos are strings and docids are internal integer ids.
     """
-    print(f"Ingesting docno mapping from index ")
+    logger.info(f"Ingesting docno mapping from index ")
     doc_map = flex_index.payload()[0]
     N = len(flex_index)
 
@@ -39,22 +43,21 @@ def get_pq_training_dataset(
         selected_docids = np.random.choice(N, size=docid_subset, replace=False) # type: ignore
         selected_docids = np.sort(selected_docids)
         selected_docnos = doc_map.fwd[selected_docids]
-        print(f"[SUBSET] using {len(selected_docnos)} random docs from index")        
+        logger.info(f"[SUBSET] using {len(selected_docnos)} random docs from index")        
     elif isinstance(docid_subset, list):  
         if isinstance(docid_subset[0], int): # use the provided list of int docid
             selected_docids = np.sort(docid_subset)
             selected_docnos = doc_map.fwd[docid_subset]
-            print(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
+            logger.info(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
         elif isinstance(docid_subset[0], str): # use the provided list of str docnos
             selected_docnos = docid_subset
             selected_docids = doc_map.inv[selected_docnos] # do we need this?
             selected_docids = np.sort(selected_docids)
-            print(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
+            logger.info(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
         else:
             raise ValueError(f"list on integers or strings must be provided")
         
     selected_docnos = list(selected_docnos) # do we need this conversion?    
-    #print(f"-----{selected_docnos}")
     docnos2pos = {docno: i for i, docno in enumerate(selected_docnos)} # map from docno to position in selected_docnos (for aligning with codes_sel)
 
     return selected_docnos, selected_docids, docnos2pos
@@ -71,7 +74,7 @@ def get_dataloader(
             'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
             'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
         }
-    print(f"[DATA] Collating")
+    logger.info(f"[DATA] Collating")
 
     return DataLoader(
         ds, # type: ignore
@@ -107,7 +110,7 @@ def get_dataset(
             'neg_codes': codes_t[docno2pos[docpair["doc_id_b"]]],
         }
 
-    print("[DATA] Preparing training data")
+    logger.info("[DATA] Preparing training data")
     docpairs = list(docpairs) # in case docpairs is an iterator...
 
     ds = Dataset.from_list(docpairs)
@@ -115,7 +118,7 @@ def get_dataset(
     if not len(ds):
         raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 pairs left. \n"
                          "Try increasing size of training dataset, or value of docid_subset")
-    print(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
+    logger.info(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
 
     if shuffle:
         ds = ds.shuffle(seed=seed)
@@ -144,7 +147,7 @@ def add_jpq_negs(
         docpair["neg_jpq_codes"] = codes_negs
         return docpair
 
-    print("[DATA] Adding %d top_k negs to %d training examples" % (top_k, len(ds)))
+    logger.info("[DATA] Adding %d top_k negs to %d training examples" % (top_k, len(ds)))
     ds = ds.map(
         _add_neg,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
