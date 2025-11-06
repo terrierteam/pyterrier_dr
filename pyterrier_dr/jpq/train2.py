@@ -206,7 +206,7 @@ class JPQTrainer:
 
             logger.info(f"[JPQ] epoch {ep}/{epochs} steps {step}")
 
-    def _currentindex(self, model,  selected_docnos, codes, verbose=True) -> Tuple[pt.Transformer, Callable]:
+    def _currentindex(self, model, selected_docnos, codes, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
         flex = FlexIndex(dstindex, verbose=False)
@@ -295,7 +295,7 @@ class JPQTrainer:
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
-        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, batch_size)
+        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
 
         self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every)

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def get_pq_training_dataset(
         flex_index: FlexIndex,
         docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
-) ->tuple:
+) -> tuple:
     """
     Build the (docno, docid) subset used to train PQ sub-embeddings.
 
