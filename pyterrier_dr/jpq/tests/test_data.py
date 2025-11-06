@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 
-from pyterrier_dr.jpq.data import get_dataloader
+from pyterrier_dr.jpq.data import get_dataset, get_dataloader
 
 
 class TestGetDataLoader(unittest.TestCase):
@@ -26,13 +26,13 @@ class TestGetDataLoader(unittest.TestCase):
         ]
 
     def test_loader_basic(self):
-        dl = get_dataloader(
+        ds = get_dataset(
             docpairs=self.docpairs,
             docnos=self.docnos,
             codes=self.codes,
             docno2pos=self.docno2pos,
-            batch_size=2,
         )
+        dl = get_dataloader(ds, batch_size=2)
 
         all_queries = []
         all_pos = []

@@ -59,10 +59,11 @@ def get_pq_training_dataset(
 
     return selected_docnos, selected_docids, docnos2pos
 
+
 def get_dataloader(
-        ds : Dataset,
+        ds: Dataset,
         batch_size: int
-) -> Dataset: 
+) -> DataLoader: 
     
     def collate(batch) -> dict[str, Any]:
         return {
@@ -71,17 +72,22 @@ def get_dataloader(
             'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
         }
     print(f"[DATA] Collating")
+
     return DataLoader(
-        ds,  # type: ignore
+        ds, # type: ignore
         batch_size=batch_size, 
-        collate_fn=collate)
+        collate_fn=collate, shuffle=False)
+
 
 def get_dataset(
     docpairs: list[dict[str, Any]], # training docpairs to use
     docnos: list[str], # documents we use during training
     codes: np.ndarray, # PQ codes for used documents
     docno2pos, # map from code position to docno
-) -> DataLoader:       
+    *,
+    shuffle: bool = False,
+    seed: int | None = None,
+) -> Dataset:       
 
     # we discard training pair where pos or neg documents were not used during PQ training
     docnos_set = set(docnos)
@@ -105,19 +111,29 @@ def get_dataset(
     docpairs = list(docpairs) # in case docpairs is an iterator...
 
     ds = Dataset.from_list(docpairs)
-    ds = ds.filter(filter_in_sel).shuffle()
+    ds = ds.filter(filter_in_sel)
     if not len(ds):
         raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 pairs left. \n"
                          "Try increasing size of training dataset, or value of docid_subset")
     print(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
+
+    if shuffle:
+        ds = ds.shuffle(seed=seed)
+
     ds = ds.map(
         queries_and_codes,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", 'pos_docno', "pos_codes", 'neg_docno', "neg_codes")],
     )
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes"])
     return ds
-    
-def add_jpq_negs(ds : Dataset, top_k : int, retr_pipe : pt.Transformer, codes: np.ndarray) -> Dataset:
+
+
+def add_jpq_negs(
+    ds: Dataset, 
+    top_k: int,
+    retr_pipe: pt.Transformer,
+    codes: np.ndarray
+) -> Dataset:
 
     retr_pipe = (retr_pipe % top_k).compile()
     codes_t = torch.as_tensor(codes, dtype=torch.long)
