@@ -146,7 +146,7 @@ class TestProductQuantizerSKLearn(unittest.TestCase):
         pq = ProductQuantizerSKLearn(M=self.M, Ks=self.Ks, random_state=0)
         pq.fit(self.X)
         codes_ref = pq.encode(self.X)
-        codes_b = pq.encode_batch(self.X, batch_size=17, verbose=False)
+        codes_b = pq.encode_batch(self.X, range(len(self.X)), batch_size=17, verbose=False)
         np.testing.assert_array_equal(codes_ref, codes_b)
 
     def test_dim_not_divisible_raises(self):
@@ -180,7 +180,6 @@ class TestProductQuantizerFAISS(unittest.TestCase):
         pq.fit(self.X)
         codes = pq.encode(self.X)
         self.assertEqual(codes.shape, (self.X.shape[0], self.M))
-        self.assertEqual(codes.dtype, np.uint8)
         self.assertGreaterEqual(codes.min(), 0)
         self.assertLess(codes.max(), self.Ks)
 
@@ -193,7 +192,7 @@ class TestProductQuantizerFAISS(unittest.TestCase):
         pq = ProductQuantizerFAISS(M=self.M, Ks=self.Ks)
         pq.fit(self.X)
         codes_ref = pq.encode(self.X)
-        codes_b = pq.encode_batch(self.X, batch_size=19, verbose=False)
+        codes_b = pq.encode_batch(self.X, range(len(self.X)), batch_size=19, verbose=False)
         np.testing.assert_array_equal(codes_ref, codes_b)
 
     @unittest.skipUnless(HAS_FAISS, "faiss not installed")

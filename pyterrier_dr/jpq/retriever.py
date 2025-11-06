@@ -109,8 +109,8 @@ def build_inverted_index_fast(item_codes, pq_type_name, dataset_models_config, c
 
 class JPQRetriever(pt.Transformer):
     def __init__(self, docnos: List[str], # N
-                 codes: np.array, # N x M
-                 sub_embeddings : np.array, # M x ks=2^nbits x dsub (aka the centroids)
+                 codes: np.ndarray, # N x M
+                 sub_embeddings : np.ndarray, # M x ks=2^nbits x dsub (aka the centroids)
                  topk: int = 1000):
         super().__init__()
         self.docnos = np.array(docnos)

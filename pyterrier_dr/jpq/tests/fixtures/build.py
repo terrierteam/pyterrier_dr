@@ -11,8 +11,8 @@ print(f"Using device: {device}")
 
 tct = pyterrier_dr.TctColBert(device=device)
 
-#index = pyterrier_dr.FlexIndex("./vaswani_tct.flex")
-#(tct >> index).index(pt.get_dataset("vaswani").get_corpus_iter())
+# index = pyterrier_dr.FlexIndex("./vaswani_tct.flex")
+# (tct >> index).index(pt.get_dataset("vaswani").get_corpus_iter())
 
 index = pyterrier_dr.FlexIndex("./msmarco-passage.tct-hnp.flex")
 (tct >> index).index(pt.get_dataset("msmarco_passage").get_corpus_iter()) # type: ignore
