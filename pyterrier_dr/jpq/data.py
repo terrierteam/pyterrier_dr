@@ -74,7 +74,7 @@ def get_dataloader(
             'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
             'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
         }
-    logger.info(f"[DATA] Collating")
+    # logger.info(f"[DATA] Collating")
 
     return DataLoader(
         ds, # type: ignore

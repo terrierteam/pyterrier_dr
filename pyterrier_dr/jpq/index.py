@@ -20,7 +20,7 @@ class Metadata:
     doc_count: int
 
     @classmethod
-    def load(cls, path: str | Path) -> Metadata: # type: ignore
+    def load(cls, path: str | Path) -> "Metadata": # type: ignore
         with open(path, 'r', encoding='utf-8') as f:
             return cls(**json.load(f))
 
