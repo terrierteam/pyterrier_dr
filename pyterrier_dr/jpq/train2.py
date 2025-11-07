@@ -15,7 +15,7 @@ from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
 from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, PassageEncoder, QueryEncoder
-from pyterrier_dr.jpq.utils import timer
+from pyterrier_dr.jpq.utils import timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
 
 from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerFAISSIndexPQ, ProductQuantizerSKLearn
@@ -48,7 +48,7 @@ def compute_PQ(
 
     # train PQ on a random sample of the selected docs
     sample_size = min(sample_size, len(docids))
-    print(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
+    logger.info(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
     # set seed for reproducibility
     np.random.seed(42)
     sample_docids = np.random.choice(docids, size=sample_size, replace=False) # type: ignore
@@ -58,7 +58,7 @@ def compute_PQ(
     with timer(f"PQ / train (samples={len(sample_docids):,})"):
         pq.fit(vecs[sample_docids])
 
-    print(f"[PQ] computing codes for {len(docids):,} selected docs in chunks of {batch_size:,}...")
+    logger.info(f"[PQ] computing codes for {len(docids):,} selected docs in chunks of {batch_size:,}...")
     codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
     with timer("PQ / compute codes (selected)"):
         codes = pq.encode_batch(vecs, docids, batch_size)
@@ -76,8 +76,6 @@ def compute_from_pq_index(M, indexpq, docids):
     return codes, pq.get_centroids(), pq # type: ignore
 
 
-def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
-    return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
 
 def prepare_validation_data(
@@ -106,7 +104,7 @@ def prepare_validation_data(
     eval_qrels = eval_qrels[eval_qrels["qid"].isin(valid_qids)]
     eval_queries = eval_queries[eval_queries["qid"].isin(valid_qids)]
 
-    print(f"[VAL] using {len(eval_queries)} queries with {len(eval_qrels)} qrels for validation")
+    logger.info(f"[VAL] using {len(eval_queries)} queries with {len(eval_qrels)} qrels for validation")
 
     return eval_queries, eval_qrels
 

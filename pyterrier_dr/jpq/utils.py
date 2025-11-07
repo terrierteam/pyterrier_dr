@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 
 from contextlib import contextmanager
-from typing import Iterator, Any
+from typing import Iterator, Any, Literal
+
+import torch
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
@@ -19,8 +21,13 @@ def timer(name: str):
     logger.info(f"[TIMER] {name}: {(t2-t1)/60:.2f} min ({t2-t1:.1f} s)")
 
 
+def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
+    return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+
+
 def bytes_to_gb(nbytes: int) -> float:
     return nbytes / (1024**3)
+
 
 def dir_size_bytes(path: str) -> int:
     total = 0
@@ -72,6 +79,7 @@ def sample_random_negatives(qrels : pd.DataFrame, num_neg_per_query: int, docnos
         rtr.extend([{'qid': qid, 'docno': docnos[docid], 'label': 0} for docid in sampled_neg_docids])
     return pd.concat([qrels, pd.DataFrame(rtr)])
 
+
 def queries_qrels_to_pairsiter(queries: pd.DataFrame, qrels: pd.DataFrame, max_neg=None) -> Iterator[tuple[str, str, str, str]]:
     """
     Given a set of queries and qrels, yield (qid, querytext, posdocno, negdocno) tuples
@@ -103,6 +111,6 @@ class NullWanDBRun:
     def log(self, *a, **kw): 
         print(*a, kw)
     def watch(self, *a, **kw): 
-        pass
+        ...
     def finish(self): 
-        pass
+        ...
