@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import Any, Callable, Literal, Tuple
+from typing import Callable, Literal
 from ir_measures import RR, Recall, nDCG
 import numpy as np
 import pandas as pd
