@@ -1,97 +1,145 @@
+from dataclasses import asdict, dataclass
 from pathlib import Path
 import shutil
 import pyterrier as pt
-from typing import List
 import numpy as np
 import json
 from npids import Lookup
 from pyterrier_dr.flex.core import IndexingMode
 from .retriever import JPQRetrieverFlat, JPQRetrieverPrune
 
+
+@dataclass(slots=True)
+class Metadata:
+    """Serialisable metadata for a JPQ index (stored as JSON)."""
+    type: str
+    format: str
+    M: int
+    Ks: int
+    dsub: int
+    doc_count: int
+
+    @classmethod
+    def load(cls, path: str | Path) -> Metadata: # type: ignore
+        with open(path, 'r', encoding='utf-8') as f:
+            return cls(**json.load(f))
+
+    def save(self, path: str | Path) -> None:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(asdict(self), f)
+
+            
 class JPQIndex(pt.Artifact):
 
     ARTIFACT_TYPE = 'dense_index'
     ARTIFACT_FORMAT = 'jpq'
 
-    def __init__(self, path: str):
+    # file names
+    _META_FN = "pt_meta.json"
+    _DOCNOS_FN = "docnos.npids"
+    _CODES_FN = "codes.f4"     # uint8   [N, M]
+    _SUBVECS_FN = "subvecs.f4" # float32 [M, Ks, dsub]
+
+    def __init__(self, path: str | Path):
         super().__init__(path)
-        self._meta = None
-        self._dvecs = None
-        self._codes = None
-        self._docnos = None
         self.index_path = Path(path)
 
-    def __len__(self):
-        return self.payload(return_codes=False, return_docnos=False, return_dvecs=False)[0]['doc_count']
-    
-    def payload(self, return_dvecs=True, return_docnos=True, return_codes=True):
+        self._meta: Metadata | None = None
+        self._dvecs: np.ndarray | None = None
+        self._codes: np.ndarray | None = None
+        self._docnos: Lookup | None = None
+
+
+    @property
+    def meta(self) -> Metadata:
         if self._meta is None:
-            with open(self.index_path/'pt_meta.json', 'rt') as f_meta:
-                meta = json.load(f_meta)
-                assert meta.get('type') == 'dense_index' and meta['format'] == 'jpq'
-                self._meta = meta
-        res = [self._meta]
-        if return_dvecs:
-            if self._dvecs is None:
-                self._dvecs = np.memmap(self.index_path/'subvecs.f4', mode='r', dtype=np.float32, shape=(self._meta['M'], self._meta['Ks'], self._meta['dsub']))
-            res.insert(0, self._dvecs)
-        if return_codes:
-            if self._codes is None:
-                self._codes = np.memmap(self.index_path/'codes.f4', mode='r', dtype=np.uint8, shape=(self._meta['doc_count'], self._meta['M']))
-            res.insert(0, self._codes)
-        if return_docnos:
-            if self._docnos is None:
-                self._docnos = Lookup(self.index_path/'docnos.npids')
-            res.insert(0, self._docnos)
-        return res
-    
+            self._meta = Metadata.load(self.index_path / JPQIndex._META_FN)
+        return self._meta # type: ignore
+
+
+    @property
+    def docnos(self) -> Lookup:
+        if self._docnos is None:
+            self._docnos = Lookup(self.index_path / JPQIndex._DOCNOS_FN)
+        return self._docnos
+
+
+    @property
+    def codes(self) -> np.ndarray:
+        if self._codes is None:
+            shape = (self.meta.doc_count, self.meta.M)
+            self._codes = np.memmap(self.index_path / JPQIndex._CODES_FN, mode="r", dtype=np.uint8, shape=shape)
+        return self._codes
+
+
+    @property
+    def dvecs(self) -> np.ndarray:
+        if self._dvecs is None:
+            shape = (self.meta.M, self.meta.Ks, self.meta.dsub)
+            self._dvecs = np.memmap(self.index_path / JPQIndex._SUBVECS_FN, mode="r", dtype=np.float32, shape=shape)
+        return self._dvecs
+
+
+    def __len__(self) -> int:
+        return self.meta.doc_count
+
+
     @staticmethod
-    def build(path : str, 
-              docnos : List[str], 
-              codes : np.ndarray, # N x M
-              embs : np.ndarray, # sub-item embeddings: M x 2^nbits x dsub (aka the centroids)
-              mode = IndexingMode.create) -> "JPQIndex":
-        index = JPQIndex(path)
-        index.docnos = docnos
-        index.codes = codes
-        index.embs = embs
+    def build(
+        path: str | Path, 
+        docnos: list[str], 
+        codes: np.ndarray, # [N, M]
+        centroids: np.ndarray, # [M, Ks, dsub]
+        mode = IndexingMode.create
+    ) -> "JPQIndex": # type: ignore
         path = Path(path)
+
         if path.exists():
             if mode == IndexingMode.overwrite:
                 shutil.rmtree(path)
             else:
                 raise RuntimeError(f'Index already exists at {path}. If you want to delete and re-create an existing index, you can pass mode="overwrite"')
         path.mkdir(parents=True, exist_ok=True)
-        count = len(docnos)
-        Lookup.build(docnos, path/'docnos.npids')
 
-        with open(path/'subvecs.f4', 'wb') as fout:
-            for split in range(embs.shape[0]):
-                for code in range(embs.shape[1]):
-                    vec = embs[split, code, :] # dim: dsub
-                    vec = vec.astype(np.float32)
-                    fout.write(vec.tobytes())
-        with open(path/'codes.f4', 'wb') as fout:
-            for docid in range(count):
-                vec = codes[docid,:]
-                vec = vec.astype(np.uint8) # assumes Ks <= 256
-                fout.write(vec.tobytes())
-        with open(path/'pt_meta.json', 'wt') as f_meta:
-            json.dump({
-                "type": JPQIndex.ARTIFACT_TYPE,
-                "format": JPQIndex.ARTIFACT_FORMAT,
-                "M" : embs.shape[0],
-                "Ks": embs.shape[1],
-                "dsub" : embs.shape[2],
-                "doc_count": count
-            }, f_meta)
-        return JPQIndex(str(path))
+        centroids = np.asarray(centroids, dtype=np.float32)
+        codes = np.asarray(codes, dtype=np.uint8)
+        docnos = list(docnos)
+
+        if centroids.ndim != 3:
+            raise ValueError(f"centroids must have shape [M, Ks, dsub], got {centroids.shape}")
+        if codes.ndim != 2:
+            raise ValueError(f"codes must have shape [N, M], got {codes.shape}")
+
+        M, Ks, dsub = centroids.shape
+        N, M_codes = codes.shape
+        if M != M_codes:
+            raise ValueError(f"M mismatch: embs={M}, codes={M_codes}")
+
+        # We save the docnos
+        Lookup.build(docnos, path / JPQIndex._DOCNOS_FN)
+
+        # We save the sub-vectors
+        with open(path / JPQIndex._SUBVECS_FN, "wb") as f:
+            centroids.tofile(f)
+
+        # We save the codes
+        with open(path / JPQIndex._CODES_FN, "wb") as f:
+            codes.tofile(f)
+
+        # We save the metadata
+        Metadata(
+            type=JPQIndex.ARTIFACT_TYPE,
+            format=JPQIndex.ARTIFACT_FORMAT,
+            M=int(M),
+            Ks=int(Ks),
+            dsub=int(dsub),
+            doc_count=int(N),
+        ).save(path / JPQIndex._META_FN)
+
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
-        docnos, codes, subembs, _ = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
-        return JPQRetrieverFlat(docnos, codes, subembs, topk=topk, name="JPQ-Full")
-    
-    def retriever_prune(self, topk: int = 1000, ub_inflation : float =1.) -> "JPQRetrieverPrune":
-        docnos, codes, subembs, _ = self.payload(return_dvecs=True, return_docnos=True, return_codes=True)
-        return JPQRetrieverPrune(docnos, codes, subembs, topk=topk, name="JPQ-Full", ub_inflation=ub_inflation)
-        
+        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat")
+
+
+    def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
+        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation)

@@ -247,7 +247,7 @@ class JPQTrainer:
             topk_eval : int = 1000):
         
         rtr = pt.Evaluate(
-            (retr_pipe%topk_eval)(eval_queries),  # type: ignore
+            (retr_pipe % topk_eval)(eval_queries),  # type: ignore
             eval_qrels, 
             metrics=[RR@10, Recall@1000, nDCG@10])
         
@@ -353,4 +353,4 @@ class JPQTrainer:
             docnos.fwd,
             all_codes,
             centroids
-            )
+        )
