@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 
@@ -7,13 +8,16 @@ import pandas as pd
 from contextlib import contextmanager
 from typing import Iterator, Any
 
+logging.basicConfig(level=logging.INFO, force=True)
+logger = logging.getLogger(__name__)
 
 @contextmanager
 def timer(name: str):
-    t0 = time.perf_counter()
-    yield
-    dt = time.perf_counter() - t0
-    print(f"[TIMER] {name}: {dt/60:.2f} min ({dt:.1f} s)")
+    t1 = t2 = time.perf_counter() 
+    yield lambda: t2 - t1
+    t2 = time.perf_counter() 
+    logger.info(f"[TIMER] {name}: {(t2-t1)/60:.2f} min ({t2-t1:.1f} s)")
+
 
 def bytes_to_gb(nbytes: int) -> float:
     return nbytes / (1024**3)

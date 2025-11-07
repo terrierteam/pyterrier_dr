@@ -74,6 +74,7 @@ def compute_from_pq_index(M, indexpq, docids):
 
     return codes, pq.get_centroids(), pq # type: ignore
 
+
 def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
     return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
