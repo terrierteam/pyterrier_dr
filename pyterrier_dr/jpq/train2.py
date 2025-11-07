@@ -205,6 +205,7 @@ class JPQTrainer:
                     break
 
             logger.info(f"[JPQ] epoch {ep}/{epochs} steps {step}")
+            logger.info(f"[JPQ] Training loss: {running_loss/step}")
 
     def _currentindex(self, model, selected_docnos, codes, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
