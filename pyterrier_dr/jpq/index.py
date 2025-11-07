@@ -20,11 +20,11 @@ class Metadata:
     doc_count: int
 
     @classmethod
-    def load(cls, path: str | Path) -> "Metadata": # type: ignore
+    def load(cls, path: str | Path):
         with open(path, 'r', encoding='utf-8') as f:
             return cls(**json.load(f))
 
-    def save(self, path: str | Path) -> None:
+    def save(self, path: str | Path):
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(asdict(self), f)
 
