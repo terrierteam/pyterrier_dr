@@ -49,12 +49,14 @@ class TestJPQ(unittest.TestCase):
         t.query_encoder.model.save_pretrained("/data/data-nicola/jpq/vaswani_10_epochs_M96", from_pt=True)  # type: ignore
  
         oldmodel = pyterrier_dr.TctColBert()
-        dataset = pt.get_dataset('msmarco_passage')
+        dataset = pt.get_dataset('vaswani')
         print(pt.Experiment(
             [
                 oldmodel >> index.retriever(), # type: ignore
                 t.query_encoder >> newindex.retriever_flat()
             ],
+            topics = dataset.get_topics(),
+            qrels = dataset.get_qrels(),
             eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10],
             batch_size=10,
             verbose=True

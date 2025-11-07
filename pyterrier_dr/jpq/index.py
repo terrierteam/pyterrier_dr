@@ -136,6 +136,8 @@ class JPQIndex(pt.Artifact):
             doc_count=int(N),
         ).save(path / JPQIndex._META_FN)
 
+        return JPQIndex(path)
+
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
         return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat")

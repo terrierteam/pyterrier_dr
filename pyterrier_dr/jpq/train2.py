@@ -12,6 +12,7 @@ import pyterrier as pt
 import shutil
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
+from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
 from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer
@@ -354,5 +355,6 @@ class JPQTrainer:
             dest, 
             docnos.fwd,
             all_codes,
-            centroids
+            centroids,
+            mode=IndexingMode.overwrite
         )
