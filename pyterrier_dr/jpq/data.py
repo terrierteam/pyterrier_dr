@@ -177,6 +177,7 @@ def add_jpq_negs(
                     docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
                 else:
                     docpairs[f"{t}_ranks"].append(100) # a deep enough rank
+        docpairs['neg_jpq_codes'] = torch.cat(docpairs['neg_jpq_codes'], dim=0)
         return docpairs
 
     def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
