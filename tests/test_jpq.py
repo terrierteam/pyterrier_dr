@@ -54,7 +54,7 @@ class TestJPQ(unittest.TestCase):
         (tct >> jpqindex.retriever_pq()).search("chemical reactions")
         print(pt.Experiment(
             [tct >> index,
-            tct >> jpqindex.retriever(),
+            tct >> jpqindex.retriever_flat(),
             tct >> jpqindex.retriever_pq(),
             #tct >> jpqindex.retriever_prune()
             ],
