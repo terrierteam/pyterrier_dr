@@ -69,13 +69,11 @@ def compute_PQ(
     # is a subset of the sel_indices set, it should be ok.
     return codes, pq.get_centroids(), pq # type: ignore
 
+
 def compute_from_pq_index(M, indexpq, docids):
 
     codes = np.empty((len(docids), M), dtype=np.uint8)
-
     return codes, pq.get_centroids(), pq # type: ignore
-
-
 
 
 def prepare_validation_data(
