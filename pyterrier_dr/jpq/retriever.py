@@ -174,7 +174,7 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         Ks = self.sub_embeddings.shape[1]
         import faiss
         # Step 1: Create IndexPQ
-        index = faiss.IndexPQ(d, self.M, np.log2(Ks).astype(int), faiss.METRIC_INNER_PRODUCT)
+        index = faiss.IndexPQ(d, self.M, np.log2(Ks).astype(int).item(), faiss.METRIC_INNER_PRODUCT)
 
         # Step 2: Mark index as trained (we already have centroids)
         index.is_trained = True
