@@ -238,9 +238,10 @@ class JPQCELossInBatchNegs(nn.Module):
             # a) positives & in-batch negatives
             pos_scores = torch.matmul(q, pos.T)  # [B, B]
 
-            # b) explicit negatives
-            neg_scores = torch.matmul(q, neg.T)  # [B, B*N]
-
+            # b) explicit negatives, applied for all queries
+            neg_flat = neg.reshape(B * N, -1)     # [B*N, D]
+            neg_scores = q @ neg_flat.T           # [B, B*N]
+            
             # 5. Concatenate all scores
             scores = torch.cat([pos_scores, neg_scores], dim=1)  # [B, B + B*N]
         else:
