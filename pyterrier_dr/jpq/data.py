@@ -141,10 +141,16 @@ def add_jpq_negs(
     ds: Dataset, 
     top_k: int,
     retr_pipe: pt.Transformer,
-    codes: np.ndarray
+    codes: np.ndarray,
+    cache : bool = True
 ) -> Dataset:
-
     retr_pipe = (retr_pipe % (top_k + 2)).compile() # +2 to account for pos and neg docs already in the index
+    
+    if cache:
+        # many queries will be repeated due to the nature of a pairs dataset, so cache results to speed up
+        from pyterrier_caching import RetrieverCache
+        retr_pipe = RetrieverCache(None, retr_pipe, on='query')
+    
     codes_t = torch.as_tensor(codes, dtype=torch.long)
     def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
         res : pd.DataFrame = retr_pipe.search(docpair['query_text'])
@@ -168,4 +174,5 @@ def add_jpq_negs(
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
     )
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes", "neg_jpq_codes", "pos_ranks", "neg_ranks", "neg_jpq_ranks"])
+    
     return ds
