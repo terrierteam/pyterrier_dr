@@ -132,7 +132,7 @@ class JPQRetrieverFaissBase(JPQRetriever):
         Q = np.stack(topics["query_vec"].to_list())
         qids = topics['qid'].astype(str).tolist()
         self._ensure()
-        with timer(f"{self._name} / flat search"):
+        with timer(f"{self._name} / search"):
             D, I = self._index.search(Q, min(self.topk, len(self.docnos)))
         rows = []
         for i, qid in enumerate(qids):
