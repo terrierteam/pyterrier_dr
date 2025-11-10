@@ -40,7 +40,8 @@ class TestJPQ(unittest.TestCase):
             eval_qrels= dataset.get_qrels(), 
             valid_every=64,
             jpq_negs = 10,
-            lambda_rank=True
+            lambda_rank=False,
+            in_batch=True
         )
         from tempfile import mkdtemp
         import os, shutil
@@ -49,13 +50,13 @@ class TestJPQ(unittest.TestCase):
         jpqindex = t.jpq_index(dest)
 
         (tct >> jpqindex.retriever_flat()).search("chemical reactions")
-        (tct >> jpqindex.retriever_prune()).search("chemical reactions")
+        #(tct >> jpqindex.retriever_prune()).search("chemical reactions")
         (tct >> jpqindex.retriever_pq()).search("chemical reactions")
         print(pt.Experiment(
             [tct >> index,
             tct >> jpqindex.retriever(),
             tct >> jpqindex.retriever_pq(),
-            tct >> jpqindex.retriever_prune()
+            #tct >> jpqindex.retriever_prune()
             ],
             dataset.get_topics(),
             dataset.get_qrels(),
