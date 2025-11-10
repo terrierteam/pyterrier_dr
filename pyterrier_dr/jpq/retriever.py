@@ -165,7 +165,7 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
     def __init__(self, *args, name: Optional[str] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._index = None
-        self._name = name or "JPQRetrieverFlat"
+        self._name = name or "JPQRetrieverPQ"
     
     def _ensure(self, bs: int = 20000):
         if self._index is not None: return
