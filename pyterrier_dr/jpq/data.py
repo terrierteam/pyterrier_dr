@@ -164,8 +164,8 @@ def add_jpq_negs(
         docpairs['neg_ranks'] = []
 
         res_grouped = dict(tuple(res.groupby("qid")))
-        for i, _ in enumerate(docpairs["query_text"]):
-            res_i = res_grouped.get(f"q{i}", pd.DataFrame())
+        for i in range(len(docpairs["query_text"])):
+            res_i = res_grouped.get(f"q{i}", pd.DataFrame(columns=res.columns))
             res_i = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
             res_i = res_i.head(top_k) # take top_k only
             codes_negs = codes_t[res_i["docid"].to_list()]
