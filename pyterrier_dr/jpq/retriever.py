@@ -181,7 +181,10 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
 
         # Step 3: Assign PQ centroids
         # FAISS stores centroids internally in a 1D array; we reshape
-        index.pq.centroids = pq_centroids.reshape(self.M, Ks, d // self.M).copy()
+        faiss.copy_array_to_vector(
+            pq_centroids.copy().reshape(-1),  # flatten
+            index.pq.centroids         # destination (C++ vector<float>)
+        )
 
         # Step 4: Assign PQ codes
         index.codes = self.codes.copy()
