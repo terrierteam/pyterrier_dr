@@ -288,6 +288,34 @@ def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
     
     return loss / batch_size
 
+def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
+    """
+    Vectorized LambdaRank loss (no Python loops)
+    scores: [B, num_docs]
+    ranks: [B, num_docs]  (global ranks)
+    labels: [B, num_docs] (binary or graded relevance)
+    """
+    # Compute DCG gain and discount
+    gain = (2 ** labels - 1).float()                     # [B, num_docs]
+    discount = 1.0 / torch.log2(2.0 + ranks.float())     # [B, num_docs]
+    dcg = gain * discount                                 # [B, num_docs]
+
+    # Pairwise differences
+    diff_s = scores.unsqueeze(2) - scores.unsqueeze(1)   # [B, num_docs, num_docs]
+    diff_dcg = torch.abs(dcg.unsqueeze(2) - dcg.unsqueeze(1))  # [B, num_docs, num_docs]
+    diff_labels = labels.unsqueeze(2) - labels.unsqueeze(1)     # [B, num_docs, num_docs]
+
+    # Only consider pairs where i is more relevant than j
+    pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
+
+    # Logistic pairwise loss weighted by ΔNDCG
+    pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg * pos_pairs
+
+    # Sum over pairs and average over batch
+    loss = pair_loss.sum(dim=(1,2)).mean()
+
+    return loss
+
 class JPQCELossJPQNegsLambaRank(nn.Module):
     def __init__(self, query_encoder, passage_encoder):
         super().__init__()
@@ -349,7 +377,7 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
         ], dim=1)          
 
         # 6. Compute loss
-        loss = lambdarank_fixed_ranks(scores, ranks, labels, sigma=0.1)
+        loss = lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=0.1)
         return loss
 
 class JPQBiencoder:
