@@ -225,12 +225,13 @@ class JPQCELossInBatchNegs(nn.Module):
         if "neg_codes" in batch:
             
             if "neg_jpq_codes" in batch: # jpq_negs from the last epoch
-                all_neg_codes = torch.cat((batch["neg_codes"], batch["neg_jpq_codes"]))
-                # Flatten negatives for similarity computation
+                all_neg_codes = torch.cat((batch["neg_codes"].unsqueeze(1), batch["neg_jpq_codes"]), dim=1) # [B, N_total, D_code]
                 B, N, D_code = all_neg_codes.shape
-                neg = self.passage_encoder(all_neg_codes.view(B*N, D_code).to(device))  # [B*N, D]
+                # Flatten negatives for similarity computation
+                neg = self.passage_encoder(all_neg_codes.view(B*N, D_code).to(device))  # [B * N_total, D]
+                neg = neg.view(B, N, -1)  # [B, N_total, D]
             else:
-                neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, D]
+                neg = self.passage_encoder(batch["neg_codes"].to(device)).unsqueeze(1)  # [B, 1, D]
                 # we only have ONE negative per batch, so hack in a unsqueeze here, to fit rest of code.
 
             # 4. Compute similarity scores
