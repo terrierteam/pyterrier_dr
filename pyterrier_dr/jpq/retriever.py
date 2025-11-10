@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from typing import List, Optional
 import pandas as pd
 import numpy as np
@@ -120,7 +121,26 @@ class JPQRetriever(pt.Transformer):
         assert sub_embeddings.shape[0] == self.M, (sub_embeddings.shape, self.M)
         self.topk = topk
 
-class JPQRetrieverFlat(JPQRetriever):
+class JPQRetrieverFaissBase(JPQRetriever):
+
+    @abstractmethod
+    def _ensure(self, bs: int = 20000):
+        pass
+
+    def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
+        pta.validate.query_frame(topics, extra_columns=['query_vec'])
+        Q = np.stack(topics["query_vec"].to_list())
+        qids = topics['qid'].astype(str).tolist()
+        self._ensure()
+        with timer(f"{self._name} / flat search"):
+            D, I = self._index.search(Q, min(self.topk, len(self.docnos)))
+        rows = []
+        for i, qid in enumerate(qids):
+            for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
+                rows.append((qid, self.docnos[int(did)], float(s), r))
+        return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+
+class JPQRetrieverFlat(JPQRetrieverFaissBase):
     """Subset-mode retriever (Flat-IP reconstructed from codes)."""
     def __init__(self, *args, name: Optional[str] = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -139,19 +159,34 @@ class JPQRetrieverFlat(JPQRetriever):
             embs = np.concatenate([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)], axis=-1)
             index.add(embs)
         self._index = index
+
+class JPQRetrieverPQ(JPQRetrieverFaissBase):
+    """Subset-mode retriever (IndexPQ constructed directly from codes and centroids)."""
+    def __init__(self, *args, name: Optional[str] = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._index = None
+        self._name = name or "JPQRetrieverFlat"
     
-    def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.query_frame(topics, extra_columns=['query_vec'])
-        Q = np.stack(topics["query_vec"].to_list())
-        qids = topics['qid'].astype(str).tolist()
-        self._ensure()
-        with timer(f"{self._name} / flat search"):
-            D, I = self._index.search(Q, min(self.topk, len(self.docnos)))
-        rows = []
-        for i, qid in enumerate(qids):
-            for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
-                rows.append((qid, self.docnos[int(did)], float(s), r))
-        return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+    def _ensure(self, bs: int = 20000):
+        if self._index is not None: return
+        pq_centroids = self.sub_embeddings
+        d = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
+        Ks = self.sub_embeddings.shape[1]
+        import faiss
+        # Step 1: Create IndexPQ
+        index = faiss.IndexPQ(d, self.M, np.log2(Ks).astype(int), faiss.METRIC_INNER_PRODUCT)
+
+        # Step 2: Mark index as trained (we already have centroids)
+        index.is_trained = True
+
+        # Step 3: Assign PQ centroids
+        # FAISS stores centroids internally in a 1D array; we reshape
+        index.pq.centroids = pq_centroids.reshape(self.M, Ks, d // self.M).copy()
+
+        # Step 4: Assign PQ codes
+        index.codes = self.codes.copy()
+        index.ntotal = len(self.docnos)
+        self._index = index
     
 class JPQRetrieverPrune(JPQRetriever):
 

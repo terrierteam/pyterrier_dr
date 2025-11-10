@@ -6,7 +6,7 @@ import numpy as np
 import json
 from npids import Lookup
 from pyterrier_dr.flex.core import IndexingMode
-from .retriever import JPQRetrieverFlat, JPQRetrieverPrune
+from .retriever import JPQRetrieverFlat, JPQRetrieverPrune, JPQRetrieverPQ
 
 
 @dataclass(slots=True)
@@ -138,10 +138,11 @@ class JPQIndex(pt.Artifact):
 
         return JPQIndex(path)
 
+    def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
+        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ")
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
         return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat")
-
 
     def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
         return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation)
