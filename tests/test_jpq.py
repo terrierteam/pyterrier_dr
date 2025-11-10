@@ -31,14 +31,16 @@ class TestJPQ(unittest.TestCase):
             max_neg=1
             )
         
+        doc_pairs = list(doc_pairs)[:256] # limit for test speed
         t.fit(
             doc_pairs, 
-            epochs=10, #patience=10000, 
+            epochs=3, #patience=10000, 
             pq_sample_size=500, 
             eval_queries=dataset.get_topics(), 
-            eval_qrels= dataset.get_qrels(), valid_every=64,
+            eval_qrels= dataset.get_qrels(), 
+            valid_every=64,
             jpq_negs = 10,
-            in_batch=True
+            lambda_rank=True
         )
         from tempfile import mkdtemp
         import os, shutil
@@ -48,14 +50,16 @@ class TestJPQ(unittest.TestCase):
 
         (tct >> jpqindex.retriever_flat()).search("chemical reactions")
         (tct >> jpqindex.retriever_prune()).search("chemical reactions")
+        (tct >> jpqindex.retriever_pq()).search("chemical reactions")
         print(pt.Experiment(
             [tct >> index,
             tct >> jpqindex.retriever(),
+            tct >> jpqindex.retriever_pq(),
             tct >> jpqindex.retriever_prune()
             ],
             dataset.get_topics(),
             dataset.get_qrels(),
-            eval_metrics=[RR@100, MAP, nDCG@10]
+            eval_metrics=[RR@100, MAP, nDCG@10, "mrt"]
         ))
         del(jpqindex)
         shutil.rmtree(dest)
