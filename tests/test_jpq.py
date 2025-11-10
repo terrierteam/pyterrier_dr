@@ -48,16 +48,18 @@ class TestJPQ(unittest.TestCase):
         dest = mkdtemp()
         os.rmdir(dest)
         jpqindex = t.jpq_index(dest)
+        oldmodel = pyterrier_dr.TctColBert()
 
-        (tct >> jpqindex.retriever_flat()).search("chemical reactions")
-        #(tct >> jpqindex.retriever_prune()).search("chemical reactions")
-        (tct >> jpqindex.retriever_pq()).search("chemical reactions")
+        p = [
+            (tct >> jpqindex.retriever_flat()),
+            #(tct >> jpqindex.retriever_prune())
+            (tct >> jpqindex.retriever_pq())
+        ]
+        for r in p:
+            res = r.search("chemical reactions")
+            print(len(res))
         print(pt.Experiment(
-            [tct >> index,
-            tct >> jpqindex.retriever_flat(),
-            tct >> jpqindex.retriever_pq(),
-            #tct >> jpqindex.retriever_prune()
-            ],
+            [oldmodel >> index] + p,
             dataset.get_topics(),
             dataset.get_qrels(),
             eval_metrics=[RR@100, MAP, nDCG@10, "mrt"]
