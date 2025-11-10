@@ -14,7 +14,7 @@ from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
-from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, PassageEncoder, QueryEncoder
+from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambaRank, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
 
@@ -136,8 +136,15 @@ class JPQTrainer:
         in_batch : bool = False,
         batch_size : int = 32,
         jpq_negs : int = 0,
+        lambda_rank = False
     ):
-        lossclz = JPQCELossInBatchNegs if in_batch else JPQCELoss
+        if lambda_rank:
+            assert not in_batch, "in_batch and lambda_rank cannot be used together"
+            lossclz = JPQCELossJPQNegsLambaRank
+        elif in_batch:
+            lossclz = JPQCELossInBatchNegs
+        else:
+            lossclz = JPQCELoss
         loss_f = lossclz(model.query, model.passage).to(self.device)
 
         # Create optimizer for passage encoder AND query encoder
@@ -316,7 +323,8 @@ class JPQTrainer:
         eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25,
         in_batch : bool = False,
-        jpq_negs : int = 0
+        jpq_negs : int = 0,
+        lambda_rank : bool = False,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
@@ -329,7 +337,7 @@ class JPQTrainer:
         dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
 
-        self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every, in_batch, batch_size=batch_size, jpq_negs=jpq_negs)
+        self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every, in_batch, batch_size=batch_size, jpq_negs=jpq_negs, lambda_rank=lambda_rank)
         self.model = model
         self.fitted = True
 
