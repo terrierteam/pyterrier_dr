@@ -6,4 +6,5 @@ numpy
 npids
 sentence_transformers
 pyterrier-adaptive
+pyterrier-caching>=0.5.4
 datasets

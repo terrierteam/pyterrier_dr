@@ -69,11 +69,17 @@ def get_dataloader(
 ) -> DataLoader: 
     
     def collate(batch) -> dict[str, Any]:
-        return {
+        rtr = {
             'query_text': [b['query_text'] for b in batch],
             'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
-            'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
+            'neg_codes': torch.stack([b['neg_codes'] for b in batch])
         }
+        if 'neg_jpq_codes' in batch[0]:
+            rtr['neg_jpq_codes'] = torch.stack([b['neg_jpq_codes'] for b in batch])
+            rtr['neg_jpq_ranks'] = torch.stack([b['neg_jpq_ranks'] for b in batch])
+            rtr['pos_ranks' ] = torch.stack([b['pos_ranks'] for b in batch])
+            rtr['neg_ranks'] = torch.stack([b['neg_ranks'] for b in batch])
+        return rtr
     # logger.info(f"[DATA] Collating")
 
     return DataLoader(
@@ -135,16 +141,32 @@ def add_jpq_negs(
     ds: Dataset, 
     top_k: int,
     retr_pipe: pt.Transformer,
-    codes: np.ndarray
+    codes: np.ndarray,
+    cache : bool = False
 ) -> Dataset:
-
-    retr_pipe = (retr_pipe % top_k).compile()
+    retr_pipe = (retr_pipe % (top_k + 2)).compile() # +2 to account for pos and neg docs already in the index
+    
+    if cache:
+        # many queries will be repeated due to the nature of some pairs datasets
+        # (e.g. if they are instantiated from a qrels file), so cache results to speed up
+        from pyterrier_caching import RetrieverCache
+        retr_pipe = RetrieverCache(None, retr_pipe, on='query')
+    
     codes_t = torch.as_tensor(codes, dtype=torch.long)
     def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
         res : pd.DataFrame = retr_pipe.search(docpair['query_text'])
         res = res[~res["docno"].isin([docpair['pos_docno'], docpair['neg_docno']])]
+        res = res.head(top_k) # take top_k only
         codes_negs = codes_t[res["docid"].to_list()]
+        rank_negs = res["rank"].to_list()
         docpair["neg_jpq_codes"] = codes_negs
+        docpair["neg_jpq_ranks"] = rank_negs
+        for t in ["pos", "neg"]:
+            t_res = res["docno"] == docpair[f'{t}_docno']
+            if t_res.any():
+                docpair[f"{t}_ranks"] = res[t_res]["rank"].values[0]
+            else:
+                docpair[f"{t}_ranks"] = 100 # a deep enough rank
         return docpair
 
     logger.info("[DATA] Adding %d top_k negs to %d training examples" % (top_k, len(ds)))
@@ -152,5 +174,6 @@ def add_jpq_negs(
         _add_neg,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
     )
-    ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes", "neg_jpq_codes"])
+    ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes", "neg_jpq_codes", "pos_ranks", "neg_ranks", "neg_jpq_ranks"])
+    
     return ds

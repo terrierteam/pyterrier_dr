@@ -26,8 +26,8 @@ class QueryEncoder(nn.Module):
         Automatically batches inputs and optionally normalises vectors.
     """
     def __init__(
-        self, 
-        dr_model : pyterrier_dr.BiEncoder, 
+        self,
+        dr_model : pyterrier_dr.BiEncoder,
         batch_size: int = 64
     ) -> None:
         super().__init__()
@@ -45,7 +45,7 @@ class QueryEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.dr(x) # type: ignore
-    
+
     def encode_texts_torch(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
         """Encode a list of texts into a Torch tensor (float32), optionally L2-normalised."""
         if not texts:
@@ -100,7 +100,7 @@ class QueryEncoder(nn.Module):
             outputs.append(t)
 
         return torch.cat(outputs, dim=0)
-    
+
 
 class PassageEncoder(nn.Module):
     """
@@ -138,6 +138,7 @@ class PassageEncoder(nn.Module):
             self.sub_embeddings[i].weight.data.copy_(torch.from_numpy(cents[i]).float()) # type: ignore
 
     def forward(self, doc_codes: torch.Tensor) -> torch.Tensor:
+        assert doc_codes.dim() == 2
         parts = [self.sub_embeddings[i](doc_codes[:, i]) for i in range(self.M)]
         return torch.cat(parts, dim=1)
 
@@ -179,6 +180,7 @@ class JPQCELoss(nn.Module):
         self.query_encoder = query_encoder
         self.passage_encoder = passage_encoder
         self.loss_f = nn.CrossEntropyLoss()
+        print("Using CE loss")
 
     def forward(self, batch):
         # Find the device from the passage encoder (the model we are training)
@@ -207,6 +209,7 @@ class JPQCELossInBatchNegs(nn.Module):
         self.query_encoder = query_encoder
         self.passage_encoder = passage_encoder
         self.loss_f = nn.CrossEntropyLoss()
+        print("Using CE loss with IBNs")
 
     def forward(self, batch):
         device = next(self.passage_encoder.parameters()).device
@@ -223,16 +226,12 @@ class JPQCELossInBatchNegs(nn.Module):
             
             if "neg_jpq_codes" in batch: # jpq_negs from the last epoch
                 all_neg_codes = torch.cat((batch["neg_codes"], batch["neg_jpq_codes"]))
-                neg = self.passage_encoder(all_neg_codes.to(device))  # [B, 1+jpg_negs, D]
+                # Flatten negatives for similarity computation
+                B, N, D_code = all_neg_codes.shape
+                neg = self.passage_encoder(all_neg_codes.view(B*N, D_code).to(device))  # [B*N, D]
             else:
                 neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, D]
                 # we only have ONE negative per batch, so hack in a unsqueeze here, to fit rest of code.
-                neg = neg.unsqueeze(1)  # [B, 1, D]
-            
-            B, N, D = neg.shape
-
-            # Flatten negatives for similarity computation
-            neg = neg.view(B * N, D)  # [B*N, D]
 
             # 4. Compute similarity scores
             # a) positives & in-batch negatives
@@ -285,9 +284,137 @@ class JPQBiencoder(nn.Module):
             "JPQBiencoder is just a container; call "
             "self.query(...) or self.passage(...), not the model directly."
         )
-    
+
 #    def to(self, device: str):
 #        self.query = self.query.to(device)
 #        self.passage = self.passage.to(device)
 #        return self
+
+
+def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
+    """
+    scores: [batch_size, num_docs] - model similarity scores
+    ranks: [batch_size, num_docs] - integer global ranks (1 = top)
+    labels: [batch_size, num_docs] - relevance labels (e.g., 1 or 0)
+    """
+    batch_size, num_docs = scores.shape
+    loss = 0.0
     
+    for b in range(batch_size):
+        s = scores[b]
+        r = ranks[b]
+        y = labels[b]
+        
+        # Compute gain and discount for NDCG weighting
+        gain = (2 ** y - 1.0)
+        discount = 1.0 / torch.log2(2.0 + r.float())
+        dcg = gain * discount
+        
+        # ΔNDCG approximated via pairwise differences in DCG
+        delta_ndcg = torch.abs(dcg.unsqueeze(1) - dcg.unsqueeze(0))
+        
+        # pairwise differences in predicted scores
+        diff_s = s.unsqueeze(1) - s.unsqueeze(0)
+        diff_y = y.unsqueeze(1) - y.unsqueeze(0)
+        
+        # only pairs with different relevance matter
+        pos_pairs = diff_y > 0
+        
+        # logistic loss weighted by ΔNDCG
+        pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * delta_ndcg * pos_pairs.float()
+        loss += pair_loss.sum()
+    
+    return loss / batch_size
+
+def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
+    """
+    Vectorized LambdaRank loss (no Python loops)
+    scores: [B, num_docs]
+    ranks: [B, num_docs]  (global ranks)
+    labels: [B, num_docs] (binary or graded relevance)
+    """
+    # Compute DCG gain and discount
+    gain = (2 ** labels - 1).float()                     # [B, num_docs]
+    discount = 1.0 / torch.log2(2.0 + ranks.float())     # [B, num_docs]
+    dcg = gain * discount                                 # [B, num_docs]
+
+    # Pairwise differences
+    diff_s = scores.unsqueeze(2) - scores.unsqueeze(1)   # [B, num_docs, num_docs]
+    diff_dcg = torch.abs(dcg.unsqueeze(2) - dcg.unsqueeze(1))  # [B, num_docs, num_docs]
+    diff_labels = labels.unsqueeze(2) - labels.unsqueeze(1)     # [B, num_docs, num_docs]
+
+    # Only consider pairs where i is more relevant than j
+    pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
+
+    # Logistic pairwise loss weighted by ΔNDCG
+    pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg * pos_pairs
+
+    # Sum over pairs and average over batch
+    loss = pair_loss.sum(dim=(1,2)).mean()
+
+    return loss
+
+class JPQCELossJPQNegsLambaRank(nn.Module):
+    def __init__(self, query_encoder, passage_encoder):
+        super().__init__()
+        self.query_encoder = query_encoder
+        self.passage_encoder = passage_encoder
+        print("Using LambdaRank loss with JPQ negatives")
+
+    def forward(self, batch):
+        device = next(self.passage_encoder.parameters()).device
+        B = len(batch["query_text"])
+
+        # 1. Encode queries
+        q = self.query_encoder.encode_texts_torch(batch["query_text"]).to(device)  # [B, D]
+
+        # 2. Encode positives
+        pos = self.passage_encoder(batch["pos_codes"].to(device))  # [B, D]
+        rank_pos = batch["pos_ranks"].to(device).view(B, 1)
+
+        # 3. Encode negatives (if present)
+        if not "neg_codes" and "neg_ranks" in batch:
+            raise ValueError("LambdaRank requires explicit negatives with known ranks.")
+            
+        if "neg_jpq_codes" in batch: # jpq_negs from the last epoch
+            # need an unsqueeze here for the original neg_codes, as therse is only one per query
+            all_neg_codes = torch.cat((batch["neg_codes"].unsqueeze(1), batch["neg_jpq_codes"]), dim=1) # [B, N_total, D_code]
+            B, N, D_code = all_neg_codes.shape
+            neg = self.passage_encoder(all_neg_codes.view(B*N, D_code).to(device))  # [B * N_total, D]
+            neg = neg.view(B, N, -1)  # [B, N_total, D]
+            rank_negs = torch.cat((batch["neg_ranks"].unsqueeze(1), batch["neg_jpq_ranks"]), dim=1).to(device)  # [B, N_neg_total]
+        else:
+            neg = self.passage_encoder(batch["neg_codes"].to(device))  # [B, D]
+            rank_negs = batch["neg_ranks"].to(device)  # [B, N=1]
+            if rank_negs.dim() == 1:
+                rank_negs = rank_negs.view(B, -1)  # reshape to [B, N] if needed
+            N = 1
+
+        # sanity shapes
+        assert q.dim() == 2 and pos.dim() == 2 and neg.dim() == 3
+        Bq, Dq = q.shape
+        Bp, Dp = pos.shape
+        Bn, N, Dn = neg.shape
+        assert Bq == Bp == Bn == B, f"Batch mismatch: {Bq},{Bp},{Bn}"
+        assert Dq == Dp == Dn, f"Embedding dim mismatch: {Dq},{Dp},{Dn}"
+
+        # 4. Compute similarities (per-query)
+        # positive: [B, 1]
+        pos_scores = (q * pos).sum(dim=1, keepdim=True)
+
+        # negatives: [B, N]  (each query against its own N negatives)
+        neg_scores = torch.einsum("bd,bnd->bn", q, neg)
+        # alternative: neg_scores = torch.matmul(q.unsqueeze(1), neg.transpose(1,2)).squeeze(1)
+
+        # 5. Concatenate scores, ranks, labels
+        scores = torch.cat([pos_scores, neg_scores], dim=1)   # [B, 1 + N]
+        ranks = torch.cat([rank_pos, rank_negs], dim=1)      # [B, 1 + N]
+        labels = torch.cat([
+            torch.ones((B, 1), device=device),
+            torch.zeros((B, N), device=device)
+        ], dim=1)          
+
+        # 6. Compute loss
+        loss = lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=0.1)
+        return loss
+
