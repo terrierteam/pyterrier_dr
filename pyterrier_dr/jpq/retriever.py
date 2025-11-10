@@ -187,7 +187,7 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         )
 
         # Step 4: Assign PQ codes
-        index.codes = self.codes.copy()
+        faiss.copy_array_to_vector(self.codes.copy().reshape(-1), index.codes)
         index.ntotal = len(self.docnos)
         self._index = index
     
