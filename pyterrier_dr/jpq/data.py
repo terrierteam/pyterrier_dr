@@ -163,8 +163,9 @@ def add_jpq_negs(
         docpairs['pos_ranks'] = []
         docpairs['neg_ranks'] = []
 
-        for i, _ in enumerate(docpairs['query_text']):
-            res_i = res[res["qid"] == f"q{i}"]
+        res_grouped = dict(tuple(res.groupby("qid")))
+        for i, _ in enumerate(docpairs["query_text"]):
+            res_i = res_grouped.get(f"q{i}", pd.DataFrame())
             res_i = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
             res_i = res_i.head(top_k) # take top_k only
             codes_negs = codes_t[res_i["docid"].to_list()]
@@ -177,34 +178,13 @@ def add_jpq_negs(
                     docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
                 else:
                     docpairs[f"{t}_ranks"].append(100) # a deep enough rank
-        docpairs['neg_jpq_codes'] = torch.cat(docpairs['neg_jpq_codes'], dim=0)
         return docpairs
 
-    def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
-        res : pd.DataFrame = retr_pipe.search(docpair['query_text'])
-        res = res[~res["docno"].isin([docpair['pos_docno'], docpair['neg_docno']])]
-        res = res.head(top_k) # take top_k only
-        codes_negs = codes_t[res["docid"].to_list()]
-        rank_negs = res["rank"].to_list()
-        docpair["neg_jpq_codes"] = codes_negs
-        docpair["neg_jpq_ranks"] = rank_negs
-        for t in ["pos", "neg"]:
-            t_res = res["docno"] == docpair[f'{t}_docno']
-            if t_res.any():
-                docpair[f"{t}_ranks"] = res[t_res]["rank"].values[0]
-            else:
-                docpair[f"{t}_ranks"] = 100 # a deep enough rank
-        return docpair
-
     logger.info("[DATA] Adding %d top_k negs to %d training examples" % (top_k, len(ds)))
-    
-    # ds = ds.map(
-    #     _add_neg,
-    #     remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
-    # )
+
     ds = ds.map(
         _add_neg_batches, batched=True, batch_size=32,
-        remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
+        remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes", "pos_ranks", "neg_ranks", "neg_jpq_ranks")]
     )
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes", "neg_jpq_codes", "pos_ranks", "neg_ranks", "neg_jpq_ranks"])
     
