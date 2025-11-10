@@ -26,8 +26,8 @@ class QueryEncoder(nn.Module):
         Automatically batches inputs and optionally normalises vectors.
     """
     def __init__(
-        self, 
-        dr_model : pyterrier_dr.BiEncoder, 
+        self,
+        dr_model : pyterrier_dr.BiEncoder,
         batch_size: int = 64
     ) -> None:
         super().__init__()
@@ -45,7 +45,7 @@ class QueryEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.dr(x) # type: ignore
-    
+
     def encode_texts_torch(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
         """Encode a list of texts into a Torch tensor (float32), optionally L2-normalised."""
         if not texts:
@@ -100,7 +100,7 @@ class QueryEncoder(nn.Module):
             outputs.append(t)
 
         return torch.cat(outputs, dim=0)
-    
+
 
 class PassageEncoder(nn.Module):
     """
@@ -252,6 +252,44 @@ class JPQCELossInBatchNegs(nn.Module):
         # 7. Compute loss
         return self.loss_f(scores, labels)
 
+class JPQBiencoder(nn.Module):
+    """
+    A simple container class bundling a `QueryEncoder` and a `PassageEncoder`
+    into a single bi-encoder model.
+
+    This class does not implement training or loss computation itself; it
+    simply groups both encoders and provides a unified `.to(device)` method
+    for device management.
+
+    Attributes
+    ----------
+    query : QueryEncoder
+        Query encoder submodule.
+    passage : PassageEncoder
+        Passage encoder submodule.
+
+    Methods
+    -------
+    to(device: str) -> JPQBiencoder
+        Moves both the query and passage encoders to the specified device
+        and returns `self`.
+    """
+    def __init__(self, query_encoder: QueryEncoder, passage_encoder: PassageEncoder):
+        super().__init__()
+        self.query = query_encoder
+        self.passage = passage_encoder
+
+    def forward(self):
+        raise NotImplementedError(
+            "JPQBiencoder is just a container; call "
+            "self.query(...) or self.passage(...), not the model directly."
+        )
+
+#    def to(self, device: str):
+#        self.query = self.query.to(device)
+#        self.passage = self.passage.to(device)
+#        return self
+
 
 def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
     """
@@ -380,34 +418,3 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
         loss = lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=0.1)
         return loss
 
-class JPQBiencoder:
-    """
-    A simple container class bundling a `QueryEncoder` and a `PassageEncoder`
-    into a single bi-encoder model.
-
-    This class does not implement training or loss computation itself; it
-    simply groups both encoders and provides a unified `.to(device)` method
-    for device management.
-
-    Attributes
-    ----------
-    query : QueryEncoder
-        Query encoder submodule.
-    passage : PassageEncoder
-        Passage encoder submodule.
-
-    Methods
-    -------
-    to(device: str) -> JPQBiencoder
-        Moves both the query and passage encoders to the specified device
-        and returns `self`.
-    """
-    def __init__(self, query_encoder: QueryEncoder, passage_encoder: PassageEncoder):
-        self.query = query_encoder
-        self.passage = passage_encoder
-
-    def to(self, device: str):
-        self.query = self.query.to(device)
-        self.passage = self.passage.to(device)
-        return self
-    
