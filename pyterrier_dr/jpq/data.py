@@ -153,6 +153,28 @@ def add_jpq_negs(
         retr_pipe = RetrieverCache(None, retr_pipe, on='query')
     
     codes_t = torch.as_tensor(codes, dtype=torch.long)
+
+    def _add_neg_batches(docpairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        queries = pd.DataFrame([  {"qid" : f"q{i}", "query": dp['query_text']} for i, dp in enumerate(docpairs)])
+        res : pd.DataFrame = retr_pipe.search(queries)
+        out_docpairs = []
+        for i, docpair in enumerate(docpairs):
+            res_i = res[res["qid"] == f"q{i}"]
+            res_i = res_i[~res_i["docno"].isin([docpair['pos_docno'], docpair['neg_docno']])]
+            res_i = res_i.head(top_k) # take top_k only
+            codes_negs = codes_t[res_i["docid"].to_list()]
+            rank_negs = res_i["rank"].to_list()
+            docpair["neg_jpq_codes"] = codes_negs
+            docpair["neg_jpq_ranks"] = rank_negs
+            for t in ["pos", "neg"]:
+                t_res = res_i["docno"] == docpair[f'{t}_docno']
+                if t_res.any():
+                    docpair[f"{t}_ranks"] = res_i[t_res]["rank"].values[0]
+                else:
+                    docpair[f"{t}_ranks"] = 100 # a deep enough rank
+            out_docpairs.append(docpair)
+        return out_docpairs
+
     def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
         res : pd.DataFrame = retr_pipe.search(docpair['query_text'])
         res = res[~res["docno"].isin([docpair['pos_docno'], docpair['neg_docno']])]
@@ -170,8 +192,13 @@ def add_jpq_negs(
         return docpair
 
     logger.info("[DATA] Adding %d top_k negs to %d training examples" % (top_k, len(ds)))
+    
+    # ds = ds.map(
+    #     _add_neg,
+    #     remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
+    # )
     ds = ds.map(
-        _add_neg,
+        _add_neg_batches, batched=True, batch_size=32,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", "pos_codes", "neg_codes", "neg_jpq_codes")]
     )
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes", "neg_jpq_codes", "pos_ranks", "neg_ranks", "neg_jpq_ranks"])
