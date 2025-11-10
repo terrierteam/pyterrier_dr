@@ -253,7 +253,7 @@ class JPQCELossInBatchNegs(nn.Module):
         # 7. Compute loss
         return self.loss_f(scores, labels)
 
-class JPQBiencoder:
+class JPQBiencoder(nn.Module):
     """
     A simple container class bundling a `QueryEncoder` and a `PassageEncoder`
     into a single bi-encoder model.
@@ -276,11 +276,18 @@ class JPQBiencoder:
         and returns `self`.
     """
     def __init__(self, query_encoder: QueryEncoder, passage_encoder: PassageEncoder):
+        super().__init__()
         self.query = query_encoder
         self.passage = passage_encoder
 
-    def to(self, device: str):
-        self.query = self.query.to(device)
-        self.passage = self.passage.to(device)
-        return self
+    def forward(self):
+        raise NotImplementedError(
+            "JPQBiencoder is just a container; call "
+            "self.query(...) or self.passage(...), not the model directly."
+        )
+    
+#    def to(self, device: str):
+#        self.query = self.query.to(device)
+#        self.passage = self.passage.to(device)
+#        return self
     
