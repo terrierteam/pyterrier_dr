@@ -154,26 +154,30 @@ def add_jpq_negs(
     
     codes_t = torch.as_tensor(codes, dtype=torch.long)
 
-    def _add_neg_batches(docpairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        queries = pd.DataFrame([  {"qid" : f"q{i}", "query": dp['query_text']} for i, dp in enumerate(docpairs)])
+    def _add_neg_batches(docpairs: dict[str, list[Any]]) -> dict[str, list[Any]]:
+        queries = pd.DataFrame([  {"qid" : f"q{i}", "query": qtext} for i, qtext in enumerate(docpairs['query_text'])])
         res : pd.DataFrame = retr_pipe.search(queries)
-        out_docpairs = []
-        for i, docpair in enumerate(docpairs):
+        docpairs = docpairs.copy()
+        docpairs['neg_jpq_codes'] = []
+        docpairs['neg_jpq_ranks'] = []
+        docpairs['pos_ranks'] = []
+        docpairs['neg_ranks'] = []
+
+        for i, _ in enumerate(docpairs['query_text']):
             res_i = res[res["qid"] == f"q{i}"]
-            res_i = res_i[~res_i["docno"].isin([docpair['pos_docno'], docpair['neg_docno']])]
+            res_i = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
             res_i = res_i.head(top_k) # take top_k only
             codes_negs = codes_t[res_i["docid"].to_list()]
             rank_negs = res_i["rank"].to_list()
-            docpair["neg_jpq_codes"] = codes_negs
-            docpair["neg_jpq_ranks"] = rank_negs
+            docpairs["neg_jpq_codes"].append(codes_negs)
+            docpairs["neg_jpq_ranks"].append(rank_negs)
             for t in ["pos", "neg"]:
-                t_res = res_i["docno"] == docpair[f'{t}_docno']
+                t_res = res_i["docno"] == docpairs['pos_docno'][i]
                 if t_res.any():
-                    docpair[f"{t}_ranks"] = res_i[t_res]["rank"].values[0]
+                    docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
                 else:
-                    docpair[f"{t}_ranks"] = 100 # a deep enough rank
-            out_docpairs.append(docpair)
-        return out_docpairs
+                    docpairs[f"{t}_ranks"].append(100) # a deep enough rank
+        return docpairs
 
     def _add_neg(docpair: dict[str, Any]) -> dict[str, Any]:
         res : pd.DataFrame = retr_pipe.search(docpair['query_text'])
