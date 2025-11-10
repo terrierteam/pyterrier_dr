@@ -172,12 +172,16 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         pq_centroids = self.sub_embeddings
         d = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
         Ks = self.sub_embeddings.shape[1]
+        assert pq_centroids.shape == (self.M, Ks, d // self.M)
         import faiss
         # Step 1: Create IndexPQ
         index = faiss.IndexPQ(d, self.M, np.log2(Ks).astype(int).item(), faiss.METRIC_INNER_PRODUCT)
 
         # Step 2: Mark index as trained (we already have centroids)
         index.is_trained = True
+
+        assert pq_centroids.dtype == np.float32
+        assert self.codes.dtype == np.uint8
 
         # Step 3: Assign PQ centroids
         # FAISS stores centroids internally in a 1D array; we reshape
