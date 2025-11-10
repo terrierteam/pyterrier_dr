@@ -142,12 +142,13 @@ def add_jpq_negs(
     top_k: int,
     retr_pipe: pt.Transformer,
     codes: np.ndarray,
-    cache : bool = True
+    cache : bool = False
 ) -> Dataset:
     retr_pipe = (retr_pipe % (top_k + 2)).compile() # +2 to account for pos and neg docs already in the index
     
     if cache:
-        # many queries will be repeated due to the nature of a pairs dataset, so cache results to speed up
+        # many queries will be repeated due to the nature of some pairs datasets
+        # (e.g. if they are instantiated from a qrels file), so cache results to speed up
         from pyterrier_caching import RetrieverCache
         retr_pipe = RetrieverCache(None, retr_pipe, on='query')
     
