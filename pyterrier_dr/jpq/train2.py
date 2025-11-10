@@ -16,7 +16,8 @@ from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.checkpointing import _export_pq, _load_checkpoint, _save_checkpoint
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
-from pyterrier_dr.jpq.model import JPQBiencoder, JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambaRank, PassageEncoder, QueryEncoder
+from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambaRank
+from pyterrier_dr.jpq.model import JPQBiencoder, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
 
