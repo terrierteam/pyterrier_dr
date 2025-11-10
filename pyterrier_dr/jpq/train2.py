@@ -144,12 +144,19 @@ class JPQTrainer:
         resume: bool = False,
         lambda_rank = False
     ):
+        # Loss function modes:
+        # - lambda_rank: use lambda rank loss with jpq_negs negatives, cannot have in_batch negatives
+        # - in_batch: use in-batch negatives, can also have jpq_negs negatives
+        # - jpq_negs only: NOT YET SUPPORTED.
+        # - default: CE loss only on the pairs
         if lambda_rank:
             assert not in_batch, "in_batch and lambda_rank cannot be used together"
             lossclz = JPQCELossJPQNegsLambaRank
         elif in_batch:
-            lossclz = JPQCELossInBatchNegs
+            lossclz = JPQCELossInBatchNegs 
+            # supports with or without jpq_negs
         else:
+            assert not jpq_negs, "jpq_negs cannot be used when in_batch is False"
             lossclz = JPQCELoss
         loss_f = lossclz(model.query, model.passage).to(self.device)
 
