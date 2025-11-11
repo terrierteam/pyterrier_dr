@@ -3,6 +3,7 @@ from pyterrier_dr.jpq.model import PassageEncoder, QueryEncoder
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class JPQCELoss(nn.Module):
@@ -157,6 +158,64 @@ def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
 
     return loss / batch_size
 
+
+def lambdarank_nic(s: torch.Tensor, y: torch.Tensor, sigma: float = 1.0, eps: float = 1e-12):
+    
+    B, N = s.shape
+    # --------- Gains and ideal DCG (for NDCG normalization) ----------
+    G = (2.0 ** y) - 1.0  # [B, N]
+
+    # Ideal ordering by label (desc)
+    ideal_y, _ = torch.sort(y, dim=1, descending=True)       # [B, N]
+    ideal_G = (2.0 ** ideal_y) - 1.0                         # [B, N]
+
+    # Discount for ranks 1..N (shared across batch)
+    i = torch.arange(1, N + 1, dtype=torch.float32)  # [N]
+    D = 1.0 / torch.log2(1.0 + i)                    # [N]
+    iDCG = (ideal_G * D.unsqueeze(0)).sum(dim=1)     # [B]
+    
+    # --------- Current predicted positions & discounts ---------------
+    # Order by predicted scores (desc)
+    _, order = torch.sort(s, dim=1, descending=True)  # [B, N]
+    # positions (0-based): inverse permutation
+    i = torch.empty_like(order)
+    i.scatter_(1, order, torch.arange(N).unsqueeze(0).expand(B, -1))
+    # convert to 1-based ranks
+    curr_rank = 1.0 + i                                      # [B, N]
+    D = 1.0 / torch.log2(1.0 + curr_rank)            # [B, N]
+
+    # --------- Pairwise tensors -------------------------------------
+    # masks for ordered relevance pairs: y_i > y_j
+    y_i = y.unsqueeze(2)  # [B, N, 1]
+    y_j = y.unsqueeze(1)  # [B, 1, N]
+    pair_mask = (y_i > y_j)    # [B, N, N]
+
+    # score differences s_i - s_j
+    s_i = s.unsqueeze(2)
+    s_j = s.unsqueeze(1)
+    s_diff = s_i - s_j
+
+    # ΔNDCG swap weight = |(G_i - G_j)| * |Disc(p_i) - Disc(p_j)| / IDCG
+    G_i = G.unsqueeze(2)
+    G_j = G.unsqueeze(1)
+    delta_G = (G_i - G_j).abs()
+
+    D_i = D.unsqueeze(2)
+    D_j = D.unsqueeze(1)
+    delta_D = (D_i - D_j).abs()
+
+    idcg_safe = iDCG.clamp_min(eps).unsqueeze(1).unsqueeze(2)  # [B,1,1]
+    delta_NDCG = (delta_G * delta_D) / idcg_safe            # [B, N, N]
+
+    # pairwise logistic loss with ΔNDCG weight
+    pairwise = F.softplus(-sigma * s_diff) * delta_NDCG
+
+    # apply mask and average per list by number of valid pairs
+    pairwise = pairwise * pair_mask
+    per_list_pairs = pair_mask.sum(dim=(1, 2)).clamp_min(1)
+    per_list_loss = pairwise.sum(dim=(1, 2)) / per_list_pairs
+
+    return per_list_loss.mean()
 
 def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     """
