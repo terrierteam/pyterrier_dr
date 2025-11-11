@@ -345,7 +345,7 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
         ranks = torch.cat([rank_pos, rank_negs], dim=1)      # [B, 1 + N]
         labels = torch.cat([
             torch.ones((B, 1), device=device),
-            torch.zeros((B, N), device=device)
+            torch.zeros((B, all_negs.size(1)), device=device)
         ], dim=1)
 
         # 6. Compute loss
