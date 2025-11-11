@@ -175,11 +175,12 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     diff_dcg = (dcg.unsqueeze(2) - dcg.unsqueeze(1))  # [B, num_docs, num_docs]
     diff_labels = labels.unsqueeze(2) - labels.unsqueeze(1)     # [B, num_docs, num_docs]
 
-    print(diff_dcg.abs().mean().item())
-
-
     # Only consider pairs where i is more relevant than j
     pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
+
+    num_pos_pairs = pos_pairs.sum().item()
+    print("Num positive pairs per batch:", num_pos_pairs)
+    print("ΔDCG mean for pospairs:", diff_dcg[pos_pairs].mean().item())
 
     # Logistic pairwise loss weighted by ΔDCG
     pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg.clamp(min=0) * pos_pairs
@@ -187,7 +188,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     # Sum over pairs and average over batch
     loss = pair_loss.sum(dim=(1,2)).mean()
 
-    print("ΔNDCG mean", diff_dcg.mean().item())
+    print("ΔDCG mean all", diff_dcg.mean().item())
     print("Pair loss mean", pair_loss.mean().item())
     print("Num positive pairs", pos_pairs.sum().item())
 
@@ -267,5 +268,7 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
         loss = lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=0.1)
 
         ce_loss = -torch.log_softmax(torch.cat([pos_scores, neg_scores], dim=1), dim=1)[:, 0].mean()
+        print("Scores mean:", scores.mean().item(), "std:", scores.std().item())
+
         print(f"LambdaRank loss: {loss.item():.4f}, CE loss: {ce_loss.item():.4f}")
         return loss
