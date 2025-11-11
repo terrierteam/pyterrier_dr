@@ -141,8 +141,8 @@ def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
         discount = 1.0 / torch.log2(2.0 + r.float())
         dcg = gain * discount
 
-        # ΔNDCG approximated via pairwise differences in DCG
-        delta_ndcg = torch.abs(dcg.unsqueeze(1) - dcg.unsqueeze(0))
+        # ΔDCG approximated via pairwise differences in DCG
+        delta_ndcg = (dcg.unsqueeze(1) - dcg.unsqueeze(0))
 
         # pairwise differences in predicted scores
         diff_s = s.unsqueeze(1) - s.unsqueeze(0)
@@ -152,7 +152,7 @@ def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
         pos_pairs = diff_y > 0
 
         # logistic loss weighted by ΔNDCG
-        pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * delta_ndcg * pos_pairs.float()
+        pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * delta_ndcg.clamp(min=0) * pos_pairs.float()
         loss += pair_loss.sum()
 
     return loss / batch_size
