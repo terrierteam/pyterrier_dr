@@ -175,14 +175,21 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     diff_dcg = torch.abs(dcg.unsqueeze(2) - dcg.unsqueeze(1))  # [B, num_docs, num_docs]
     diff_labels = labels.unsqueeze(2) - labels.unsqueeze(1)     # [B, num_docs, num_docs]
 
+    print(diff_dcg.abs().mean().item())
+
+
     # Only consider pairs where i is more relevant than j
     pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
 
-    # Logistic pairwise loss weighted by ΔNDCG
+    # Logistic pairwise loss weighted by ΔDCG
     pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg * pos_pairs
 
     # Sum over pairs and average over batch
     loss = pair_loss.sum(dim=(1,2)).mean()
+
+    print("ΔNDCG mean", diff_dcg.mean().item())
+    print("Pair loss mean", pair_loss.mean().item())
+    print("Num positive pairs", pos_pairs.sum().item())
 
     return loss
 
@@ -226,7 +233,9 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
             if rank_negs.dim() == 1:
                 rank_negs = rank_negs.view(B, -1)  # reshape to [B, N] if needed
             N = 1
-
+        
+        print("rank_pos:", rank_pos)
+        print("rank_negs:", rank_negs)
         # sanity shapes
         assert q.dim() == 2 and pos.dim() == 2 and neg.dim() == 3
         Bq, Dq = q.shape
@@ -253,4 +262,7 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
 
         # 6. Compute loss
         loss = lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=0.1)
+
+        ce_loss = -torch.log_softmax(torch.cat([pos_scores, neg_scores], dim=1), dim=1)[:, 0].mean()
+        print(f"LambdaRank loss: {loss.item():.4f}, CE loss: {ce_loss.item():.4f}")
         return loss
