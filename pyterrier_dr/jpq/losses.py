@@ -178,7 +178,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     # Only consider pairs where i is more relevant than j
     pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
 
-    # Logistic pairwise loss weighted by ΔNDCG
+    # Logistic pairwise loss weighted by ΔDCG
     pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg * pos_pairs
 
     # Sum over pairs and average over batch
