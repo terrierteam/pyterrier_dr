@@ -145,7 +145,7 @@ def add_jpq_negs(
     codes: np.ndarray,
     cache : bool = False
 ) -> Dataset:
-    retr_pipe = (retr_pipe % (top_k + 2)).compile() # +2 to account for pos and neg docs already in the index
+    retr_pipe = (retr_pipe % (top_k + 100)).compile() # +2 to account for pos and neg docs already in the index
     
     if cache:
         # many queries will be repeated due to the nature of some pairs datasets
