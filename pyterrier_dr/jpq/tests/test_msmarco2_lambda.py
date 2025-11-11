@@ -26,7 +26,7 @@ class TestJPQ(unittest.TestCase):
 
         from pyterrier_dr.jpq.utils import merge_queries_into_docpairs
         from pyterrier_dr.jpq import JPQTrainer
-        t = JPQTrainer(tct, index, M=64, nbits=8, pq_impl='faiss2')
+        t = JPQTrainer(tct, index, M=96, nbits=8, pq_impl='faiss2')
 
         t.fit(
             merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:2_000_000]), 
