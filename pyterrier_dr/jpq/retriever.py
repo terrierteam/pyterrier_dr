@@ -305,7 +305,7 @@ class JPQRetrieverPrune(JPQRetriever):
             # split query_vec into M sub-vecs
             Q = Q.reshape((num_q, self.M, self.dsub))
             assert Q.shape == (num_q, self.M, self.dsub), Q.shape
-            for qoffset in range(centroid_scores.shape[0]):
+            for qoffset in range(num_q):
                 centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q[qoffset,:,:])  # [M, Ks]
                 assert centroid_scores.shape == (num_q, self.M, self.Ks), centroid_scores.shape
                 Is = []
