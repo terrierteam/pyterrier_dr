@@ -308,14 +308,8 @@ class JPQRetrieverPrune(JPQRetriever):
             for qoffset in range(num_q):
                 centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q[qoffset,:,:])  # [M, Ks]
                 assert centroid_scores.shape == (self.M, self.Ks), centroid_scores.shape
-                Is = []
-                Ds = []
-                for qoffset in range(centroid_scores.shape[0]):
-                    I_q, D_q = self.scorer(centroid_scores[qoffset])
-                    Is.append(I_q)
-                    Ds.append(D_q)
                 I, D = self.scorer(centroid_scores)
-                for r, (did, s) in enumerate(zip(I, D), start=1):
+                for r, (did, s) in enumerate(zip(I, D)):
                     rows.append((qids[qoffset], self.docnos[int(did)], float(s), r))
         return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
 
