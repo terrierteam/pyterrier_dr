@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Optional
+import math
 import pandas as pd
 import numpy as np
 import pyterrier as pt, pyterrier_alpha as pta
@@ -8,6 +8,8 @@ from pyterrier_dr.jpq.pq import ProductQuantizer
 import torch
 from .utils import timer
 from pyterrier import tqdm
+
+import faiss
 
 def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder, dest_folder : str, bs : int = 20_000) -> FlexIndex:
 
@@ -21,7 +23,7 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
                     codes_batch = pq.encode(original_vec[i:i+bs])
                     embs = pm(torch.Tensor(codes_batch).int()).detach().cpu().numpy().astype('float32')
                     #embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
-                    for j in range(codes_batch.shape[0]):
+                    for j in range(codes_batch.shape[0]): # type: ignore
                         running_se += np.sum((embs[j] - original_vec[i+j])**2)
                         yield {'docno' : docnos[i+j], 'doc_vec' : embs[j]}
                 print("Emb MSE", running_se/len(existing_index))
@@ -33,7 +35,7 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
         
         return new_index
 
-def build_inverted_index(item_codes, pq_type_name, dataset_models_config, current_dir, k : int = 256) -> np.array:
+def build_inverted_index(item_codes, pq_type_name, dataset_models_config, current_dir, k : int = 256) -> np.ndarray:
     #dir = current_dir / "inverted_indexes" / pq_type_name / dataset_models_config.config_name
     #dir.mkdir(parents=True, exist_ok=True)
     #cache_filename = dir / "inverted_index.npy"
@@ -46,8 +48,8 @@ def build_inverted_index(item_codes, pq_type_name, dataset_models_config, curren
         num_items, num_splits = target_codes.shape
         code_items = [[] for _ in range(num_splits * k)]
 
-        for split in tqdm(range(num_splits), unit='split'):
-            for item in tqdm(range(num_items)):
+        for split in tqdm(range(num_splits), unit='split', desc="Building inverted index"):
+            for item in range(num_items):
                 code = target_codes[item, split]
                 code_items[split * k + code].append(item)
 
@@ -108,99 +110,174 @@ def build_inverted_index_fast(item_codes, pq_type_name, dataset_models_config, c
     return padded
 
 
+# FAISS stores PQ codes bit-packed when nbits < 8 (and also packs to 2 bytes when nbits > 8).
+# Copying a plain [N, M] uint8 matrix into index.codes only works when nbits == 8. 
+def _pack_pq_codes(codes: np.ndarray, nbits: int) -> np.ndarray:
+    """
+    Pack [N, M] uint8 codes (values in [0, 2^nbits)) into FAISS bit-packed layout.
+    Returns a flat uint8 array of length N * code_size, where code_size = ceil(M*nbits/8).
+    Packing is LSB-first per code value, contiguous over sub-quantizers.
+    """
+    assert codes.dtype == np.uint8 and codes.ndim == 2
+    N, M = codes.shape
+    code_size = (M * nbits + 7) // 8  # bytes per vector
+    out = np.zeros((N, code_size), dtype=np.uint8)
+
+    bit_cursor = 0
+    for m in range(M):
+        v = codes[:, m].astype(np.uint32)  # [N]
+        # write nbits LSB-first into the bitstream
+        for b in range(nbits):
+            byte_idx = (bit_cursor + b) // 8
+            bit_in_byte = (bit_cursor + b) % 8
+            out[:, byte_idx] |= (((v >> b) & 1).astype(np.uint8)) << bit_in_byte
+        bit_cursor += nbits
+
+    return out.reshape(-1)  # flat vector as FAISS expects
+
+
 class JPQRetriever(pt.Transformer):
-    def __init__(self, docnos: List[str], # N
-                 codes: np.ndarray, # N x M
-                 sub_embeddings : np.ndarray, # M x ks=2^nbits x dsub (aka the centroids)
-                 topk: int = 1000):
+    def __init__(
+        self, 
+        docnos: list[str], # list of [N] docids
+        codes: np.ndarray, # PQ codes of shape [N, M] (uint8)
+        sub_embeddings: np.ndarray, #  PQ centroids of shape [M, Ks, dsub] where Ks = 2^nbits and d = M * dsub (aka the centroids, float32)
+        topk: int = 1000, # number of results to retrieve
+    ):
         super().__init__()
-        self.docnos = np.array(docnos)
-        self.codes = codes
-        self.M = codes.shape[1]
-        self.sub_embeddings = sub_embeddings
-        assert sub_embeddings.shape[0] == self.M, (sub_embeddings.shape, self.M)
-        self.topk = topk
+        
+        self.docnos = list(map(str, docnos))
+        self.codes = np.ascontiguousarray(codes)
+        self.sub_embeddings = np.ascontiguousarray(sub_embeddings)
+        self.topk = int(topk)
+
+        if self.codes.ndim != 2:
+            raise ValueError(f"codes must be [N, M], got {self.codes.shape}")
+        if self.sub_embeddings.ndim != 3:
+            raise ValueError(f"sub_embeddings must be [M, Ks, dsub], got {self.sub_embeddings.shape}")
+
+        N, M = self.codes.shape
+        M2, Ks, dsub = self.sub_embeddings.shape
+        if len(self.docnos) != N:
+            raise ValueError(f"len(docnos)={len(self.docnos)} != N={N}")
+        if M != M2:
+            raise ValueError(f"M mismatch: codes has {M}, sub_embeddings has {M2}")
+
+        nbits_f = math.log2(Ks)
+        if abs(nbits_f - round(nbits_f)) > 1e-9:
+            raise ValueError(f"Ks must be a power of 2, got {Ks}")
+
+        self.N = N
+        self.M = M
+        self.Ks = Ks
+        self.dsub = dsub
+        self.d = M * dsub
+        self.nbits = int(round(nbits_f))
+
+        self._index = None
+        self._name = self.__class__.__name__        
+
+    def __str__(self) -> str:
+        return self._name        
+    
+    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
+        pta.validate.query_frame(topics, extra_columns=["query_vec"])
+        qvecs = topics["query_vec"].to_list()
+        Q = np.stack(qvecs).astype(np.float32, copy=False)
+        Q = np.ascontiguousarray(Q)
+        qids = topics["qid"].astype(str).tolist()
+        return Q, qids
+
 
 class JPQRetrieverFaissBase(JPQRetriever):
 
+    def __init__(self, *args, name: str | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._index = None
+        self._name = name or self.__class__.__name__
+
     @abstractmethod
-    def _ensure(self, bs: int = 20000):
-        pass
+    def _ensure(self, bs: int = 20000) -> None:
+        ...
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.query_frame(topics, extra_columns=['query_vec'])
-        Q = np.stack(topics["query_vec"].to_list())
-        qids = topics['qid'].astype(str).tolist()
+        Q, qids = self._validate_queries(topics)
         self._ensure()
         with timer(f"{self._name} / search"):
-            D, I = self._index.search(Q, min(self.topk, len(self.docnos)))
+            k = min(self.topk, len(self.docnos))
+            D, I = self._index.search(Q, k) # type: ignore
+
         rows = []
         for i, qid in enumerate(qids):
-            for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
-                rows.append((qid, self.docnos[int(did)], float(s), r))
+            dids = I[i].astype(int)
+            scores = D[i].astype(float)
+
+            # stable, deterministic ordering: by score desc, then by doc index asc
+            order = np.lexsort((dids, -scores))  # primary: -scores, secondary: dids
+            dids = dids[order]
+            scores = scores[order]
+
+            for rank, (did, score) in enumerate(zip(dids, scores), start=1):
+                rows.append((qid, self.docnos[did], score, rank))
         return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+
 
 class JPQRetrieverFlat(JPQRetrieverFaissBase):
     """Subset-mode retriever (Flat-IP reconstructed from codes)."""
-    def __init__(self, *args, name: Optional[str] = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._index = None
-        self._name = name or "JPQRetrieverFlat"
-    
-    def __str__(self): return self._name
 
-    def _ensure(self, bs: int = 20000):
-        if self._index is not None: return
-        dim = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
-        import faiss
-        index = faiss.IndexFlatIP(dim)
-        for i in tqdm(range(0, self.codes.shape[0], bs), desc=f"{self._name} / build flat", leave=False):
-            chunk = self.codes[i:i+bs, :] # bs x M
-            embs = np.concatenate([self.sub_embeddings[split, chunk[:, split]] for split in range(self.M)], axis=-1)
-            index.add(embs)
+    def _ensure(self, bs: int = 20_000):
+        if self._index is not None: 
+            return
+        
+        index = faiss.IndexFlatIP(self.d)
+        for start in tqdm(range(0, self.N, bs), desc=f"{self._name} / build flat", leave=False):
+            stop = min(start + bs, self.N)
+            chunk_codes = self.codes[start:stop, :]           # [b, M] uint8
+            parts = [self.sub_embeddings[m, chunk_codes[:, m], :] for m in range(self.M)]
+            embs = np.concatenate(parts, axis=-1).astype(np.float32, copy=False)  # [b, M*dsub]
+            embs = np.ascontiguousarray(embs)
+            index.add(embs) # type: ignore
+            
         self._index = index
+        self._name = "JPQRetrieverFlat"
+
 
 class JPQRetrieverPQ(JPQRetrieverFaissBase):
     """Subset-mode retriever (IndexPQ constructed directly from codes and centroids)."""
-    def __init__(self, *args, name: Optional[str] = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._index = None
-        self._name = name or "JPQRetrieverPQ"
     
-    def _ensure(self, bs: int = 20000):
-        if self._index is not None: return
-        pq_centroids = self.sub_embeddings
-        d = self.sub_embeddings.shape[2] * self.sub_embeddings.shape[0]
-        Ks = self.sub_embeddings.shape[1]
-        assert pq_centroids.shape == (self.M, Ks, d // self.M)
-        import faiss
-        # Step 1: Create IndexPQ
-        index = faiss.IndexPQ(d, self.M, np.log2(Ks).astype(int).item(), faiss.METRIC_INNER_PRODUCT)
-
-        # Step 2: Mark index as trained (we already have centroids)
+    def _ensure(self, bs: int = 20_000) -> None:
+        if self._index is not None:
+            return
+        
+        index = faiss.IndexPQ(self.d, self.M, self.nbits, faiss.METRIC_INNER_PRODUCT)
         index.is_trained = True
 
-        assert pq_centroids.dtype == np.float32
-        assert self.codes.dtype == np.uint8
+        # Copy centroids: flat float array length M*Ks*dsub
+        faiss.copy_array_to_vector(self.sub_embeddings.reshape(-1), index.pq.centroids)
 
-        # Step 3: Assign PQ centroids
-        # FAISS stores centroids internally in a 1D array; we reshape
-        faiss.copy_array_to_vector(
-            pq_centroids.copy().reshape(-1),  # flatten
-            index.pq.centroids         # destination (C++ vector<float>)
-        )
+        # Copy codes: flat uint8 array length N*M
+        # pack codes if needed
+        if self.nbits == 8:
+            packed = self.codes.reshape(-1)
+        else:
+            packed = _pack_pq_codes(self.codes, self.nbits)
 
-        # Step 4: Assign PQ codes
-        faiss.copy_array_to_vector(self.codes.copy().reshape(-1), index.codes)
+        faiss.copy_array_to_vector(packed, index.codes)
+
         index.ntotal = len(self.docnos)
+
+        self._index = index
+        self._name = "JPQRetrieverPQ"
+
         self._index = index
     
+
 class JPQRetrieverPrune(JPQRetriever):
 
     """Subset-mode retriever - uses dynamic pruning."""
     def __init__(self,
                  *args,
-                 name: Optional[str] = None,
+                 name: str | None = None,
                  ub_inflation : float = 1.,
                  **kwargs
                  ):
@@ -220,28 +297,20 @@ class JPQRetrieverPrune(JPQRetriever):
         )
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.query_frame(topics, extra_columns=['query_vec'])
-        num_q = len(topics)
-        Q = np.stack(topics["query_vec"].to_list())
+        Q, qids = self._validate_queries(topics)
         qids = topics['qid'].astype(str).tolist()
+        num_q = len(qids)
+        rows = []
         with timer(f"{self._name} / prune search"):
             # split query_vec into M sub-vecs
             Q = Q.reshape((num_q, self.M, self.dsub))
             assert Q.shape == (num_q, self.M, self.dsub), Q.shape
-            # TODO check this works query as the first dimension...?
-            centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q)
-            assert centroid_scores.shape == (num_q, self.M, self.ks), centroid_scores.shape
-            Is = []
-            Ds = []
-            for qoffset in range(centroid_scores.shape[0]):
-                I_q, D_q = self.scorer(centroid_scores[qoffset])
-                Is.append(I_q)
-                Ds.append(D_q)
-            I, D = self.scorer(centroid_scores)
-        rows = []
-        for i, qid in enumerate(qids):
-            for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
-                rows.append((qid, self.docnos[int(did)], float(s), r))
+            for qoffset in range(num_q):
+                centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q[qoffset,:,:])  # [M, Ks]
+                assert centroid_scores.shape == (self.M, self.Ks), centroid_scores.shape
+                I, D = self.scorer(centroid_scores.reshape(-1))
+                for r, (did, s) in enumerate(zip(I, D)):
+                    rows.append((qids[qoffset], self.docnos[int(did)], float(s), r))
         return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
 
 def merge_top_k(item_score_ids_1: np.ndarray,
@@ -279,8 +348,8 @@ def merge_top_k(item_score_ids_1: np.ndarray,
 class _PrunedScorer:
     def __init__(self, 
                  centroids_per_split : int, 
-                 inverted_index : np.array, 
-                 item_codes : np.array, 
+                 inverted_index : np.ndarray, 
+                 item_codes : np.ndarray, 
                  item_code_bytes : int,
                  top_k : int = 10, 
                  max_iterations : int = 1000, 
@@ -373,7 +442,7 @@ class _PrunedScorer:
                 self.best_values[:] = vals
             else:
                 items, vals = self.score_top_k(items_with_centroids, need_items)
-                merge_top_k(self.best_items, self.best_values, items, vals, self.top_k, need_items)
+                merge_top_k(self.best_items, self.best_values, items, vals, self.top_k, need_items) # type: ignore
 
             self.old_lower_bound = self.threshold
             self.threshold = self.best_values[-1]

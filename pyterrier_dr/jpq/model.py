@@ -34,15 +34,6 @@ class QueryEncoder(nn.Module):
         self.dr = dr_model
         self.batch_size = batch_size
 
-        # Make it clear this module is frozen
-#        for p in self.parameters():
-#            p.requires_grad = False
-#        self.eval()
-
-#    def parameters(self):  # type: ignore[override]
-#        # No trainable params; return an empty iterator
-#        return iter(())
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.dr(x) # type: ignore
 
@@ -175,11 +166,3 @@ class JPQBiencoder(nn.Module):
             "JPQBiencoder is just a container; call "
             "self.query(...) or self.passage(...), not the model directly."
         )
-
-#    def to(self, device: str):
-#        self.query = self.query.to(device)
-#        self.passage = self.passage.to(device)
-#        return self
-
-
-
