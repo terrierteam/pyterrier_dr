@@ -201,7 +201,6 @@ class JPQRetrieverFaissBase(JPQRetriever):
         return Q, qids
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.query_frame(topics, extra_columns=['query_vec'])
         Q, qids = self._validate_queries(topics)
         self._ensure()
         with timer(f"{self._name} / search"):
