@@ -303,6 +303,8 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
 
         # Optionally add in-batch negatives
         if self.use_inbatch_negatives:
+            # Essentially, the positive embeddings of other queries are treated as fixed negatives
+            # — we don’t want their gradient flowing into those queries’ embeddings.
             with torch.no_grad():
                 all_pos_as_negs = pos.unsqueeze(0).repeat(B, 1, 1)  # [B, B, D]
                 mask_self = ~torch.eye(B, dtype=torch.bool, device=device)
