@@ -16,7 +16,7 @@ from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.checkpointing import _export_pq, _load_checkpoint, _save_checkpoint
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
-from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambaRank
+from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
 from pyterrier_dr.jpq.model import JPQBiencoder, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
@@ -147,20 +147,19 @@ class JPQTrainer:
         lambda_rank = False
     ):
         # Loss function modes:
-        # - lambda_rank: use lambda rank loss with jpq_negs negatives, cannot have in_batch negatives
+        # - lambda_rank: use lambda rank loss, with or without jpq_negs negative, with or without in-batch negatives
         # - in_batch: use in-batch negatives, can also have jpq_negs negatives
         # - jpq_negs only: NOT YET SUPPORTED.
         # - default: CE loss only on the pairs
         if lambda_rank:
-            assert not in_batch, "in_batch and lambda_rank cannot be used together"
-            lossclz = JPQCELossJPQNegsLambaRank
+            loss_f = JPQCELossJPQNegsLambdaRank(model.query, model.passage, use_inbatch_negatives=in_batch, jpq_negs=jpq_negs)
         elif in_batch:
-            lossclz = JPQCELossInBatchNegs 
+            loss_f = JPQCELossInBatchNegs(model.query, model.passage)
             # supports with or without jpq_negs
         else:
             assert not jpq_negs, "jpq_negs cannot be used when in_batch is False"
-            lossclz = JPQCELoss
-        loss_f = lossclz(model.query, model.passage).to(self.device)
+            loss_f = JPQCELoss(model.query, model.passage)
+        loss_f = loss_f.to(self.device)
 
         # Create optimizer for passage encoder AND query encoder
         if self.M in [16, 24]:

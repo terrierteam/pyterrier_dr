@@ -258,16 +258,18 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     return loss
 
 
-class JPQCELossJPQNegsLambaRank(nn.Module):
+class JPQCELossJPQNegsLambdaRank(nn.Module):
     """
     CE loss with JPQ negatives using LambdaRank.
     IBNs are NOT used here (we dont currently have their ranks)
     """
-    def __init__(self, query_encoder, passage_encoder):
+    def __init__(self, query_encoder, passage_encoder, use_inbatch_negatives=True, jpq_negs=True):
         super().__init__()
         self.query_encoder = query_encoder
         self.passage_encoder = passage_encoder
-        print("Using LambdaRank loss with JPQ negatives")
+        self.use_inbatch_negatives = use_inbatch_negatives
+        self.jpq_negs = jpq_negs
+        print("Using LambdaRank loss: JPQ negatives =", jpq_negs, ", IBNs =", use_inbatch_negatives)
 
     def forward(self, batch):
         device = next(self.passage_encoder.parameters()).device
@@ -284,7 +286,8 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
         if not "neg_codes" in batch and "neg_ranks" in batch:
             raise ValueError("LambdaRank requires explicit negatives with known ranks.")
 
-        if "neg_jpq_codes" in batch: # jpq_negs from the last epoch
+        if self.jpq_negs: # jpq_negs from the last epoch
+            assert "neg_jpq_codes" in batch
             # need an unsqueeze here for the original neg_codes, as therse is only one per query
             all_neg_codes = torch.cat((batch["neg_codes"].unsqueeze(1), batch["neg_jpq_codes"]), dim=1) # [B, N_total, D_code]
             B, N, D_code = all_neg_codes.shape
@@ -297,9 +300,25 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
             if rank_negs.dim() == 1:
                 rank_negs = rank_negs.view(B, -1)  # reshape to [B, N] if needed
             N = 1
+
+        # Optionally add in-batch negatives
+        if self.use_inbatch_negatives:
+            with torch.no_grad():
+                all_pos_as_negs = pos.unsqueeze(0).repeat(B, 1, 1)  # [B, B, D]
+                mask_self = ~torch.eye(B, dtype=torch.bool, device=device)
+                inbatch_negs = all_pos_as_negs[mask_self].view(B, B - 1, -1)
+                # we assume in-batch negatives are ranked very low (e.g., 100)
+                rank_inbatch = torch.full((B, B - 1), 100, device=device)
+
+            # Concatenate all negatives
+            all_negs = torch.cat([neg, inbatch_negs], dim=1)
+            all_neg_ranks = torch.cat([rank_negs, rank_inbatch], dim=1)
+        else:
+            all_negs = neg
+            all_neg_ranks = rank_negs
         
         print("rank_pos:", rank_pos.float().mean().item())
-        print("rank_negs:", rank_negs.float().mean().item())
+        print("rank_negs:", all_neg_ranks.float().mean().item())
         # sanity shapes
         assert q.dim() == 2 and pos.dim() == 2 and neg.dim() == 3
         Bq, Dq = q.shape
@@ -313,7 +332,7 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
         pos_scores = (q * pos).sum(dim=1, keepdim=True)
 
         # negatives: [B, N]  (each query against its own N negatives)
-        neg_scores = torch.einsum("bd,bnd->bn", q, neg)
+        neg_scores = torch.einsum("bd,bnd->bn", q, all_negs)
         # alternative: neg_scores = torch.matmul(q.unsqueeze(1), neg.transpose(1,2)).squeeze(1)
 
         print("pos_scores:", pos_scores.mean().item())
