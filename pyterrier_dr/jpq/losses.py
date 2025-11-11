@@ -233,7 +233,9 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
             if rank_negs.dim() == 1:
                 rank_negs = rank_negs.view(B, -1)  # reshape to [B, N] if needed
             N = 1
-
+        
+        print("rank_pos:", rank_pos)
+        print("rank_negs:", rank_negs)
         # sanity shapes
         assert q.dim() == 2 and pos.dim() == 2 and neg.dim() == 3
         Bq, Dq = q.shape
