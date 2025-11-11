@@ -179,7 +179,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
 
     # Logistic pairwise loss weighted by ΔNDCG
-    pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg * pos_pairs
+    pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg.detach() * pos_pairs
 
     # Sum over pairs and average over batch
     loss = pair_loss.sum(dim=(1,2)).mean()
@@ -210,7 +210,7 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
         rank_pos = batch["pos_ranks"].to(device).view(B, 1)
 
         # 3. Encode negatives (if present)
-        if not "neg_codes" and "neg_ranks" in batch:
+        if not "neg_codes" in batch and "neg_ranks" in batch:
             raise ValueError("LambdaRank requires explicit negatives with known ranks.")
 
         if "neg_jpq_codes" in batch: # jpq_negs from the last epoch
