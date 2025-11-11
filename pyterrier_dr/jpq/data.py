@@ -180,7 +180,7 @@ def add_jpq_negs(
 
             # now, get the ranks for the explicit pos and neg docs, from res_i
             for t in ["pos", "neg"]:
-                t_res = res_i["docno"] == docpairs['pos_docno'][i]
+                t_res = res_i["docno"] == docpairs[f'{t}_docno'][i]
                 if t_res.any():
                     docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
                 else:
