@@ -49,7 +49,7 @@ def build_inverted_index(item_codes, pq_type_name, dataset_models_config, curren
         code_items = [[] for _ in range(num_splits * k)]
 
         for split in tqdm(range(num_splits), unit='split'):
-            for item in tqdm(range(num_items)):
+            for item in range(num_items):
                 code = target_codes[item, split]
                 code_items[split * k + code].append(item)
 
