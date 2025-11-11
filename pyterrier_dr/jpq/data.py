@@ -163,13 +163,12 @@ def add_jpq_negs(
         docpairs['pos_ranks'] = []
         docpairs['neg_ranks'] = []
 
-        #res_grouped = dict(tuple(res.groupby("qid")))
+        res_grouped = dict(tuple(res.groupby("qid")))
         for i in range(len(docpairs["query_text"])):
-            res_i = res[res["qid"] == f"q{i}"]
+            res_i = res_grouped.get(f"q{i}", pd.DataFrame(columns=res.columns))
             if len(res_i) == 0:
                 raise ValueError(f"No retrieval results for query {docpairs['query_text'][i]}")
 
-            #res_i = res_grouped.get(f"q{i}", pd.DataFrame(columns=res.columns))
             res_i = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
             res_i = res_i.head(top_k) # take top_k only
             codes_negs = codes_t[res_i["docid"].to_list()]
