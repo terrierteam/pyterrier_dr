@@ -170,12 +170,15 @@ def add_jpq_negs(
             if len(res_i) == 0:
                 raise ValueError(f"No retrieval results for query {docpairs['query_text'][i]}")
 
-            res_i = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
-            res_i = res_i.head(top_k) # take top_k only
-            codes_negs = codes_t[res_i["docid"].to_list()]
-            rank_negs = res_i["rank"].to_list()
+            # for jpq_negs filter out pos and neg docnos from results
+            jpq_negs_res = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
+            jpq_negs_res = jpq_negs_res.head(top_k) # take top_k only
+            codes_negs = codes_t[jpq_negs_res["docid"].to_list()]
+            rank_negs = jpq_negs_res["rank"].to_list()
             docpairs["neg_jpq_codes"].append(codes_negs)
             docpairs["neg_jpq_ranks"].append(rank_negs)
+
+            # now, get the ranks for the explicit pos and neg docs, from res_i
             for t in ["pos", "neg"]:
                 t_res = res_i["docno"] == docpairs['pos_docno'][i]
                 if t_res.any():
