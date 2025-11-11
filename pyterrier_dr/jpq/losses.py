@@ -172,7 +172,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
 
     # Pairwise differences
     diff_s = scores.unsqueeze(2) - scores.unsqueeze(1)   # [B, num_docs, num_docs]
-    diff_dcg = torch.abs(dcg.unsqueeze(2) - dcg.unsqueeze(1))  # [B, num_docs, num_docs]
+    diff_dcg = (dcg.unsqueeze(2) - dcg.unsqueeze(1))  # [B, num_docs, num_docs]
     diff_labels = labels.unsqueeze(2) - labels.unsqueeze(1)     # [B, num_docs, num_docs]
 
     print(diff_dcg.abs().mean().item())
@@ -182,7 +182,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
 
     # Logistic pairwise loss weighted by ΔDCG
-    pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg * pos_pairs
+    pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg.clamp(min=0) * pos_pairs
 
     # Sum over pairs and average over batch
     loss = pair_loss.sum(dim=(1,2)).mean()
