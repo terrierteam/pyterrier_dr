@@ -159,7 +159,7 @@ def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
     return loss / batch_size
 
 
-def lambdarank_nic(s: torch.Tensor, y: torch.Tensor, sigma: float = 1.0, eps: float = 1e-12):
+def lambdarank_nic(s: torch.Tensor, not_ranks, y: torch.Tensor, sigma: float = 1.0, eps: float = 1e-12):
     
     B, N = s.shape
     # --------- Gains and ideal DCG (for NDCG normalization) ----------
@@ -239,7 +239,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
 
     num_pos_pairs = pos_pairs.sum().item()
     print("Num positive pairs per batch:", num_pos_pairs)
-    print("ΔDCG mean for pospairs:", diff_dcg[pos_pairs].mean().item())
+    print("ΔDCG mean for pospairs:", diff_dcg[(diff_labels > 0)].mean().item())
 
     # Logistic pairwise loss weighted by ΔDCG
     pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg.clamp(min=0) * pos_pairs
