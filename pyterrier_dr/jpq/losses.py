@@ -252,7 +252,7 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     print("Num positive pairs", pos_pairs.sum().item())
 
     with torch.no_grad():
-        corr = torch.corrcoef(torch.stack([scores.mean(dim=1), -ranks.mean(dim=1)], dim=0))[0, 1]
+        corr = torch.corrcoef(torch.stack([scores.mean(dim=1), -ranks.float().mean(dim=1)], dim=0))[0, 1]
         print("Correlation(scores, -ranks):", corr.item())    
 
     return loss
