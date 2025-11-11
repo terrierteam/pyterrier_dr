@@ -176,9 +176,6 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     diff_labels = labels.unsqueeze(2) - labels.unsqueeze(1)     # [B, num_docs, num_docs]
 
     print(diff_dcg.abs().mean().item())
-    print("ΔNDCG mean", diff_dcg.mean().item())
-    print("Pair loss mean", pair_loss.mean().item())
-    print("Num positive pairs", pos_pairs.sum().item())
 
 
     # Only consider pairs where i is more relevant than j
@@ -189,6 +186,10 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
 
     # Sum over pairs and average over batch
     loss = pair_loss.sum(dim=(1,2)).mean()
+
+    print("ΔNDCG mean", diff_dcg.mean().item())
+    print("Pair loss mean", pair_loss.mean().item())
+    print("Num positive pairs", pos_pairs.sum().item())
 
     return loss
 
