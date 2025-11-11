@@ -157,7 +157,7 @@ def add_jpq_negs(
 
     def _add_neg_batches(docpairs: dict[str, list[Any]]) -> dict[str, list[Any]]:
         queries = pd.DataFrame([  {"qid" : f"q{i}", "query": qtext} for i, qtext in enumerate(docpairs['query_text'])])
-        res : pd.DataFrame = retr_pipe(queries)
+        res : pd.DataFrame = retr_pipe(queries) # type: ignore
         docpairs = docpairs.copy()
         docpairs['neg_jpq_codes'] = []
         docpairs['neg_jpq_ranks'] = []

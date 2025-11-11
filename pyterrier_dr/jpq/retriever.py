@@ -272,7 +272,7 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
 
         self._index = index
     
-    
+
 class JPQRetrieverPrune(JPQRetriever):
 
     """Subset-mode retriever - uses dynamic pruning."""
@@ -451,7 +451,7 @@ class _PrunedScorer:
                 self.best_values[:] = vals
             else:
                 items, vals = self.score_top_k(items_with_centroids, need_items)
-                merge_top_k(self.best_items, self.best_values, items, vals, self.top_k, need_items)
+                merge_top_k(self.best_items, self.best_values, items, vals, self.top_k, need_items) # type: ignore
 
             self.old_lower_bound = self.threshold
             self.threshold = self.best_values[-1]
