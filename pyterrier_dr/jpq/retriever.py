@@ -179,6 +179,14 @@ class JPQRetriever(pt.Transformer):
 
     def __str__(self) -> str:
         return self._name        
+    
+    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
+        pta.validate.query_frame(topics, extra_columns=["query_vec"])
+        qvecs = topics["query_vec"].to_list()
+        Q = np.stack(qvecs).astype(np.float32, copy=False)
+        Q = np.ascontiguousarray(Q)
+        qids = topics["qid"].astype(str).tolist()
+        return Q, qids
 
 
 class JPQRetrieverFaissBase(JPQRetriever):
@@ -191,14 +199,6 @@ class JPQRetrieverFaissBase(JPQRetriever):
     @abstractmethod
     def _ensure(self, bs: int = 20000) -> None:
         ...
-
-    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
-        pta.validate.query_frame(topics, extra_columns=["query_vec"])
-        qvecs = topics["query_vec"].to_list()
-        Q = np.stack(qvecs).astype(np.float32, copy=False)
-        Q = np.ascontiguousarray(Q)
-        qids = topics["qid"].astype(str).tolist()
-        return Q, qids
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         Q, qids = self._validate_queries(topics)
