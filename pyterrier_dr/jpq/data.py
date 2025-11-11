@@ -34,13 +34,14 @@ def get_pq_training_dataset(
     logger.info(f"Ingesting docno mapping from index ")
     doc_map = flex_index.payload()[0]
     N = len(flex_index)
+    rng = np.random.default_rng(seed=42)
 
     if not docid_subset: # use all documents if not used or empty list
         docid_subset = list(range(N))
     if isinstance(docid_subset, int): # use a random subset of given size
         if docid_subset > N:
             raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
-        selected_docids = np.random.choice(N, size=docid_subset, replace=False) # type: ignore
+        selected_docids = rng.choice(N, size=docid_subset, replace=False) # type: ignore
         selected_docids = np.sort(selected_docids)
         selected_docnos = doc_map.fwd[selected_docids]
         logger.info(f"[SUBSET] using {len(selected_docnos)} random docs from index")        
