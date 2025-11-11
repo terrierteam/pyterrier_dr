@@ -179,6 +179,14 @@ class JPQRetriever(pt.Transformer):
 
     def __str__(self) -> str:
         return self._name        
+    
+    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
+        pta.validate.query_frame(topics, extra_columns=["query_vec"])
+        qvecs = topics["query_vec"].to_list()
+        Q = np.stack(qvecs).astype(np.float32, copy=False)
+        Q = np.ascontiguousarray(Q)
+        qids = topics["qid"].astype(str).tolist()
+        return Q, qids
 
 
 class JPQRetrieverFaissBase(JPQRetriever):
@@ -191,14 +199,6 @@ class JPQRetrieverFaissBase(JPQRetriever):
     @abstractmethod
     def _ensure(self, bs: int = 20000) -> None:
         ...
-
-    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
-        pta.validate.query_frame(topics, extra_columns=["query_vec"])
-        qvecs = topics["query_vec"].to_list()
-        Q = np.stack(qvecs).astype(np.float32, copy=False)
-        Q = np.ascontiguousarray(Q)
-        qids = topics["qid"].astype(str).tolist()
-        return Q, qids
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         Q, qids = self._validate_queries(topics)
@@ -297,28 +297,20 @@ class JPQRetrieverPrune(JPQRetriever):
         )
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.query_frame(topics, extra_columns=['query_vec'])
-        num_q = len(topics)
-        Q = np.stack(topics["query_vec"].to_list())
+        Q, qids = self._validate_queries(topics)
         qids = topics['qid'].astype(str).tolist()
+        num_q = len(qids)
+        rows = []
         with timer(f"{self._name} / prune search"):
             # split query_vec into M sub-vecs
             Q = Q.reshape((num_q, self.M, self.dsub))
             assert Q.shape == (num_q, self.M, self.dsub), Q.shape
-            # TODO check this works query as the first dimension...?
-            centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q)
-            assert centroid_scores.shape == (num_q, self.M, self.Ks), centroid_scores.shape
-            Is = []
-            Ds = []
-            for qoffset in range(centroid_scores.shape[0]):
-                I_q, D_q = self.scorer(centroid_scores[qoffset])
-                Is.append(I_q)
-                Ds.append(D_q)
-            I, D = self.scorer(centroid_scores)
-        rows = []
-        for i, qid in enumerate(qids):
-            for r, (did, s) in enumerate(zip(I[i], D[i]), start=1):
-                rows.append((qid, self.docnos[int(did)], float(s), r))
+            for qoffset in range(num_q):
+                centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q[qoffset,:,:])  # [M, Ks]
+                assert centroid_scores.shape == (self.M, self.Ks), centroid_scores.shape
+                I, D = self.scorer(centroid_scores)
+                for r, (did, s) in enumerate(zip(I, D)):
+                    rows.append((qids[qoffset], self.docnos[int(did)], float(s), r))
         return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
 
 def merge_top_k(item_score_ids_1: np.ndarray,
