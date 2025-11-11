@@ -234,8 +234,8 @@ class JPQCELossJPQNegsLambaRank(nn.Module):
                 rank_negs = rank_negs.view(B, -1)  # reshape to [B, N] if needed
             N = 1
         
-        print("rank_pos:", rank_pos.mean().item())
-        print("rank_negs:", rank_negs.mean().item())
+        print("rank_pos:", rank_pos.float().mean().item())
+        print("rank_negs:", rank_negs.float().mean().item())
         # sanity shapes
         assert q.dim() == 2 and pos.dim() == 2 and neg.dim() == 3
         Bq, Dq = q.shape
