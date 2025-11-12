@@ -456,11 +456,15 @@ class JPQTrainer:
         centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.M) ]).detach().cpu().numpy() # type: ignore # M x Ks x dsub
         assert len(centroids.shape) == 3, centroids.shape
         
+        opq = None
+        if isinstance(self.query_encoder, OPQQueryEncoder):
+            opq = self.query_encoder.R.detach().cpu().numpy() # type: ignore
+
         return JPQIndex.build(
             dest,
             docnos.fwd,
             all_codes,
             centroids,
             mode=IndexingMode.overwrite,
-            opq=self.pq.opq if self.pq.opq is not None else None
+            opq=opq
         )

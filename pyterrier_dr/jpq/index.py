@@ -92,7 +92,7 @@ class JPQIndex(pt.Artifact):
         docnos: list[str], 
         codes: np.ndarray, # [N, M]
         centroids: np.ndarray, # [M, Ks, dsub]
-        opq = None | np.npdarray,
+        opq = None | np.ndarray,
         mode = IndexingMode.create
     ) -> "JPQIndex": # type: ignore
         path = Path(path)
