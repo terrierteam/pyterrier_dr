@@ -17,11 +17,11 @@ from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.checkpointing import _export_pq, _load_checkpoint, _save_checkpoint
 from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
 from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
-from pyterrier_dr.jpq.model import JPQBiencoder, PassageEncoder, QueryEncoder
+from pyterrier_dr.jpq.model import JPQBiencoder, OPQQueryEncoder, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
 
-from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerFAISSIndexPQ, ProductQuantizerSKLearn
+from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerFAISSIndexPQ, ProductQuantizerSKLearn,ProductQuantizerFAISSIndexPQOPQ
 
 
 logging.basicConfig(level=logging.INFO, force=True)
@@ -44,6 +44,8 @@ def compute_PQ(
         pq_class = ProductQuantizerFAISSIndexPQ
     elif pq_impl == 'sklearn':
         pq_class = ProductQuantizerSKLearn
+    elif pq_impl == 'faiss2opq':
+        pq_class = ProductQuantizerFAISSIndexPQOPQ
     else:
         raise ValueError(f"Unknown pq_impl {pq_impl}, must be 'faiss' or 'sklearn'")
 
@@ -322,7 +324,7 @@ class JPQTrainer:
 
         def _queryencoder(inp : pd.DataFrame):
             with torch.no_grad():
-                Q_t = model.query.encode_texts(inp['query'].tolist(), batch_size=256)
+                Q_t = model.query.forward(inp['query'].tolist(), batch_size=256)
             Q = Q_t.detach().cpu().numpy().astype('float32')
             rtr = inp.copy()
             rtr["query_vec"] = [row for row in Q]
@@ -356,7 +358,7 @@ class JPQTrainer:
         model : BiEncoder, # the backbone biencoder model
         index: FlexIndex, # the index with documents
         device = None,
-        pq_impl: Literal['faiss','sklearn','faiss2'] = 'sklearn', # the PQ implementation
+        pq_impl: Literal['faiss','sklearn','faiss2', 'faiss2opq'] = 'sklearn', # the PQ implementation
         M: int = 8, # number of subquantizers (splits of the vector)
         nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
     ):
@@ -388,7 +390,7 @@ class JPQTrainer:
 
         self.pq = pq
         model = JPQBiencoder(
-            QueryEncoder(self.query_encoder), 
+            QueryEncoder(self.query_encoder),
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
@@ -419,8 +421,14 @@ class JPQTrainer:
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
         self.pq = pq
+        if hasattr(self.pq, "opq"):
+            logger.info(f"[JPQTrainer] using OPQ rotation matrix")
+            R = torch.Tensor(self.pq.opq).to(self.device)
+            query_encoder = OPQQueryEncoder(self.query_encoder, R)
+        else:
+            query_encoder = QueryEncoder(self.query_encoder)
         model = JPQBiencoder(
-            QueryEncoder(self.query_encoder), 
+            query_encoder, 
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 

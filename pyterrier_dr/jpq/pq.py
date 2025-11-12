@@ -269,3 +269,14 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
         self.pq = pqi.pq
         self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self.M, self.Ks, self.dsub).astype('float32')
         return self
+    
+class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
+    def fit(self, X):
+        import faiss
+        _, d = X.shape
+        opq = faiss.OPQMatrix(d, self.M)
+        opq.train(X)
+        x_rotated = opq.apply_py(X)
+        super().fit(x_rotated)
+        self.opq = faiss.vector_to_array(opq.A).reshape(d, d).astype('float32')
+        return self
