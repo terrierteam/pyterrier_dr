@@ -13,7 +13,7 @@ from pyterrier_dr.jpq.losses import JPQCELoss
 class FakeQueryEncoder:
     """
     Minimal stand-in for QueryEncoder:
-    - forward(texts) -> L2-normalized embeddings [B, D] on CPU
+    - encode_texts_torch(texts) -> L2-normalized embeddings [B, D] on CPU
     - records how many times it's called
     """
     def __init__(self, vectors_by_text: Dict[str, torch.Tensor], l2_norm: bool = True):
@@ -21,7 +21,7 @@ class FakeQueryEncoder:
         self.l2_norm = l2_norm
         self.calls = 0
 
-    def forward(self, texts: List[str]) -> torch.Tensor:
+    def encode_texts_torch(self, texts: List[str]) -> torch.Tensor:
         self.calls += 1
         embs = []
         for t in texts:
@@ -95,7 +95,7 @@ class TestJPQCELoss(unittest.TestCase):
 
         # Manual computation using the same encoders
         with torch.no_grad():
-            q = self.query.forward(self.batch["query_text"]).to(self.device)  # [B, D]
+            q = self.query.encode_texts_torch(self.batch["query_text"]).to(self.device)  # [B, D]
             pos = self.passage(self.batch["pos_codes"].to(self.device))                  # [B, D]
             neg = self.passage(self.batch["neg_codes"].to(self.device))                  # [B, D]
             s_pos = (q * pos).sum(dim=-1)                                                # [B]
@@ -148,11 +148,11 @@ class TestJPQCELoss(unittest.TestCase):
             _ = self.criterion(empty_batch)
 
     def test_query_encoder_called(self):
-        """Ensure the loss uses the QueryEncoder path (forward)."""
+        """Ensure the loss uses the QueryEncoder path (encode_texts_torch)."""
         before = self.query.calls
         _ = self.criterion(self.batch)
         after = self.query.calls
-        self.assertEqual(after, before + 1, "forward was not called exactly once")
+        self.assertEqual(after, before + 1, "encode_texts_torch was not called exactly once")
 
 
 if __name__ == "__main__":

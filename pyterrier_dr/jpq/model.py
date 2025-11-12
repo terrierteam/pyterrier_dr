@@ -34,11 +34,36 @@ class QueryEncoder(nn.Module):
         self.dr = dr_model
         self.batch_size = batch_size
 
-    def forward(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.dr(x) # type: ignore
+
+    def encode_texts_torch(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
         """Encode a list of texts into a Torch tensor (float32), optionally L2-normalised."""
         if not texts:
             return torch.empty((0, 0), dtype=torch.float32)
         return self.dr.encode_queries_torch(texts, batch_size=batch_size) # type: ignore
+
+        # bs = batch_size or self.batch_size
+        # outputs: list[torch.Tensor] = []
+
+        # for i in range(0, len(texts), bs):
+        #     chunk = texts[i:i + bs]
+
+        #     arr = self.dr.encode_queries_torch(chunk, batch_size=bs)
+        #     # # Try direct API first
+        #     # if hasattr(self.dr, "encode_queries"):
+        #     #     arr = self.dr.encode_queries(chunk, batch_size=bs)
+        #     # else:
+        #     #     # Fallback: nested query_encoder().encode(...)
+        #     #     qe = getattr(self.dr, "query_encoder", lambda **kw: None)(batch_size=bs)
+        #     #     if qe is None or not hasattr(qe, "encode"):
+        #     #         raise RuntimeError("dr_model must expose `encode_queries` or `query_encoder().encode`")
+        #     #     arr = qe.encode(chunk, batch_size=bs)
+
+        #     t = torch.from_numpy(np.asarray(arr, dtype=np.float32, order="C"))
+        #     outputs.append(t)
+
+        # return torch.cat(outputs, dim=0)
 
     @torch.no_grad()
     def encode_texts(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
@@ -67,20 +92,6 @@ class QueryEncoder(nn.Module):
 
         return torch.cat(outputs, dim=0)
 
-class OPQQueryEncoder(QueryEncoder):
-    def __init__(
-        self,
-        dr_model : pyterrier_dr.BiEncoder,
-        R: torch.Tensor,
-        batch_size: int = 64
-    ) -> None:
-        super().__init__(dr_model, batch_size)
-        self.R = R  # [D, D]
-    
-    def forward(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
-        x = super().forward(texts, batch_size)  # [N, D]
-        x = x @ self.R.to(x.device)  # [N, D]
-        return x
 
 class PassageEncoder(nn.Module):
     """

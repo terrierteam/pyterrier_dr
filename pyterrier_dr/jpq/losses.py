@@ -50,7 +50,7 @@ class JPQCELoss(nn.Module):
         # Find the device from the passage encoder (the model we are training)
         device = next(self.passage_encoder.parameters()).device
         # Encode queries on CPU, then move to the same device
-        q = self.query_encoder.forward(batch["query_text"])
+        q = self.query_encoder.encode_texts_torch(batch["query_text"])
         q = q.to(device)
         # Bring positive/negative PQ codes to same device
         pos = batch["pos_codes"].to(device)
@@ -84,7 +84,7 @@ class JPQCELossInBatchNegs(nn.Module):
         B = len(batch["query_text"])
 
         # 1. Encode queries
-        q = self.query_encoder.forward(batch["query_text"]).to(device)  # [B, D]
+        q = self.query_encoder.encode_texts_torch(batch["query_text"]).to(device)  # [B, D]
 
         # 2. Encode positives
         pos = self.passage_encoder(batch["pos_codes"].to(device))  # [B, D]
@@ -276,7 +276,7 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
         B = len(batch["query_text"])
 
         # 1. Encode queries
-        q = self.query_encoder.forward(batch["query_text"]).to(device)  # [B, D]
+        q = self.query_encoder.encode_texts_torch(batch["query_text"]).to(device)  # [B, D]
 
         # 2. Encode positives
         pos = self.passage_encoder(batch["pos_codes"].to(device))  # [B, D]
