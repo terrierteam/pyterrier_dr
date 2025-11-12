@@ -457,9 +457,10 @@ class JPQTrainer:
         assert len(centroids.shape) == 3, centroids.shape
         
         return JPQIndex.build(
-            dest, 
+            dest,
             docnos.fwd,
             all_codes,
             centroids,
-            mode=IndexingMode.overwrite
+            mode=IndexingMode.overwrite,
+            opq=self.pq.opq if self.pq.opq is not None else None
         )
