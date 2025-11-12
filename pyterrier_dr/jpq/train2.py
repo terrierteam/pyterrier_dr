@@ -35,7 +35,7 @@ def compute_PQ(
     batch_size: int, # how many doc vectors from sample to process in a batch when computing PQ codes
     docids: np.ndarray, # which document indices (into full vecs_mem) to compute codes for
     vecs: np.ndarray, # vector store
-    pq_impl: Literal["faiss", "sklearn", "faiss2"] = "faiss",
+    pq_impl: Literal["faiss", "sklearn", "faiss2", "faiss2opq"] = "faiss",
     ) -> tuple[np.ndarray, np.ndarray, ProductQuantizer]:
 
     if pq_impl == 'faiss':
