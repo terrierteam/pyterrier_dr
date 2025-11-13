@@ -238,9 +238,9 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     # Only consider pairs where i is more relevant than j
     pos_pairs = (diff_labels > 0).float()                # [B, num_docs, num_docs]
 
-    num_pos_pairs = pos_pairs.sum().item()
-    print("Num positive pairs per batch:", num_pos_pairs)
-    print("ΔDCG mean for pospairs:", diff_dcg[(diff_labels > 0)].mean().item())
+    #num_pos_pairs = pos_pairs.sum().item()
+    #print("Num positive pairs per batch:", num_pos_pairs)
+    #print("ΔDCG mean for pospairs:", diff_dcg[(diff_labels > 0)].mean().item())
 
     # Logistic pairwise loss weighted by ΔDCG
     pair_loss = torch.log1p(torch.exp(-sigma * diff_s)) * diff_dcg.abs() * pos_pairs
@@ -248,13 +248,13 @@ def lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1.0):
     # Sum over pairs and average over batch
     loss = (pair_loss.sum(dim=(1,2)) / (pos_pairs.sum(dim=(1,2)) + 1e-8)).mean()
 
-    print("ΔDCG mean all", diff_dcg.mean().item())
-    print("Pair loss mean", pair_loss.mean().item())
-    print("Num positive pairs", pos_pairs.sum().item())
+    # print("ΔDCG mean all", diff_dcg.mean().item())
+    # print("Pair loss mean", pair_loss.mean().item())
+    # print("Num positive pairs", pos_pairs.sum().item())
 
-    with torch.no_grad():
-        corr = torch.corrcoef(torch.stack([scores.mean(dim=1), -ranks.float().mean(dim=1)], dim=0))[0, 1]
-        print("Correlation(scores, -ranks):", corr.item())    
+    # with torch.no_grad():
+    #     corr = torch.corrcoef(torch.stack([scores.mean(dim=1), -ranks.float().mean(dim=1)], dim=0))[0, 1]
+    #     print("Correlation(scores, -ranks):", corr.item())
 
     return loss
 
@@ -320,8 +320,8 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
             all_negs = neg
             all_neg_ranks = rank_negs
         
-        print("rank_pos:", rank_pos.float().mean().item())
-        print("rank_negs:", all_neg_ranks.float().mean().item())
+        #print("rank_pos:", rank_pos.float().mean().item())
+        #print("rank_negs:", all_neg_ranks.float().mean().item())
         # sanity shapes
         assert q.dim() == 2 and pos.dim() == 2 and neg.dim() == 3
         Bq, Dq = q.shape
@@ -338,8 +338,8 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
         neg_scores = torch.einsum("bd,bnd->bn", q, all_negs)
         # alternative: neg_scores = torch.matmul(q.unsqueeze(1), neg.transpose(1,2)).squeeze(1)
 
-        print("pos_scores:", pos_scores.mean().item())
-        print("neg_scores:", neg_scores.mean().item())
+        #print("pos_scores:", pos_scores.mean().item())
+        #print("neg_scores:", neg_scores.mean().item())
 
         # 5. Concatenate scores, ranks, labels
         scores = torch.cat([pos_scores, neg_scores], dim=1)   # [B, 1 + N]
@@ -352,8 +352,8 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
         # 6. Compute loss
         loss = lambdarank_fixed_ranks_vectorized(scores, ranks, labels, sigma=1)
 
-        ce_loss = -torch.log_softmax(torch.cat([pos_scores, neg_scores], dim=1), dim=1)[:, 0].mean()
-        print("Scores mean:", scores.mean().item(), "std:", scores.std().item())
+        #ce_loss = -torch.log_softmax(torch.cat([pos_scores, neg_scores], dim=1), dim=1)[:, 0].mean()
+        #print("Scores mean:", scores.mean().item(), "std:", scores.std().item())
 
-        print(f"LambdaRank loss: {loss.item():.4f}, CE loss: {ce_loss.item():.4f}")
+        #print(f"LambdaRank loss: {loss.item():.4f}, CE loss: {ce_loss.item():.4f}")
         return loss
