@@ -258,7 +258,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         reconstructed = np.zeros((codes.shape[0], self.d), dtype=np.float32)  # [B, D]
         _, _, D_sub = self.centroids.shape
         for m in range(self.M):
-                reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][codes[:, m]] # type: ignore
+            reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][codes[:, m]] # type: ignore
         return reconstructed
     
 
