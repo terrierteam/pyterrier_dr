@@ -97,14 +97,7 @@ class ProductQuantizer:
             
             if error:
                 # --- Reconstruction ---
-                # Look up centroids to reconstruct vector
-                # self.centroids shape: [M, Ks, D_sub]
-                _, _, D_sub = self.centroids.shape # type: ignore
-
                 # Reconstruct each subvector from its centroid
-                #reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
-                #for m in range(self.M):
-                #    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
                 reconstructed = self.decode(batch_codes)  # [B, D]
 
                 # Compute reconstruction error (e.g. mean squared error)
@@ -133,7 +126,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
     def fit(self, X):
         from sklearn.cluster import KMeans
         """Train PQ on data X (n_samples, d)."""
-        n_samples, d = X.shape
+        _, d = X.shape
         self.d = d
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.dsub = d // self.M
@@ -179,7 +172,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
 
     def fit(self, X):
         """Train FAISS PQ on data X (n_samples, d)."""
-        n_samples, d = X.shape
+        _, d = X.shape
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.d = d
         self.dsub = d // self.M
@@ -265,7 +258,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
 class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
     def fit(self, X):
         """Train FAISS PQ on data X (n_samples, d)."""
-        n_samples, d = X.shape
+        _, d = X.shape
         self.d = d
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.dsub = d // self.M
