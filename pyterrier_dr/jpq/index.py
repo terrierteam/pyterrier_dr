@@ -18,6 +18,7 @@ class Metadata:
     Ks: int
     dsub: int
     doc_count: int
+    opq : bool
 
     @classmethod
     def load(cls, path: str | Path):
@@ -37,6 +38,7 @@ class JPQIndex(pt.Artifact):
     # file names
     _META_FN = "pt_meta.json"
     _DOCNOS_FN = "docnos.npids"
+    _OPQ_FN = "opq.f4"       # float32 [d, d]
     _CODES_FN = "codes.f4"     # uint8   [N, M]
     _SUBVECS_FN = "subvecs.f4" # float32 [M, Ks, dsub]
 
@@ -48,7 +50,7 @@ class JPQIndex(pt.Artifact):
         self._dvecs: np.ndarray | None = None
         self._codes: np.ndarray | None = None
         self._docnos: Lookup | None = None
-
+        self._opq: np.ndarray | None = None
 
     @property
     def meta(self) -> Metadata:
@@ -78,7 +80,14 @@ class JPQIndex(pt.Artifact):
             shape = (self.meta.M, self.meta.Ks, self.meta.dsub)
             self._dvecs = np.memmap(self.index_path / JPQIndex._SUBVECS_FN, mode="r", dtype=np.float32, shape=shape)
         return self._dvecs
-
+    
+    def opq_matrix(self) -> np.ndarray | None:
+        if not self.meta.opq:
+            return None
+        if self._opq is None:
+            shape = (self.meta.M * self.meta.dsub, self.meta.M * self.meta.dsub)
+            self._opq = np.memmap(self.index_path / JPQIndex._OPQ_FN, mode="r", dtype=np.float32, shape=shape)
+        return self._opq
 
     def __len__(self) -> int:
         return self.meta.doc_count
@@ -90,6 +99,7 @@ class JPQIndex(pt.Artifact):
         docnos: list[str], 
         codes: np.ndarray, # [N, M]
         centroids: np.ndarray, # [M, Ks, dsub]
+        opq = None | np.ndarray,
         mode = IndexingMode.create
     ) -> "JPQIndex": # type: ignore
         path = Path(path)
@@ -102,6 +112,7 @@ class JPQIndex(pt.Artifact):
         path.mkdir(parents=True, exist_ok=True)
 
         centroids = np.asarray(centroids, dtype=np.float32)
+        opq = np.asarray(opq, dtype=np.float32) if opq is not None else None
         codes = np.asarray(codes, dtype=np.uint8)
         docnos = list(docnos)
 
@@ -122,6 +133,10 @@ class JPQIndex(pt.Artifact):
         with open(path / JPQIndex._SUBVECS_FN, "wb") as f:
             centroids.tofile(f)
 
+        if opq is not None:
+            with open(path / JPQIndex._OPQ_FN, "wb") as f:
+                opq.tofile(f)
+
         # We save the codes
         with open(path / JPQIndex._CODES_FN, "wb") as f:
             codes.tofile(f)
@@ -134,15 +149,16 @@ class JPQIndex(pt.Artifact):
             Ks=int(Ks),
             dsub=int(dsub),
             doc_count=int(N),
+            opq = opq is not None
         ).save(path / JPQIndex._META_FN)
 
         return JPQIndex(path)
 
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
-        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ")
+        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq_matrix())
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
-        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat")
+        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq_matrix())
 
     def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
-        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation)
+        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self.opq_matrix())

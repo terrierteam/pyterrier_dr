@@ -72,6 +72,7 @@ class OPQQueryEncoder(QueryEncoder):
         self,
         dr_model : pyterrier_dr.BiEncoder,
         R: torch.Tensor,
+<<<<<<< HEAD
         batch_size: int = 64
     ) -> None:
         super().__init__(dr_model, batch_size)
@@ -80,6 +81,17 @@ class OPQQueryEncoder(QueryEncoder):
     def forward(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
         x = super().forward(texts, batch_size)  # [N, D]
         x = x @ self.R.to(x.device)  # [N, D]
+=======
+        batch_size: int = 64,
+        trainable = False
+    ) -> None:
+        super().__init__(dr_model, batch_size)
+        self.R = nn.Parameter(R, requires_grad=trainable)
+    
+    def forward(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
+        x = super().forward(texts, batch_size)  # [N, D]
+        x = (x @ self.R)  # [N, D]
+>>>>>>> e56507be5548f850a9654363985a59e442c80376
         return x
 
 class PassageEncoder(nn.Module):

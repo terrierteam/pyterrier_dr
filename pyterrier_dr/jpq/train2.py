@@ -423,6 +423,7 @@ class JPQTrainer:
         self.pq = pq
         if hasattr(self.pq, "opq"):
             logger.info(f"[JPQTrainer] using OPQ rotation matrix")
+            # TODO: consider if R should be trainable 
             R = torch.Tensor(self.pq.opq).to(self.device)
             query_encoder = OPQQueryEncoder(self.query_encoder, R)
         else:
@@ -456,10 +457,15 @@ class JPQTrainer:
         centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.M) ]).detach().cpu().numpy() # type: ignore # M x Ks x dsub
         assert len(centroids.shape) == 3, centroids.shape
         
+        opq = None
+        if isinstance(self.query_encoder, OPQQueryEncoder):
+            opq = self.query_encoder.R.data.detach().cpu().numpy() # type: ignore
+
         return JPQIndex.build(
-            dest, 
+            dest,
             docnos.fwd,
             all_codes,
             centroids,
-            mode=IndexingMode.overwrite
+            mode=IndexingMode.overwrite,
+            opq=opq
         )

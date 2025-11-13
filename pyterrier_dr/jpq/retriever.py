@@ -143,6 +143,7 @@ class JPQRetriever(pt.Transformer):
         codes: np.ndarray, # PQ codes of shape [N, M] (uint8)
         sub_embeddings: np.ndarray, #  PQ centroids of shape [M, Ks, dsub] where Ks = 2^nbits and d = M * dsub (aka the centroids, float32)
         topk: int = 1000, # number of results to retrieve
+        opq : np.ndarray | None = None,
     ):
         super().__init__()
         
@@ -150,6 +151,7 @@ class JPQRetriever(pt.Transformer):
         self.codes = np.ascontiguousarray(codes)
         self.sub_embeddings = np.ascontiguousarray(sub_embeddings)
         self.topk = int(topk)
+        self.opq = opq
 
         if self.codes.ndim != 2:
             raise ValueError(f"codes must be [N, M], got {self.codes.shape}")
@@ -185,6 +187,8 @@ class JPQRetriever(pt.Transformer):
         qvecs = topics["query_vec"].to_list()
         Q = np.stack(qvecs).astype(np.float32, copy=False)
         Q = np.ascontiguousarray(Q)
+        if self.opq is not None:
+            Q = Q @ self.opq
         qids = topics["qid"].astype(str).tolist()
         return Q, qids
 

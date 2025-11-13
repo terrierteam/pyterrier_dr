@@ -70,11 +70,11 @@ class ProductQuantizer:
         self.centroids = []
     
     @abstractmethod
-    def fit(self, X):
+    def fit(self, X : np.ndarray):
         pass
 
     @abstractmethod
-    def encode(self, X):
+    def encode(self, X : np.ndarray) -> np.ndarray:
         pass
 
     def get_centroids(self) -> np.ndarray | list:
@@ -97,14 +97,8 @@ class ProductQuantizer:
             
             if error:
                 # --- Reconstruction ---
-                # Look up centroids to reconstruct vector
-                # self.centroids shape: [M, Ks, D_sub]
-                _, _, D_sub = self.centroids.shape # type: ignore
-
                 # Reconstruct each subvector from its centroid
-                reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
-                for m in range(self.M):
-                    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
+                reconstructed = self.decode(batch_codes)  # [B, D]
 
                 # Compute reconstruction error (e.g. mean squared error)
                 errors = np.square(vecs - reconstructed).sum(axis=1)  # [B]
@@ -132,7 +126,8 @@ class ProductQuantizerSKLearn(ProductQuantizer):
     def fit(self, X):
         from sklearn.cluster import KMeans
         """Train PQ on data X (n_samples, d)."""
-        n_samples, d = X.shape
+        _, d = X.shape
+        self.d = d
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.dsub = d // self.M
         centroids = []
@@ -177,8 +172,9 @@ class ProductQuantizerFAISS(ProductQuantizer):
 
     def fit(self, X):
         """Train FAISS PQ on data X (n_samples, d)."""
-        n_samples, d = X.shape
+        _, d = X.shape
         assert d % self.M == 0, "Dimensionality must be divisible by M."
+        self.d = d
         self.dsub = d // self.M
         import faiss
 
@@ -246,19 +242,24 @@ class ProductQuantizerFAISS(ProductQuantizer):
     #     assert codes.shape == (n_samples, self.M)
     #     return codes
 
+    # def decode(self, codes) -> np.ndarray:
+    #     """Decode PQ codes back to approximate vectors."""
+    #     assert self.pq is not None, "Must call fit() first."
+    #     return self.pq.decode(codes.astype(np.uint8))
+    
     def decode(self, codes) -> np.ndarray:
-        """Decode PQ codes back to approximate vectors."""
-        n_samples = codes.shape[0]
-        assert self.pq is not None, "Must call fit() first."
-        X_recon = np.zeros((n_samples, self.M * self.dsub), dtype=np.float32)
-        self.pq.decode(codes, X_recon)
-        return X_recon
+        reconstructed = np.zeros((codes.shape[0], self.d), dtype=np.float32)  # [B, D]
+        _, _, D_sub = self.centroids.shape
+        for m in range(self.M):
+            reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][codes[:, m]] # type: ignore
+        return reconstructed
     
 
 class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
     def fit(self, X):
         """Train FAISS PQ on data X (n_samples, d)."""
-        n_samples, d = X.shape
+        _, d = X.shape
+        self.d = d
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.dsub = d // self.M
         import faiss
@@ -274,9 +275,28 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
     def fit(self, X):
         import faiss
         _, d = X.shape
+<<<<<<< HEAD
+=======
+        self.d = d
+>>>>>>> e56507be5548f850a9654363985a59e442c80376
         opq = faiss.OPQMatrix(d, self.M)
         opq.train(X)
         x_rotated = opq.apply_py(X)
         super().fit(x_rotated)
         self.opq = faiss.vector_to_array(opq.A).reshape(d, d).astype('float32')
+<<<<<<< HEAD
         return self
+=======
+        return self
+    
+    def encode(self, X) -> np.ndarray:
+        # rotate before PQ encoding
+        X = X @ self.opq
+        return super().encode(X)
+    
+    def decode(self, codes) -> np.ndarray:
+        # decode with PQ, then apply inverse rotate
+        X_recon = super().decode(codes)
+        X_recon = X_recon @ self.opq.T
+        return X_recon
+>>>>>>> e56507be5548f850a9654363985a59e442c80376
