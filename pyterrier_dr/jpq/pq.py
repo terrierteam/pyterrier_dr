@@ -257,7 +257,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
     def decode(self, codes) -> np.ndarray:
         reconstructed = np.zeros((codes.shape[0], self.d), dtype=np.float32)  # [B, D]
         for m in range(self.M):
-                reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
+                reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][codes[:, m]] # type: ignore
         return reconstructed
     
 
