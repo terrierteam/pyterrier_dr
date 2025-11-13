@@ -135,7 +135,7 @@ dmypy.json
 flex/
 *.flex
 
-checkpoints_jpq/*
+checkpoints_jpq
 tmp
 
 *ipynb
