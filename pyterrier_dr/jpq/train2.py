@@ -423,6 +423,7 @@ class JPQTrainer:
         self.pq = pq
         if hasattr(self.pq, "opq"):
             logger.info(f"[JPQTrainer] using OPQ rotation matrix")
+            # TODO: consider if R should be trainable 
             R = torch.Tensor(self.pq.opq).to(self.device)
             query_encoder = OPQQueryEncoder(self.query_encoder, R)
         else:
@@ -458,7 +459,7 @@ class JPQTrainer:
         
         opq = None
         if isinstance(self.query_encoder, OPQQueryEncoder):
-            opq = self.query_encoder.R.detach().cpu().numpy() # type: ignore
+            opq = self.query_encoder.R.data.detach().cpu().numpy() # type: ignore
 
         return JPQIndex.build(
             dest,
