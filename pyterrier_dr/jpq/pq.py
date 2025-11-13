@@ -277,8 +277,8 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
         _, d = X.shape
         self.d = d
         opq = faiss.OPQMatrix(d, self.M)
-        opq.train(X)
-        x_rotated = opq.apply_py(X)
+        opq.train(X) # type: ignore
+        x_rotated = opq.apply_py(X) # type: ignore
         super().fit(x_rotated)
         # I've checked, T is what we want.
         self.opq = faiss.vector_to_array(opq.A).reshape(d, d).T.astype('float32')
