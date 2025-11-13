@@ -275,18 +275,12 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
     def fit(self, X):
         import faiss
         _, d = X.shape
-<<<<<<< HEAD
-=======
         self.d = d
->>>>>>> e56507be5548f850a9654363985a59e442c80376
         opq = faiss.OPQMatrix(d, self.M)
-        opq.train(X)
-        x_rotated = opq.apply_py(X)
+        opq.train(X) # type: ignore
+        x_rotated = opq.apply_py(X) # type: ignore
         super().fit(x_rotated)
         self.opq = faiss.vector_to_array(opq.A).reshape(d, d).astype('float32')
-<<<<<<< HEAD
-        return self
-=======
         return self
     
     def encode(self, X) -> np.ndarray:
@@ -299,4 +293,3 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
         X_recon = super().decode(codes)
         X_recon = X_recon @ self.opq.T
         return X_recon
->>>>>>> e56507be5548f850a9654363985a59e442c80376
