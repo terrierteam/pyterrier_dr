@@ -280,7 +280,8 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
         opq.train(X)
         x_rotated = opq.apply_py(X)
         super().fit(x_rotated)
-        self.opq = faiss.vector_to_array(opq.A).reshape(d, d).astype('float32')
+        # I've checked, T is what we want.
+        self.opq = faiss.vector_to_array(opq.A).reshape(d, d).T.astype('float32')
         return self
     
     def encode(self, X) -> np.ndarray:
