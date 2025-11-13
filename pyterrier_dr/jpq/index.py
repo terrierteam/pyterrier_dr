@@ -80,7 +80,14 @@ class JPQIndex(pt.Artifact):
             shape = (self.meta.M, self.meta.Ks, self.meta.dsub)
             self._dvecs = np.memmap(self.index_path / JPQIndex._SUBVECS_FN, mode="r", dtype=np.float32, shape=shape)
         return self._dvecs
-
+    
+    def opq_matrix(self) -> np.ndarray | None:
+        if not self.meta.opq:
+            return None
+        if self._opq is None:
+            shape = (self.meta.M * self.meta.dsub, self.meta.M * self.meta.dsub)
+            self._opq = np.memmap(self.index_path / JPQIndex._OPQ_FN, mode="r", dtype=np.float32, shape=shape)
+        return self._opq
 
     def __len__(self) -> int:
         return self.meta.doc_count
@@ -148,10 +155,10 @@ class JPQIndex(pt.Artifact):
         return JPQIndex(path)
 
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
-        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self._opq if self.meta.opq else None)
+        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq_matrix())
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
-        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self._opq if self.meta.opq else None)
+        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq_matrix())
 
     def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
-        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self._opq if self.meta.opq else None)
+        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self.opq_matrix())
