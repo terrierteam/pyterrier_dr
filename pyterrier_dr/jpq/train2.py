@@ -458,8 +458,8 @@ class JPQTrainer:
         assert len(centroids.shape) == 3, centroids.shape
         
         opq = None
-        if isinstance(self.query_encoder, OPQQueryEncoder):
-            opq = self.query_encoder.R.data.detach().cpu().numpy() # type: ignore
+        if hasattr(self.pq, "opq"):
+            opq = self.model.query.R.data.detach().cpu().numpy() # type: ignore
 
         return JPQIndex.build(
             dest,
