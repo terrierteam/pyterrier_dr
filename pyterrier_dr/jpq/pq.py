@@ -250,7 +250,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
     def decode(self, codes) -> np.ndarray:
         """Decode PQ codes back to approximate vectors."""
         assert self.pq is not None, "Must call fit() first."
-        return self.pq.decode(codes)
+        return self.pq.decode(codes.astype(np.uint8))
     
 
 class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
