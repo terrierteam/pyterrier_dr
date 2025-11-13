@@ -100,6 +100,7 @@ class JPQCELossInBatchNegs(nn.Module):
                 neg = neg.view(B, N, -1)  # [B, N_total, D]
             else:
                 neg = self.passage_encoder(batch["neg_codes"].to(device)).unsqueeze(1)  # [B, 1, D]
+                N = 1
                 # we only have ONE negative per batch, so hack in a unsqueeze here, to fit rest of code.
 
             # 4. Compute similarity scores
