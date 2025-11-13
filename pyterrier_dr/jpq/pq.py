@@ -70,11 +70,11 @@ class ProductQuantizer:
         self.centroids = []
     
     @abstractmethod
-    def fit(self, X):
+    def fit(self, X : np.ndarray):
         pass
 
     @abstractmethod
-    def encode(self, X):
+    def encode(self, X : np.ndarray) -> np.ndarray:
         pass
 
     def get_centroids(self) -> np.ndarray | list:
