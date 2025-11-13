@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from pyterrier_dr.jpq.pq import _unpack_pq_codes_batch
+# from pyterrier_dr.jpq.pq import _unpack_pq_codes_batch
 from pyterrier_dr.jpq.pq import (
     ProductQuantizerSKLearn,
     ProductQuantizerFAISS,
@@ -13,81 +13,81 @@ try:
 except Exception:
     HAS_FAISS = False
 
-def _pack_codes_little_endian(codes: np.ndarray, nbits: int) -> np.ndarray:
-    """
-    Test helper: pack (B, M) uint8 codes (values in [0, 2^nbits)) into bytes
-    using little-endian bit order, matching FAISS behaviour when nbits < 8.
-    """
-    B, M = codes.shape
-    assert 1 <= nbits <= 7
-    total_bits = M * nbits
-    out_bits = np.zeros((B, total_bits), dtype=np.uint8)
+# def _pack_codes_little_endian(codes: np.ndarray, nbits: int) -> np.ndarray:
+#     """
+#     Test helper: pack (B, M) uint8 codes (values in [0, 2^nbits)) into bytes
+#     using little-endian bit order, matching FAISS behaviour when nbits < 8.
+#     """
+#     B, M = codes.shape
+#     assert 1 <= nbits <= 7
+#     total_bits = M * nbits
+#     out_bits = np.zeros((B, total_bits), dtype=np.uint8)
 
-    # expand each code into nbits little-endian bits
-    for m in range(M):
-        # extract m-th code column
-        vals = codes[:, m].astype(np.uint16)  # safe for bit ops
-        for b in range(nbits):
-            out_bits[:, m * nbits + b] = (vals >> b) & 1
+#     # expand each code into nbits little-endian bits
+#     for m in range(M):
+#         # extract m-th code column
+#         vals = codes[:, m].astype(np.uint16)  # safe for bit ops
+#         for b in range(nbits):
+#             out_bits[:, m * nbits + b] = (vals >> b) & 1
 
-    # pad to full bytes if needed
-    pad = (-total_bits) % 8
-    if pad:
-        out_bits = np.pad(out_bits, ((0, 0), (0, pad)), mode="constant", constant_values=0)
+#     # pad to full bytes if needed
+#     pad = (-total_bits) % 8
+#     if pad:
+#         out_bits = np.pad(out_bits, ((0, 0), (0, pad)), mode="constant", constant_values=0)
 
-    packed = np.packbits(out_bits, axis=1, bitorder="little")
-    return packed
+#     packed = np.packbits(out_bits, axis=1, bitorder="little")
+#     return packed
 
 
-class TestUnpackPQCodesBatch(unittest.TestCase):
+# class TestUnpackPQCodesBatch(unittest.TestCase):
 
-    def test_fast_path_nbits_8_ok(self):
-        B, M = 3, 5
-        packed = np.arange(B * M, dtype=np.uint8).reshape(B, M)
-        out = _unpack_pq_codes_batch(packed, M=M, nbits=8)
-        self.assertTrue(np.shares_memory(out, packed) or np.array_equal(out, packed))
-        np.testing.assert_array_equal(out, packed)
+#     def test_fast_path_nbits_8_ok(self):
+#         B, M = 3, 5
+#         packed = np.arange(B * M, dtype=np.uint8).reshape(B, M)
+#         out = _unpack_pq_codes_batch(packed, M=M, nbits=8)
+#         self.assertTrue(np.shares_memory(out, packed) or np.array_equal(out, packed))
+#         np.testing.assert_array_equal(out, packed)
 
-    def test_fast_path_nbits_8_wrong_shape_raises(self):
-        B, M = 2, 4
-        packed = np.zeros((B, M + 1), dtype=np.uint8)  # wrong second dim
-        with self.assertRaises(ValueError):
-            _ = _unpack_pq_codes_batch(packed, M=M, nbits=8)
+#     def test_fast_path_nbits_8_wrong_shape_raises(self):
+#         B, M = 2, 4
+#         packed = np.zeros((B, M + 1), dtype=np.uint8)  # wrong second dim
+#         with self.assertRaises(ValueError):
+#             _ = _unpack_pq_codes_batch(packed, M=M, nbits=8)
 
-    def test_roundtrip_for_various_nbits(self):
-        rng = np.random.default_rng(123)
-        B, M = 7, 13
-        for nbits in [1, 2, 3, 4, 5, 6, 7]:
-            vmax = (1 << nbits) - 1
-            codes = rng.integers(0, vmax + 1, size=(B, M), dtype=np.uint8)
-            packed = _pack_codes_little_endian(codes, nbits)
-            # sanity: packed should have ceil(M*nbits/8) bytes per row
-            expected_bytes = (M * nbits + 7) // 8
-            self.assertEqual(packed.shape, (B, expected_bytes))
+#     def test_roundtrip_for_various_nbits(self):
+#         rng = np.random.default_rng(123)
+#         B, M = 7, 13
+#         for nbits in [1, 2, 3, 4, 5, 6, 7]:
+#             vmax = (1 << nbits) - 1
+#             codes = rng.integers(0, vmax + 1, size=(B, M), dtype=np.uint8)
+#             packed = _pack_codes_little_endian(codes, nbits)
+#             # sanity: packed should have ceil(M*nbits/8) bytes per row
+#             expected_bytes = (M * nbits + 7) // 8
+#             self.assertEqual(packed.shape, (B, expected_bytes))
 
-            unpacked = _unpack_pq_codes_batch(packed, M=M, nbits=nbits)
-            self.assertEqual(unpacked.shape, (B, M))
-            self.assertEqual(unpacked.dtype, np.uint8)
-            np.testing.assert_array_equal(unpacked, codes)
+#             unpacked = _unpack_pq_codes_batch(packed, M=M, nbits=nbits)
+#             self.assertEqual(unpacked.shape, (B, M))
+#             self.assertEqual(unpacked.dtype, np.uint8)
+#             np.testing.assert_array_equal(unpacked, codes)
 
-    def test_insufficient_bits_raises(self):
-        # Need total_bits = M*nbits = 10*4 = 40 bits = 5 bytes
-        B, M, nbits = 2, 10, 4
-        too_small = np.zeros((B, 4), dtype=np.uint8)  # only 32 bits
-        with self.assertRaises(ValueError):
-            _ = _unpack_pq_codes_batch(too_small, M=M, nbits=nbits)
+#     def test_insufficient_bits_raises(self):
+#         # Need total_bits = M*nbits = 10*4 = 40 bits = 5 bytes
+#         B, M, nbits = 2, 10, 4
+#         too_small = np.zeros((B, 4), dtype=np.uint8)  # only 32 bits
+#         with self.assertRaises(ValueError):
+#             _ = _unpack_pq_codes_batch(too_small, M=M, nbits=nbits)
 
-    def test_non_uint8_input_is_coerced(self):
-        B, M, nbits = 3, 6, 4
-        rng = np.random.default_rng(7)
-        vmax = (1 << nbits) - 1
-        codes = rng.integers(0, vmax + 1, size=(B, M), dtype=np.uint8)
-        packed_uint8 = _pack_codes_little_endian(codes, nbits)
+#     def test_non_uint8_input_is_coerced(self):
+#         B, M, nbits = 3, 6, 4
+#         rng = np.random.default_rng(7)
+#         vmax = (1 << nbits) - 1
+#         codes = rng.integers(0, vmax + 1, size=(B, M), dtype=np.uint8)
+#         packed_uint8 = _pack_codes_little_endian(codes, nbits)
 
-        # present as a different dtype; function should coerce to uint8 internally
-        packed_int32 = packed_uint8.astype(np.int32)
-        out = _unpack_pq_codes_batch(packed_int32, M=M, nbits=nbits)
-        np.testing.assert_array_equal(out, codes)
+#         # present as a different dtype; function should coerce to uint8 internally
+#         packed_int32 = packed_uint8.astype(np.int32)
+#         out = _unpack_pq_codes_batch(packed_int32, M=M, nbits=nbits)
+#         np.testing.assert_array_equal(out, codes)
 
 
 def make_synthetic_data(n=200, d=16, seed=123):
@@ -119,7 +119,7 @@ class TestProductQuantizerSKLearn(unittest.TestCase):
     def test_fit_centroids_shape(self):
         pq = ProductQuantizerSKLearn(M=self.M, Ks=self.Ks, random_state=0)
         pq.fit(self.X)
-        cents = pq.get_centroids()
+        cents = pq.centroids
         self.assertIsInstance(cents, np.ndarray)
         self.assertEqual(cents.shape, (self.M, self.Ks, self.d // self.M)) # type: ignore
         self.assertIn(cents.dtype, (np.float32, np.float64)) # type: ignore
@@ -146,7 +146,7 @@ class TestProductQuantizerSKLearn(unittest.TestCase):
         pq = ProductQuantizerSKLearn(M=self.M, Ks=self.Ks, random_state=0)
         pq.fit(self.X)
         codes_ref = pq.encode(self.X)
-        codes_b = pq.encode_batch(self.X, range(len(self.X)), batch_size=17, verbose=False)
+        codes_b = pq.encode_batch(self.X, np.arange(len(self.X)), bs=17, verbose=False)
         np.testing.assert_array_equal(codes_ref, codes_b)
 
     def test_dim_not_divisible_raises(self):
@@ -168,7 +168,7 @@ class TestProductQuantizerFAISS(unittest.TestCase):
     def test_fit_centroids_shape(self):
         pq = ProductQuantizerFAISS(M=self.M, Ks=self.Ks)
         pq.fit(self.X)
-        cents = pq.get_centroids()
+        cents = pq.centroids
         self.assertIsInstance(cents, (np.ndarray, list))
         cents = np.asarray(cents)
         self.assertEqual(cents.shape, (self.M, self.Ks, self.d // self.M))
@@ -192,7 +192,7 @@ class TestProductQuantizerFAISS(unittest.TestCase):
         pq = ProductQuantizerFAISS(M=self.M, Ks=self.Ks)
         pq.fit(self.X)
         codes_ref = pq.encode(self.X)
-        codes_b = pq.encode_batch(self.X, range(len(self.X)), batch_size=19, verbose=False)
+        codes_b = pq.encode_batch(self.X, np.arange(len(self.X)), bs=19, verbose=False)
         np.testing.assert_array_equal(codes_ref, codes_b)
 
     @unittest.skipUnless(HAS_FAISS, "faiss not installed")

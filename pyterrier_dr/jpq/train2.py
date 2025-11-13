@@ -73,13 +73,13 @@ def compute_PQ(
     # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
     # as a codes are centroids in the vector space defined in the small sample_size set, which
     # is a subset of the sel_indices set, it should be ok.
-    return codes, pq.get_centroids(), pq # type: ignore
+    return codes, pq.centroids, pq # type: ignore
 
 
 def compute_from_pq_index(M, indexpq, docids):
 
     codes = np.empty((len(docids), M), dtype=np.uint8)
-    return codes, pq.get_centroids(), pq # type: ignore
+    return codes, pq.centroids, pq # type: ignore
 
 
 def prepare_validation_data(
@@ -424,7 +424,7 @@ class JPQTrainer:
         if hasattr(self.pq, "opq"):
             logger.info(f"[JPQTrainer] using OPQ rotation matrix")
             # TODO: consider if R should be trainable 
-            R = torch.Tensor(self.pq.opq).to(self.device)
+            R = torch.Tensor(self.pq.opq).to(self.device) # type: ignore
             query_encoder = OPQQueryEncoder(self.query_encoder, R)
         else:
             query_encoder = QueryEncoder(self.query_encoder)
@@ -449,7 +449,7 @@ class JPQTrainer:
         docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
 
         # compute codes for _all_ of the original index
-        all_codes = self.pq.encode_batch(original_embs, list(range(len(self.index))))
+        all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
         assert len(all_codes.shape) == 2, all_codes.shape
         assert all_codes.shape[0] == len(self.index)
         
