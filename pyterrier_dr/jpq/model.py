@@ -79,7 +79,7 @@ class OPQQueryEncoder(QueryEncoder):
     
     def forward(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
         x = super().forward(texts, batch_size)  # [N, D]
-        x = x @ self.R.to(x.device)  # [N, D]
+        x = (x @ self.R).to(x.device)  # [N, D]
         return x
 
 class PassageEncoder(nn.Module):

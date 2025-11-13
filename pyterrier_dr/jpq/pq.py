@@ -102,9 +102,10 @@ class ProductQuantizer:
                 _, _, D_sub = self.centroids.shape # type: ignore
 
                 # Reconstruct each subvector from its centroid
-                reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
-                for m in range(self.M):
-                    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
+                #reconstructed = np.zeros_like(vecs, dtype=np.float32)  # [B, D]
+                #for m in range(self.M):
+                #    reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
+                reconstructed = self.decode(batch_codes)  # [B, D]
 
                 # Compute reconstruction error (e.g. mean squared error)
                 errors = np.square(vecs - reconstructed).sum(axis=1)  # [B]
@@ -280,3 +281,14 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
         super().fit(x_rotated)
         self.opq = faiss.vector_to_array(opq.A).reshape(d, d).astype('float32')
         return self
+    
+    def encode(self, X) -> np.ndarray:
+        # rotate before PQ encoding
+        X = X @ self.opq
+        return super().encode_(X)
+    
+    def decode(self, codes) -> np.ndarray:
+        # decode with PQ, then apply inverse rotate
+        X_recon = super().decode(codes)
+        X_recon = X_recon @ self.opq.T
+        return X_recon
