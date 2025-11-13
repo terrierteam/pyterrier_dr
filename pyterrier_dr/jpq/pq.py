@@ -180,6 +180,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
         """Train FAISS PQ on data X (n_samples, d)."""
         n_samples, d = X.shape
         assert d % self.M == 0, "Dimensionality must be divisible by M."
+        self.d = d
         self.dsub = d // self.M
         import faiss
 
@@ -247,10 +248,16 @@ class ProductQuantizerFAISS(ProductQuantizer):
     #     assert codes.shape == (n_samples, self.M)
     #     return codes
 
+    # def decode(self, codes) -> np.ndarray:
+    #     """Decode PQ codes back to approximate vectors."""
+    #     assert self.pq is not None, "Must call fit() first."
+    #     return self.pq.decode(codes.astype(np.uint8))
+    
     def decode(self, codes) -> np.ndarray:
-        """Decode PQ codes back to approximate vectors."""
-        assert self.pq is not None, "Must call fit() first."
-        return self.pq.decode(codes.astype(np.uint8))
+        reconstructed = np.zeros((codes.shape[0], self.d), dtype=np.float32)  # [B, D]
+        for m in range(self.M):
+                reconstructed[:, m * D_sub:(m + 1) * D_sub] = self.centroids[m][batch_codes[:, m]] # type: ignore
+        return reconstructed
     
 
 class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
