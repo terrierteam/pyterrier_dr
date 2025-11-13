@@ -266,6 +266,7 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
     def fit(self, X):
         """Train FAISS PQ on data X (n_samples, d)."""
         n_samples, d = X.shape
+        self.d = d
         assert d % self.M == 0, "Dimensionality must be divisible by M."
         self.dsub = d // self.M
         import faiss
