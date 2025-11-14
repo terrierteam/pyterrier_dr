@@ -137,6 +137,7 @@ def _pack_pq_codes(codes: np.ndarray, nbits: int) -> np.ndarray:
 
 
 class JPQRetriever(pt.Transformer):
+
     def __init__(
         self, 
         docnos: list[str], # list of [N] docids
@@ -153,6 +154,15 @@ class JPQRetriever(pt.Transformer):
         self.topk = int(topk)
         self.opq = opq
 
+        self._validate_data()
+
+        self._index = None
+        self._name = self.__class__.__name__        
+
+    def __str__(self) -> str:
+        return self._name        
+
+    def _validate_data(self):
         if self.codes.ndim != 2:
             raise ValueError(f"codes must be [N, M], got {self.codes.shape}")
         if self.sub_embeddings.ndim != 3:
@@ -168,7 +178,7 @@ class JPQRetriever(pt.Transformer):
         nbits_f = math.log2(Ks)
         if abs(nbits_f - round(nbits_f)) > 1e-9:
             raise ValueError(f"Ks must be a power of 2, got {Ks}")
-
+        
         self.N = N
         self.M = M
         self.Ks = Ks
@@ -176,12 +186,6 @@ class JPQRetriever(pt.Transformer):
         self.d = M * dsub
         self.nbits = int(round(nbits_f))
 
-        self._index = None
-        self._name = self.__class__.__name__        
-
-    def __str__(self) -> str:
-        return self._name        
-    
     def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
         pta.validate.query_frame(topics, extra_columns=["query_vec"])
         qvecs = topics["query_vec"].to_list()
@@ -272,9 +276,7 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
 
         self._index = index
         self._name = "JPQRetrieverPQ"
-
-        self._index = index
-    
+   
 
 class JPQRetrieverPrune(JPQRetriever):
 
