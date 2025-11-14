@@ -468,5 +468,5 @@ class JPQTrainer:
             all_codes,
             centroids,
             mode=IndexingMode.overwrite,
-            opq=opq
+            opq=opq # type: ignore
         )

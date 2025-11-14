@@ -18,7 +18,7 @@ class Metadata:
     Ks: int
     dsub: int
     doc_count: int
-    opq : bool
+    opq: bool
 
     @classmethod
     def load(cls, path: str | Path):
@@ -58,13 +58,11 @@ class JPQIndex(pt.Artifact):
             self._meta = Metadata.load(self.index_path / JPQIndex._META_FN)
         return self._meta # type: ignore
 
-
     @property
     def docnos(self) -> Lookup:
         if self._docnos is None:
             self._docnos = Lookup(self.index_path / JPQIndex._DOCNOS_FN)
         return self._docnos
-
 
     @property
     def codes(self) -> np.ndarray:
@@ -73,7 +71,6 @@ class JPQIndex(pt.Artifact):
             self._codes = np.memmap(self.index_path / JPQIndex._CODES_FN, mode="r", dtype=np.uint8, shape=shape)
         return self._codes
 
-
     @property
     def dvecs(self) -> np.ndarray:
         if self._dvecs is None:
@@ -81,7 +78,8 @@ class JPQIndex(pt.Artifact):
             self._dvecs = np.memmap(self.index_path / JPQIndex._SUBVECS_FN, mode="r", dtype=np.float32, shape=shape)
         return self._dvecs
     
-    def opq_matrix(self) -> np.ndarray | None:
+    @property
+    def opq(self) -> np.ndarray | None:
         if not self.meta.opq:
             return None
         if self._opq is None:
@@ -155,10 +153,10 @@ class JPQIndex(pt.Artifact):
         return JPQIndex(path)
 
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
-        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq_matrix())
+        return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq)
 
     def retriever_flat(self, topk: int = 1000) -> "JPQRetrieverFlat":
-        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq_matrix())
+        return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq)
 
     def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
-        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self.opq_matrix())
+        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self.opq)
