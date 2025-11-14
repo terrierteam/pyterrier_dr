@@ -3,6 +3,8 @@ import logging
 import numpy as np
 from tqdm import tqdm
 import math
+import faiss
+from sklearn.cluster import KMeans
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
@@ -72,8 +74,8 @@ class ProductQuantizer:
         """
         self._M = M
         self._Ks = Ks
-        self._dsub = 0 # dimensionality of each subvector
-        self._centroids = None
+        self._d = None # will be set after fit
+        self._centroids = None # will be set after fit
     
     @abstractmethod
     def fit(self, X : np.ndarray):
@@ -91,27 +93,50 @@ class ProductQuantizer:
     def centroids(self) -> np.ndarray:
         if self._centroids is None:
             raise AttributeError("Must call fit() first.")
-        return self._centroids
+        return self._centroids    
 
-    def encode_batch(self, X: np.ndarray, selected: np.ndarray, bs: int =10_000, verbose: bool=True, error: bool=True) -> np.ndarray:
+    @property
+    def d(self) -> int:
+        if self._d is None:
+            raise AttributeError("Must call fit() first.")
+        return self._d
+    
+    @d.setter
+    def d(self, d: int):
+        if d % self._M != 0:
+            raise ValueError(f"Dimensionality {d} must be divisible by M = {self._M}.")
+        self._d = d
+
+    @property
+    def dsub(self) -> int:
+        return self.d // self._M
+    
+    def encode_batch(
+            self, 
+            X: np.ndarray, # vector db
+            selected: np.ndarray, # vector indexes to encode
+            bs: int=10_000, 
+            verbose: bool=True, 
+            error: bool=True
+    ) -> np.ndarray:
         """Take some embeddings from X according to selected and encodes them in batches"""
-        n = len(selected)
-        codes = np.empty((n, self._M), dtype=np.uint8)
+        N = len(selected)
+        codes = np.empty((N, self._M), dtype=np.uint8) # [N, M]
         total_error = 0.0
 
-        iter = range(0, n, bs)
-        for start in tqdm(iter, desc="[PQ] Encoding PQ batches", total = math.ceil(n / bs)) if verbose else iter:
-            end = min(start + bs, n) 
+        iter = range(0, N, bs)
+        for start in tqdm(iter, desc="[PQ] Encoding PQ batches", total = math.ceil(N / bs)) if verbose else iter:
+            end = min(start + bs, N) 
             X_sel = X[selected[start:end]] # [B, D]
             batch_codes = self.encode(X_sel) # [B, M]
-            codes[start:end] = batch_codes
+            codes[start:end] = batch_codes # [B, M]
             
             if error:
                 X_sel_recon = self.decode(batch_codes)  # [B, D]
                 err = np.square(X_sel - X_sel_recon).sum(axis=1)  # [B]
                 total_error += err.sum()
         
-        root_mean_recon_error = np.sqrt(total_error / n)
+        root_mean_recon_error = np.sqrt(total_error / N)
         if error:
             logger.info(f"[PQ] Reconstruction RMSE: {root_mean_recon_error:.6f}")
 
@@ -120,103 +145,69 @@ class ProductQuantizer:
 
 class ProductQuantizerSKLearn(ProductQuantizer):
     def __init__(self, M=4, Ks=256, random_state=42):
-        """
-        M: number of subquantizers (splits of the vector)
-        Ks: number of centroids per subquantizer
-        """
         super().__init__(M, Ks)
         self.random_state = random_state
 
-    def fit(self, X):
-        from sklearn.cluster import KMeans
-        """Train PQ on data X (n_samples, d)."""
-        _, d = X.shape
-        self._d = d
-        assert d % self._M == 0, "Dimensionality must be divisible by M."
-        self._dsub = d // self._M
+    def fit(self, X: np.ndarray) -> None: # [N, D]
+        """Train PQ on data X [N, D]."""
+        _, self.d = X.shape
         centroids = []
-        
-        for m in range(self._M):
-            X_sub = X[:, m * self._dsub:(m + 1) * self._dsub]
+        for X_m in np.hsplit(X, self._M): # X_sub has shape [N, dsub]
             kmeans = KMeans(n_clusters=self._Ks, random_state=self.random_state)
-            kmeans.fit(X_sub)
-            centroids.append(kmeans.cluster_centers_)
+            kmeans.fit(X_m)
+            centroids.append(kmeans.cluster_centers_) # [Ks, dsub]
         self._centroids = np.array(centroids)  # shape (M, Ks, dsub)
         
-    def encode(self, X) -> np.ndarray:
-        """Encode each vector into M integer codes."""
-        n_samples = len(X)
-        codes = np.empty((n_samples, self._M), dtype=np.uint8)
-        for m in range(self._M):
-            X_sub = X[:, m * self._dsub:(m + 1) * self._dsub]
-            centers = self.centroids[m]
-            distances = np.linalg.norm(X_sub[:, None, :] - centers[None, :, :], axis=2)
+    def encode(self, X: np.ndarray) -> np.ndarray: # [N, D] -> [N, M]
+        """Encode each vector in X [N,D] into M integer codes."""
+        N = len(X)
+        codes = np.empty((N, self._M), dtype=np.uint8) # [N, M]
+        for m, X_m in enumerate(np.hsplit(X, self._M)): # X_m has shape [N, dsub]
+            centers = self.centroids[m] # [Ks, dsub]
+            distances = np.linalg.norm(X_m[:, None, :] - centers[None, :, :], axis=2)
             codes[:, m] = np.argmin(distances, axis=1)
         return codes
     
-    def decode(self, codes) -> np.ndarray:
+    def decode(self, codes: np.ndarray) -> np.ndarray: # [N, M] -> [N, D]
         """Reconstruct vectors from PQ codes."""
-        n_samples = codes.shape[0]
-        X_recon = np.empty((n_samples, self._M * self._dsub), dtype=np.float32)
-        for m in range(self._M):
-            centers = self.centroids[m]
-            X_recon[:, m * self._dsub:(m + 1) * self._dsub] = centers[codes[:, m]]
+        N = len(codes)
+        X_recon = np.empty((N, self.d), dtype=np.float32) # [N, D]
+        for m, centers in enumerate(self.centroids):
+            X_recon[:, m * self.dsub:(m + 1) * self.dsub] = centers[codes[:, m]]
         return X_recon
 
 
 class ProductQuantizerFAISS(ProductQuantizer):
     def __init__(self, M=4, Ks=256):
-        """
-        M: number of subquantizers
-        Ks: number of clusters per subquantizer
-        """
         super().__init__(M, Ks)
         self._pq = None
 
-    def fit(self, X):
+    def fit(self, X: np.ndarray) -> None:
         """Train FAISS PQ on data X (n_samples, d)."""
-        _, d = X.shape
-        assert d % self._M == 0, "Dimensionality must be divisible by M."
-        self._d = d
-        self._dsub = d // self._M
-        import faiss
+        _, self.d = X.shape
 
-        # Initialize FAISS PQ
-        self.pq = faiss.ProductQuantizer(d, self._M, int(np.log2(self._Ks)))#, faiss.METRIC_INNER_PRODUCT )
+        self.pq = faiss.ProductQuantizer(self.d, self._M, int(np.log2(self._Ks)))#, faiss.METRIC_INNER_PRODUCT )
         self.pq.train(X.astype(np.float32)) # type: ignore
-        self._centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self._dsub).astype('float32')
-        return self
+        self._centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self.dsub).astype('float32')
     
     def encode(self, X: np.ndarray) -> np.ndarray:
-        """Assign PQ codes for X using dot product, return (codes [N, M], recon [N, D])."""
-        n_samples = len(X)
-        codes = np.empty((n_samples, self._M), dtype=np.int64)
-        #recon_parts = []
-        
-        for m in range(self._M):
-            x_m = X[:, m * self._dsub : (m + 1) * self._dsub]  # (N, dsub)
-            C_m = self.centroids[m]                # (K, dsub)
-    
+        """Assign PQ codes for X using dot product"""
+        N = len(X)
+        codes = np.empty((N, self._M), dtype=np.int64) # [N, M]
+        for m, X_m in enumerate(np.hsplit(X, self._M)): # X_sub has shape [N, dsub]            
+            C_m = self.centroids[m]                # [K, dsub]
             # Calculate the dot product using numpy.dot or the @ operator.
-            # This performs a batched matrix multiplication.
-            # (N, K) = (N, dsub) @ (dsub, K)
-            # Note: In NumPy, the '@' operator is preferred for matrix multiplication over the older `np.dot` function for 2D arrays.
-            similarity = x_m @ C_m.T
-    
+            similarity = X_m @ C_m.T
             # Find the index with the *maximum* dot product (highest similarity).
-            idx = np.argmax(similarity, axis=1)    # (N,)
+            idx = np.argmax(similarity, axis=1)    # [N]
             codes[:, m] = idx
-            #recon_parts.append(C_m[idx])           # (N, dsub)
-            
-        #recon = np.concatenate(recon_parts, axis=-1)  # (N, D)
-        return codes #, recon
+        return codes
     
-    def encode_(self, X) -> np.ndarray:
+    def encode_(self, X: np.ndarray) -> np.ndarray:
         """
         Encode vectors into PQ codes (n_samples, M).
         Uses FAISS native API (no custom unpacking).
         """
-        import faiss
         assert self.pq is not None, "Must call fit() first."
         X = X.astype(np.float32)
         n_samples = len(X)
@@ -233,64 +224,49 @@ class ProductQuantizerFAISS(ProductQuantizer):
         )
     
         return codes
-
-    # def encode(self, X) -> np.ndarray:
-    #     """Encode vectors into PQ codes (n_samples, n_splits)."""
-    #     assert self.pq is not None, "Must call fit() first."
-    #     n_samples = X.shape[0]
-    #     packed = self.pq.compute_codes(X.astype(np.float32)) # type: ignore
-    #     codes = _unpack_pq_codes_batch(packed, M=self.M, nbits=int(np.log2(self.Ks)))
-    #     assert codes.shape == (n_samples, self.M)
-    #     return codes
-
-    # def decode(self, codes) -> np.ndarray:
-    #     """Decode PQ codes back to approximate vectors."""
-    #     assert self.pq is not None, "Must call fit() first."
-    #     return self.pq.decode(codes.astype(np.uint8))
     
-    def decode(self, codes) -> np.ndarray:
-        n_samples = len(codes)
-        reconstructed = np.zeros((n_samples, self._d), dtype=np.float32)  # [B, D]
-        for m in range(self._M):
-            reconstructed[:, m * self._dsub:(m + 1) * self._dsub] = self.centroids[m][codes[:, m]] # type: ignore
-        return reconstructed
+    def decode(self, codes: np.ndarray) -> np.ndarray: # [N, M] -> [N, D]
+        N = len(codes)
+        X_recon = np.zeros((N, self.d), dtype=np.float32)  # [N, D]
+
+        for m, centers in enumerate(self.centroids):
+            X_recon[:, m * self.dsub:(m + 1) * self.dsub] = centers[codes[:, m]]
+        return X_recon
     
 
 class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
-    def fit(self, X):
+
+    def fit(self, X: np.ndarray) -> None: # [N, D]
         """Train FAISS PQ on data X (n_samples, d)."""
-        _, d = X.shape
-        self._d = d
-        assert d % self._M == 0, "Dimensionality must be divisible by M."
-        self._dsub = d // self._M
-        import faiss
-        pqi = faiss.IndexPQ(d, self._M, int(np.log2(self._Ks)), faiss.METRIC_INNER_PRODUCT)
+        _, self.d = X.shape
+
+        pqi = faiss.IndexPQ(self.d, self._M, int(np.log2(self._Ks)), faiss.METRIC_INNER_PRODUCT)
 
         # Initialize FAISS PQ
         pqi.train(X.astype(np.float32)) # type: ignore
         self.pq = pqi.pq
-        self._centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self._dsub).astype('float32')
-        return self
+        self._centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self.dsub).astype('float32')
+
     
 class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
     def fit(self, X):
-        import faiss
-        _, d = X.shape
-        self._d = d
-        opq = faiss.OPQMatrix(d, self._M)
+        _, self.d = X.shape
+
+        opq = faiss.OPQMatrix(self.d, self._M)
         opq.train(X) # type: ignore
+        
         x_rotated = opq.apply_py(X) # type: ignore
         super().fit(x_rotated)
+
         # I've checked, T is what we want.
-        self.opq = faiss.vector_to_array(opq.A).reshape(d, d).T.astype('float32')
-        return self
+        self.opq = faiss.vector_to_array(opq.A).reshape(self.d, self.d).T.astype('float32')
     
-    def encode(self, X) -> np.ndarray:
+    def encode(self, X: np.ndarray) -> np.ndarray:
         # rotate before PQ encoding
         X = X @ self.opq
         return super().encode(X)
     
-    def decode(self, codes) -> np.ndarray:
+    def decode(self, codes: np.ndarray) -> np.ndarray:
         # decode with PQ, then apply inverse rotate
         X_recon = super().decode(codes)
         X_recon = X_recon @ self.opq.T
