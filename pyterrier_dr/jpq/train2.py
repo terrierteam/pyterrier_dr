@@ -291,7 +291,6 @@ class JPQTrainer:
 
                 if step >= max_steps_per_epoch:
                     logger.info(f"[JPQ] reached max steps per epoch {max_steps_per_epoch}")
-                    step = 0
                     break
             
              # Save end-of-epoch "last"
@@ -301,8 +300,7 @@ class JPQTrainer:
                 _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
 
             logger.info(f"[JPQ] epoch {ep}/{epochs} steps {step}")
-            if step > 0:
-                logger.info(f"[JPQ] Training loss: {running_loss/step}")
+            logger.info(f"[JPQ] Training loss: {running_loss/step}")
 
 
     def _currentindex(self, model, selected_docnos, codes, verbose=True) -> tuple[pt.Transformer, Callable]:
