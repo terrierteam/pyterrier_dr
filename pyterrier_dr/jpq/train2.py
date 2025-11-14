@@ -15,7 +15,13 @@ from pyterrier_dr import FlexIndex
 from pyterrier_dr.biencoder import BiEncoder
 from pyterrier_dr.flex.core import IndexingMode
 from pyterrier_dr.jpq.checkpointing import _export_pq, _load_checkpoint, _save_checkpoint
-from pyterrier_dr.jpq.data import get_dataloader, get_pq_training_dataset, get_dataset, add_jpq_negs
+from pyterrier_dr.jpq.data import (
+    get_dataset, 
+    get_dataloader, 
+    get_pq_training_dataset, 
+    prepare_validation_data,
+    add_jpq_negs, 
+)
 from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
 from pyterrier_dr.jpq.model import JPQBiencoder, OPQQueryEncoder, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import timer, autodevice
@@ -28,92 +34,117 @@ logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
 
-def compute_PQ(
-    M: int, # number of subquantizers (splits of the vector)
-    n_bits: int, # number of centroids per subquantizer
-    sample_size: int, # how many doc vectors from docids to use to train PQ centroids
-    batch_size: int, # how many doc vectors from sample to process in a batch when computing PQ codes
-    docids: np.ndarray, # which document indices (into full vecs_mem) to compute codes for
-    vecs: np.ndarray, # vector store
-    pq_impl: Literal["faiss", "sklearn", "faiss2", "faiss2opq"] = "faiss",
-    ) -> tuple[np.ndarray, np.ndarray, ProductQuantizer]:
+# def compute_PQ(
+#     M: int, # number of subquantizers (splits of the vector)
+#     n_bits: int, # number of centroids per subquantizer
+#     sample_size: int, # how many doc vectors from docids to use to train PQ centroids
+#     batch_size: int, # how many doc vectors from sample to process in a batch when computing PQ codes
+#     docids: np.ndarray, # which document indices (into full vecs_mem) to compute codes for
+#     vecs: np.ndarray, # vector store
+#     pq_impl: Literal["faiss", "sklearn", "faiss2", "faiss2opq"] = "faiss",
+#     ) -> tuple[np.ndarray, np.ndarray, ProductQuantizer]:
 
-    if pq_impl == 'faiss':
-        pq_class = ProductQuantizerFAISS
-    elif pq_impl == 'faiss2':
-        pq_class = ProductQuantizerFAISSIndexPQ
-    elif pq_impl == 'sklearn':
-        pq_class = ProductQuantizerSKLearn
-    elif pq_impl == 'faiss2opq':
-        pq_class = ProductQuantizerFAISSIndexPQOPQ
-    else:
-        raise ValueError(f"Unknown pq_impl {pq_impl}, must be 'faiss' or 'sklearn'")
+#     if pq_impl == 'faiss':
+#         pq_class = ProductQuantizerFAISS
+#     elif pq_impl == 'faiss2':
+#         pq_class = ProductQuantizerFAISSIndexPQ
+#     elif pq_impl == 'sklearn':
+#         pq_class = ProductQuantizerSKLearn
+#     elif pq_impl == 'faiss2opq':
+#         pq_class = ProductQuantizerFAISSIndexPQOPQ
+#     else:
+#         raise ValueError(f"Unknown pq_impl {pq_impl}, must be 'faiss' or 'sklearn'")
 
-    pq = pq_class(M, Ks=2**n_bits)
+#     pq = pq_class(M, Ks=2**n_bits)
 
-    # train PQ on a random sample of the selected docs
-    sample_size = min(sample_size, len(docids))
-    logger.info(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
-    # set seed for reproducibility
-    np.random.seed(42)
-    rng = np.random.default_rng(seed=42)
-    sample_docids = rng.choice(docids, size=sample_size, replace=False) # type: ignore
-    # vector lookups from np.memmap are quicker when sorted
-    # this sort is safe because we just want the vectors
-    sample_docids = np.sort(sample_docids)
-    with timer(f"PQ / train (samples={len(sample_docids):,})"):
-        pq.fit(vecs[sample_docids])
+#     # train PQ on a random sample of the selected docs
+#     sample_size = min(sample_size, len(docids))
+#     logger.info(f"[PQ] training M={M} Ks={2**n_bits} on {sample_size} documents...")
+#     # set seed for reproducibility
+#     np.random.seed(42)
+#     rng = np.random.default_rng(seed=42)
+#     sample_docids = rng.choice(docids, size=sample_size, replace=False) # type: ignore
+#     # vector lookups from np.memmap are quicker when sorted
+#     # this sort is safe because we just want the vectors
+#     sample_docids = np.sort(sample_docids)
+#     with timer(f"PQ / train (samples={len(sample_docids):,})"):
+#         pq.fit(vecs[sample_docids])
 
-    logger.info(f"[PQ] computing codes for {len(docids):,} selected docs in chunks of {batch_size:,}...")
-    codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
-    with timer("PQ / compute codes (selected)"):
-        codes = pq.encode_batch(vecs, docids, batch_size)
+#     logger.info(f"[PQ] computing codes for {len(docids):,} selected docs in chunks of {batch_size:,}...")
+#     codes = np.empty((len(docids), M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
+#     with timer("PQ / compute codes (selected)"):
+#         codes = pq.encode_batch(vecs, docids, batch_size)
     
-    # TODO: we should check how the average/min/max codes are observed in sel_indices
-    # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
-    # as a codes are centroids in the vector space defined in the small sample_size set, which
-    # is a subset of the sel_indices set, it should be ok.
-    return codes, pq.centroids, pq # type: ignore
-
-
-def compute_from_pq_index(M, indexpq, docids):
-
-    codes = np.empty((len(docids), M), dtype=np.uint8)
-    return codes, pq.centroids, pq # type: ignore
-
-
-def prepare_validation_data(
-    eval_queries: pd.DataFrame | None,
-    eval_qrels: pd.DataFrame | None,
-    selected_docnos: list[str],
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-    """
-    Filter evaluation queries and qrels to include only queries
-    that still have relevant documents among `selected_docnos`.
-    Note that we remove queries that have no remaining relevant
-    documents (label > 0).
-    """
-    if eval_queries is None:
-        return None, None
-
-    assert eval_qrels is not None, "eval_qrels must be provided when eval_queries is not None"
-
-    # Keep qrels with documents used in training
-    eval_qrels = eval_qrels[eval_qrels["docno"].isin(selected_docnos)]
-
-    # Find queries that still have relevant docs
-    valid_qids = set(eval_qrels.loc[eval_qrels["label"] > 0, "qid"])
-
-    # Filter to only those queries/qrels
-    eval_qrels = eval_qrels[eval_qrels["qid"].isin(valid_qids)]
-    eval_queries = eval_queries[eval_queries["qid"].isin(valid_qids)]
-
-    logger.info(f"[VAL] using {len(eval_queries)} queries with {len(eval_qrels)} qrels for validation")
-
-    return eval_queries, eval_qrels
+#     # TODO: we should check how the average/min/max codes are observed in sel_indices
+#     # give that sel_indices is a random sample of sel_indices, it should be fairly uniform
+#     # as a codes are centroids in the vector space defined in the small sample_size set, which
+#     # is a subset of the sel_indices set, it should be ok.
+#     return codes, pq.centroids, pq # type: ignore
 
 
 class JPQTrainer:
+
+    def __init__(
+        self,
+        backbone_model : BiEncoder, # the backbone biencoder model
+        index: FlexIndex, # the index with documents
+        device = None,
+        pq_impl: Literal['faiss','sklearn','faiss2', 'faiss2opq'] = 'sklearn', # the PQ implementation
+        M: int = 8, # number of subquantizers (splits of the vector)
+        nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
+    ):
+        super().__init__()
+        self.fitted = False
+        self.query_encoder = backbone_model
+        self.index = index
+        self.d = index.payload()[2]['vec_size']
+        self.M = M
+        self.nbits = nbits
+        self.Ks = 2** nbits
+        self.pq_impl = pq_impl
+        self.device = autodevice(device)
+        logger.info(f"[JPQTrainer init] device={self.device}")
+
+    def _compute_PQ(
+        self,
+        sample_size: int, # how many doc vectors from docids to use to train PQ centroids
+        docids: np.ndarray, # which document indices (into full vecs_mem) to compute codes for
+        vecs: np.ndarray, # vector store
+        batch_size: int = 10_000, # how many doc vectors from sample to process in a batch when computing PQ codes
+        ) -> tuple[np.ndarray, np.ndarray, ProductQuantizer]:
+
+        if self.pq_impl == 'faiss':
+            pq_class = ProductQuantizerFAISS
+        elif self.pq_impl == 'faiss2':
+            self.pq_class = ProductQuantizerFAISSIndexPQ
+        elif self.pq_impl == 'sklearn':
+            pq_class = ProductQuantizerSKLearn
+        elif self.pq_impl == 'faiss2opq':
+            pq_class = ProductQuantizerFAISSIndexPQOPQ
+        else:
+            raise ValueError(f"Unknown pq_impl {self.pq_impl}, must be 'faiss' or 'sklearn'")
+
+        pq = pq_class(self.M, Ks=self.Ks)
+
+        # train PQ on a random sample of the selected docs
+        sample_size = min(sample_size, len(docids))
+        logger.info(f"[PQ] training M={self.M} Ks={self.Ks} on {sample_size} documents...")
+        # set seed for reproducibility
+        np.random.seed(42)
+        rng = np.random.default_rng(seed=42)
+        sample_docids = rng.choice(docids, size=sample_size, replace=False) # type: ignore
+        # vector lookups from np.memmap are quicker when sorted
+        # this sort is safe because we just want the vectors
+        sample_docids = np.sort(sample_docids)
+        with timer(f"PQ / train (samples={len(sample_docids):,})"):
+            pq.fit(vecs[sample_docids])
+
+        logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
+        codes = np.empty((sample_size, self.M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
+        with timer("PQ / compute codes (selected)"):
+            codes = pq.encode_batch(vecs, docids, batch_size)
+        
+        return codes, pq.centroids, pq
 
     def _training_step(self, batch, loss_f, optimizer) -> float:
         """
@@ -286,6 +317,11 @@ class JPQTrainer:
                             ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
                             _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
 
+                        best_path = os.path.join(ckdir, "best.pt")
+                        if os.path.isfile(best_path):
+                            _load_checkpoint(best_path, model=model, optimizer=optimizer)
+                            logger.info(f"[JPQ] Loaded best model checkpointed so far from {last_path}")
+
                         return  # early exit
 
 
@@ -354,56 +390,6 @@ class JPQTrainer:
         return rtr
 
 
-    def __init__(
-        self,
-        model : BiEncoder, # the backbone biencoder model
-        index: FlexIndex, # the index with documents
-        device = None,
-        pq_impl: Literal['faiss','sklearn','faiss2', 'faiss2opq'] = 'sklearn', # the PQ implementation
-        M: int = 8, # number of subquantizers (splits of the vector)
-        nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
-    ):
-        super().__init__()
-        self.fitted = False
-        self.query_encoder = model
-        self.index = index
-        self.d = index.payload()[2]['vec_size']
-        self.M = M
-        self.nbits = nbits
-        self.pq_impl = pq_impl
-        self.device = autodevice(device)
-        logger.info(f"[JPQTrainer] device={self.device}")
-
-    def fit_from_indexpq(self, 
-        training_docpairs, 
-        index_pq, 
-        batch_size: int = 32,
-        epochs: int = 3,
-        lr:float = 2e-5,
-        max_steps_per_epoch: int = math.inf, # type: ignore
-        eval_queries : pd.DataFrame | None= None,
-        eval_qrels : pd.DataFrame | None = None,
-        valid_every : int = 25,
-        jpq_negs : int = 0
-    ):
-        selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, None)
-        codes, centroids, pq = compute_from_pq_index(self.M, index_pq, selected_docids)
-
-        self.pq = pq
-        model = JPQBiencoder(
-            QueryEncoder(self.query_encoder),
-            PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
-        ).to(self.device)
-
-        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos)
-        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos)
-
-        self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every,
-                            checkpoint_dir="./checkpoints_jpq", metric="nDCG@10", mode="max", patience=5, save_every_steps=0, resume=False)
-        self.model = model
-        self.fitted = True
-
-
     def fit(self,
         training_docpairs,
         pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
@@ -420,7 +406,8 @@ class JPQTrainer:
         lambda_rank : bool = False,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
-        codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
+        # codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
+        codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
         if hasattr(self.pq, "opq"):
             logger.info(f"[JPQTrainer] using OPQ rotation matrix")
@@ -442,21 +429,18 @@ class JPQTrainer:
         self.model = model
         self.fitted = True
 
+
     def jpq_index(self, dest : str) -> JPQIndex:
+        """Return the JPQIndex using the fitted JPQ model and the original index"""
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
         
         # information from the original index
         docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
-
-        # compute codes for _all_ of the original index
+        # compute codes for all elements of the original index
         all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
-        assert len(all_codes.shape) == 2, all_codes.shape
-        assert all_codes.shape[0] == len(self.index)
-        
         # gather the trained sub-id representations
-        centroids = torch.stack([ self.model.passage.sub_embeddings[i].weight for i in range(self.M) ]).detach().cpu().numpy() # type: ignore # M x Ks x dsub
-        assert len(centroids.shape) == 3, centroids.shape
+        centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
         
         opq = None
         if hasattr(self.pq, "opq"):

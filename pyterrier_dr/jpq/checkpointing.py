@@ -53,7 +53,7 @@ def _save_checkpoint(path: str, model, optimizer, epoch: int, step: int, best_me
     torch.save(ckpt, path)
 
 
-def _export_pq(dest: str, ckpt: dict):
+def _export_pq(dest: str, ckpt: dict[str, Any]):
     os.makedirs(dest, exist_ok=True)
     meta = ckpt.get("trainer_meta", {})
     meta["epoch"] = ckpt.get("epoch")

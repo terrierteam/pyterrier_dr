@@ -264,7 +264,7 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
     CE loss with JPQ negatives using LambdaRank.
     IBNs are NOT used here (we dont currently have their ranks)
     """
-    def __init__(self, query_encoder, passage_encoder, use_inbatch_negatives=True, jpq_negs=True):
+    def __init__(self, query_encoder, passage_encoder, use_inbatch_negatives=True, jpq_negs=0):
         super().__init__()
         self.query_encoder = query_encoder
         self.passage_encoder = passage_encoder

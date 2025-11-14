@@ -11,6 +11,34 @@ from pyterrier_dr.flex.core import FlexIndex
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
+
+def prepare_validation_data(
+    eval_queries: pd.DataFrame | None,
+    eval_qrels: pd.DataFrame | None,
+    selected_docnos: list[str],
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """
+    Filter evaluation queries and qrels to include only queries
+    that still have relevant documents among `selected_docnos`.
+    Note that we remove queries that have no remaining relevant
+    documents (label > 0).
+    """
+    if eval_queries is None or eval_qrels is None:
+        return None, None
+
+    # Keep qrels with documents used in training
+    eval_qrels = eval_qrels[eval_qrels["docno"].isin(selected_docnos)]
+    # Find queries that still have relevant docs
+    valid_qids = set(eval_qrels.loc[eval_qrels["label"] > 0, "qid"])
+    # Filter to only those queries/qrels
+    eval_qrels = eval_qrels[eval_qrels["qid"].isin(valid_qids)]
+    eval_queries = eval_queries[eval_queries["qid"].isin(valid_qids)]
+
+    logger.info(f"[DATA] using {len(eval_queries)} queries with {len(eval_qrels)} qrels for validation")
+
+    return eval_queries, eval_qrels
+
+
 def get_pq_training_dataset(
         flex_index: FlexIndex,
         docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
