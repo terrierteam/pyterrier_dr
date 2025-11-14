@@ -301,7 +301,8 @@ class JPQTrainer:
                 _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
 
             logger.info(f"[JPQ] epoch {ep}/{epochs} steps {step}")
-            logger.info(f"[JPQ] Training loss: {running_loss/step}")
+            if step > 0:
+                logger.info(f"[JPQ] Training loss: {running_loss/step}")
 
 
     def _currentindex(self, model, selected_docnos, codes, verbose=True) -> tuple[pt.Transformer, Callable]:
