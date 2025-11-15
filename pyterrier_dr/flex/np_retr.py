@@ -68,6 +68,7 @@ class NumpyRetriever(pt.Transformer):
 
 
 class NumpyVectorLoader(pt.Transformer):
+    schematic = {'label': 'VecLoader'}
     def __init__(self, flex_index: FlexIndex):
         self.flex_index = flex_index
     

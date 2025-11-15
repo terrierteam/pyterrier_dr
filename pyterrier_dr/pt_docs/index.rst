@@ -15,8 +15,9 @@ This functionality is covered in more detail in the following pages:
 .. toctree::
     :maxdepth: 1
 
-    overview
-    encoding
-    indexing-retrieval
-    prf
-    diversity
+    Overview <overview>
+    Encoding <encoding>
+    Indexing & Retrieval <indexing-retrieval>
+    Pseudo-Relevance Feedback <prf>
+    Diversification <diversity>
+    API Reference <api>

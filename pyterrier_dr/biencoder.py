@@ -4,6 +4,7 @@ import numpy as np
 import pyterrier as pt
 import pandas as pd
 import pyterrier_alpha as pta
+import pyterrier_dr
 from . import SimFn
 
 
@@ -113,6 +114,10 @@ class BiEncoder(pt.Transformer):
             np.array: A numpy array of shape (n_docs, n_dims)
         """
         raise NotImplementedError()
+
+    @staticmethod
+    def example() -> 'BiEncoder':
+        return pyterrier_dr.SBertBiEncoder('sentence-transformers/paraphrase-albert-small-v2')
 
 
 class BiQueryEncoder(pt.Transformer):

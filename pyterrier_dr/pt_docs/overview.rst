@@ -1,4 +1,4 @@
-Overview
+Dense Retrieval Overview
 =======================================================
 
 Installation

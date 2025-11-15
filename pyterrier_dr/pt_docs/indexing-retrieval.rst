@@ -1,4 +1,4 @@
-Indexing & Retrieval
+Dense Indexing & Retrieval
 =====================================================
 
 This page covers the indexing and retrieval functionality provided by ``pyterrier_dr``.

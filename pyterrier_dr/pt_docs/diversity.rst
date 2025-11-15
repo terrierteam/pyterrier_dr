@@ -1,22 +1,48 @@
-Diversity
+Diversification using Dense Vectors
 =======================================================
+
+Dense vectors can be used for both diversifying search results, and measuring the diversity of search results.
+``pyterrier-dr`` provides functionality for both these use cases.
 
 Search Result Diversification
 -------------------------------------------------------
 
-``pyterrier-dr`` provides one diversification algorithm, :class:`~pyterrier_dr.MmrScorer` (Maximal Marginal Relevance).
-The transformer works over input dataframes that contain the dense vectors of the documents and the query. You can also
-use :meth:`~pyterrier_dr.FlexIndex.mmr` to first load vectors from an index and then apply MMR.
+.. related:: pyterrier_dr.FlexIndex.mmr
+.. related:: pyterrier_dr.MmrScorer
 
-.. autoclass:: pyterrier_dr.MmrScorer
+Maximal Marginal Relevance (MMR) is a technique to diversify search results by balancing relevance and novelty.
+It is available using :class:`pyterrier_dr.MmrScorer`, which uses document vector similarities to measure novelty,
+and the value in the ``score`` input column to measure relevance.
+
+The transformer requires ``doc_vec`` columns to be present in the input data frame. Therefore, you
+will usually want to load vectors from a :class:`~pyterrier_dr.FlexIndex` first using :meth:`~pyterrier_dr.FlexIndex.vec_loader`,
+then apply :class:`~pyterrier_dr.MmrScorer`. :meth:`FlexIndex.mmr() <pyterrier_dr.FlexIndex.mmr>` is a shorthand to return both
+these steps. Alternatively, you could include an encoder beforehand to compute document vectors on-the-fly.
+
+The example below applies BM25 retrieval over a sparse index, then applies search result diversification to the results using MMR.
+
+.. schematic::
+    :show_code:
+
+    import pyterrier_dr
+    sparse_index = pt.terrier.TerrierIndex.example()
+    dense_index = pyterrier_dr.FlexIndex.example()
+    # FOLD
+    sparse_index.bm25() >> dense_index.mmr()
+
+.. cite.dblp:: conf/sigir/CarbonellG98
 
 Diversity Evaluation
 -------------------------------------------------------
 
-``pyterrier-dr`` provides one diversity evaluation measure, :func:`~pyterrier_dr.ILS` (Intra-List Similarity),
-which can be used to evaluate the diversity of search results based on the dense vectors of a :class:`~pyterrier_dr.FlexIndex`.
+.. related:: pyterrier_dr.ILS
+.. related:: pyterrier_dr.ils
+.. related:: pyterrier_dr.FlexIndex.ILS
 
-This measure can be used alongside PyTerrier's built-in evaluation measures in a :func:`pyterrier.Experiment`.
+Intra-List Similarity (ILS) is a diversity evaluation measure that quantifies the similarity between documents in a ranked list.
+It is available using :func:`pyterrier_dr.ILS` or :meth:`FlexIndex.ILS <pyterrier_dr.FlexIndex.ILS>`.
+
+This measure can be used alongside PyTerrier's built-in evaluation measures in a :func:`pt.Experiment <pyterrier.Experiment>`.
 
 .. code-block:: python
     :caption: Compare the relevance and ILS of lexical and dense retrieval with a PyTerrier Experiment
@@ -46,5 +72,4 @@ This measure can be used alongside PyTerrier's built-in evaluation measures in a
     # TasB            0.716          0.841     0.889     0.775
     # TasB w/ MMR     0.714          0.841     0.888     0.775
 
-.. autofunction:: pyterrier_dr.ILS
-.. autofunction:: pyterrier_dr.ils
+.. cite.dblp:: conf/www/ZieglerMKL05
