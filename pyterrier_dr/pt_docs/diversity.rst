@@ -1,4 +1,4 @@
-Diversification using Dense Vectors
+Diversity using Dense Vectors
 =======================================================
 
 Dense vectors can be used for both diversifying search results, and measuring the diversity of search results.
