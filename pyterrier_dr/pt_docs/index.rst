@@ -40,6 +40,7 @@ you will need to install the FAISS package:
     Indexing & Retrieval <indexing-retrieval>
     Pseudo-Relevance Feedback <prf>
     Diversity <diversity>
+    How-To Guides <how-to>
     API Reference <api>
 
 ----

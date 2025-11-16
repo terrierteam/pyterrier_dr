@@ -24,7 +24,8 @@ A dense model can perform a several of operations:
 - Encode documents into dense vectors using its :meth:`~pyterrier_dr.BiEncoder.doc_encoder`.
 - Re-rank results by encoding queries and documents and computing their similarity scores using its :meth:`~pyterrier_dr.BiEncoder.text_scorer`.
 
-More information about dense encoders is available in :doc:`encoding`.
+.. seealso::
+    More information about dense encoders is available on the :doc:`encoding` page.
 
 Dense Indexes
 ------------------------------------------
@@ -44,10 +45,13 @@ A dense index can perform several operations:
 - Retrieve documents using methods like :meth:`~pyterrier_dr.FlexIndex.retriever`, :meth:`~pyterrier_dr.FlexIndex.faiss_hnsw_retriever`, and more.
 - Re-rank results from its stored vectors methods like :meth:`~pyterrier_dr.FlexIndex.scorer`, :meth:`~pyterrier_dr.FlexIndex.ladr_adaptive`, and more.
 
-More information about dense indexes is available in :doc:`indexing-retrieval`.
+.. seealso::
+    More information about dense indexes is available on the :doc:`indexing-retrieval` page.
 
-Indexing Pipelines
+Pipelines
 ------------------------------------------
+
+In most cases, you will want to combine dense models and dense indexes into pipelines.
 
 **Indexing Pipelines** encode documents into dense vectors and stores them in an index.
 
@@ -60,9 +64,6 @@ Indexing Pipelines
     # FOLD
     model.doc_encoder() >> index.indexer()
 
-Retrieval Pipelines
-------------------------------------------
-
 **Retrieval Pipelines** encode queries into dense vectors and retrieves documents from an index.
 
 .. schematic::
@@ -73,6 +74,7 @@ Retrieval Pipelines
     model = pyterrier_dr.BiEncoder.example()
     # FOLD
     model.query_encoder() >> index.retriever()
+
 
 Putting it all Together
 ------------------------------------------
