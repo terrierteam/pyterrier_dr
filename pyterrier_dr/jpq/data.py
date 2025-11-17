@@ -173,13 +173,17 @@ def add_jpq_negs_applier(
         top_k: int,
         codes: np.ndarray,
         cache : bool = False) -> Callable[dict, dict]:
-    retr_pipe = (retr_pipe % (top_k + 100)).compile() # +2 to account for pos and neg docs already in the index
+    
+    retr_pipe = (retr_pipe % (top_k + 300)).compile() # +2 to account for pos and neg docs already in the index
+    
     if cache:
         # many queries will be repeated due to the nature of some pairs datasets
         # (e.g. if they are instantiated from a qrels file), so cache results to speed up
         from pyterrier_caching import RetrieverCache
         retr_pipe = RetrieverCache(None, retr_pipe, on='query')
+    
     codes_t = torch.as_tensor(codes, dtype=torch.long)
+    
     def _add_neg_batches(docpairs: dict[str, list[Any]]) -> dict[str, list[Any]]:
         queries = pd.DataFrame([  {"qid" : f"q{i}", "query": qtext} for i, qtext in enumerate(docpairs['query_text'])])
         res : pd.DataFrame = retr_pipe(queries) # type: ignore
@@ -210,7 +214,11 @@ def add_jpq_negs_applier(
                     docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
                 else:
                     docpairs[f"{t}_ranks"].append(100) # a deep enough rank
+        # map to torch tensors
+        for j in ['neg_jpq_codes', 'neg_jpq_ranks', 'pos_ranks', 'neg_ranks']:
+            docpairs[j] = torch.Tensor(docpairs[j]).long()
         return docpairs
+    
     return _add_neg_batches
     
 
