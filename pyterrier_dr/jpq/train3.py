@@ -183,6 +183,7 @@ class JPQTrainer:
         best_metric = float("-inf") if mode == "max" else float("+inf")
         better = (lambda new, best: new > best) if mode == "max" else (lambda new, best: new < best)
         valids_since_improve = 0
+        best_step = 0
 
 
         # Resuming
@@ -231,8 +232,10 @@ class JPQTrainer:
                     # Checkpointing
                     current = float(val_stats[metric])
                     if better(current, best_metric):
+                        logger.info(f"[JPQ] New best model at step {step}: {metric} improved from {best_metric:.6f} (at step {best_step}) to {current:.6f} ")
                         best_metric = current
                         valids_since_improve = 0
+                        best_step = step
                         if checkpoint_dir:
                             best_path = os.path.join(ckdir, f"best_step{0:06d}.pt")
                             _save_checkpoint(best_path, model=model, optimizer=optimizer,  step=0, best_metric=best_metric, trainer_self=self)
@@ -251,7 +254,7 @@ class JPQTrainer:
                 _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
 
             if valids_since_improve and valids_since_improve >= patience:
-                logger.info(f"[JPQ] Early stopping: no improvement in {patience} validations.")
+                logger.info(f"[JPQ] Early stopping at step {step}: no improvement in {patience} validations (since step {step}).")
                 if checkpoint_dir:
                     _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
                     ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
