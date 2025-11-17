@@ -64,7 +64,7 @@ def _export_pq(dest: str, ckpt: dict[str, Any]):
 
 
 def _load_checkpoint(path: str, model, optimizer) -> tuple[int, int, float]:
-    ckpt = torch.load(path, map_location="cpu")
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
     model.load_state_dict(ckpt["state_dict"])
     optimizer.load_state_dict(ckpt["optimizer"])
     if "rng_state" in ckpt and ckpt["rng_state"]:
