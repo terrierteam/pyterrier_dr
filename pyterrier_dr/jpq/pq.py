@@ -207,27 +207,27 @@ class ProductQuantizerFAISS(ProductQuantizer):
             codes[:, m] = idx
         return codes
     
-    def encode_(self, X: np.ndarray) -> np.ndarray:
-        """
-        Encode vectors into PQ codes (n_samples, M).
-        Uses FAISS native API (no custom unpacking).
-        """
-        assert self.pq is not None, "Must call fit() first."
-        X = X.astype(np.float32)
-        n_samples = len(X)
+    # def encode_(self, X: np.ndarray) -> np.ndarray:
+    #     """
+    #     Encode vectors into PQ codes (n_samples, M).
+    #     Uses FAISS native API (no custom unpacking).
+    #     """
+    #     assert self.pq is not None, "Must call fit() first."
+    #     X = X.astype(np.float32)
+    #     n_samples = len(X)
     
-        # Prepare an empty array for the codes
-        codes = np.zeros((n_samples, self._M), dtype=np.uint8)
+    #     # Prepare an empty array for the codes
+    #     codes = np.zeros((n_samples, self._M), dtype=np.uint8)
     
-        # Compute PQ codes directly into the array
-        faiss_pq = self.pq
-        faiss_pq.compute_codes(
-            faiss.swig_ptr(X),
-            faiss.swig_ptr(codes),
-            n_samples
-        )
+    #     # Compute PQ codes directly into the array
+    #     faiss_pq = self.pq
+    #     faiss_pq.compute_codes(
+    #         faiss.swig_ptr(X),
+    #         faiss.swig_ptr(codes),
+    #         n_samples
+    #     )
     
-        return codes
+    #     return codes
     
     def decode(self, codes: np.ndarray) -> np.ndarray: # [N, M] -> [N, D]
         N = len(codes)
