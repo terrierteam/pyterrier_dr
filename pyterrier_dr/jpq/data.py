@@ -102,13 +102,15 @@ def get_dataloader(
         rtr = {
             'query_text': [b['query_text'] for b in batch],
             'pos_codes': torch.stack([b['pos_codes'] for b in batch]),
-            'neg_codes': torch.stack([b['neg_codes'] for b in batch])
+            'neg_codes': torch.stack([b['neg_codes'] for b in batch]),
+            'pos_docno': [b['pos_docno'] for b in batch],
+            'neg_docno': [b['neg_docno'] for b in batch],
         }
-        if 'neg_jpq_codes' in batch[0]:
-            rtr['neg_jpq_codes'] = torch.stack([b['neg_jpq_codes'] for b in batch])
-            rtr['neg_jpq_ranks'] = torch.stack([b['neg_jpq_ranks'] for b in batch])
-            rtr['pos_ranks' ] = torch.stack([b['pos_ranks'] for b in batch])
-            rtr['neg_ranks'] = torch.stack([b['neg_ranks'] for b in batch])
+        # if 'neg_jpq_codes' in batch[0]:
+        #     rtr['neg_jpq_codes'] = torch.stack([b['neg_jpq_codes'] for b in batch])
+        #     rtr['neg_jpq_ranks'] = torch.stack([b['neg_jpq_ranks'] for b in batch])
+        #     rtr['pos_ranks' ] = torch.stack([b['pos_ranks'] for b in batch])
+        #     rtr['neg_ranks'] = torch.stack([b['neg_ranks'] for b in batch])
         return rtr
     # logger.info(f"[DATA] Collating")
 
