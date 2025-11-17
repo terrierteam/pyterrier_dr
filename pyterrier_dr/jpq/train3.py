@@ -324,7 +324,7 @@ class JPQTrainer:
         def _cleanup():
             # dest index may still be open
             shutil.rmtree(dstindex, ignore_errors=True)    
-            passage_encoder.to(device).train()
+            passage_encoder.train()
 
         return (pt.apply.generic(_queryencoder) >> flex.retriever(num_results=1000)), _cleanup # type: ignore
 
