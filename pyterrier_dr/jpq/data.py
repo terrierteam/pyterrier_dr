@@ -80,6 +80,7 @@ def get_pq_training_dataset(
             selected_docnos = doc_map.fwd[docid_subset]
             logger.info(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
         elif isinstance(docid_subset[0], str): # use the provided list of str docnos
+            raise ValueError(f"docno subset not yet supported - the sort is problematics")
             selected_docnos = docid_subset
             selected_docids = doc_map.inv[selected_docnos] # do we need this?
             selected_docids = np.sort(selected_docids)
@@ -214,8 +215,8 @@ def add_jpq_negs_applier(
                     docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
                 else:
                     docpairs[f"{t}_ranks"].append(100) # a deep enough rank
+        
         # map to torch tensors
-
         for j in ['neg_jpq_codes']:
             docpairs[j] = torch.stack(docpairs[j]).long()
         
