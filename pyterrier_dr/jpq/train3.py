@@ -216,7 +216,7 @@ class JPQTrainer:
             step += 1
 
             if step % 100 == 0:
-                logger.info(f"[JPQ] Steps f{step} Training loss: {running_loss/step}")
+                logger.info(f"[JPQ] Steps {step} Training loss: {running_loss/step}")
                 running_loss = 0.0
             
             if step % valid_every == 0:
