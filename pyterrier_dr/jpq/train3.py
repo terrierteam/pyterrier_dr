@@ -266,7 +266,7 @@ class JPQTrainer:
                 best_path = os.path.join(ckdir, "best.pt")
                 if os.path.isfile(best_path):
                     _load_checkpoint(best_path, model=model, optimizer=optimizer)
-                    logger.info(f"[JPQ] Loaded best model checkpointed so far from {last_path}")
+                    logger.info(f"[JPQ] Loaded best model checkpointed so far from {best_path}")
 
                 early_stop = True
                 break
