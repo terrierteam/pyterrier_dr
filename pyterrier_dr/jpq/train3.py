@@ -211,9 +211,9 @@ class JPQTrainer:
                 batch = next(data_loader_iter)
             
             # add jpq_negs, if applicable; switch model to eval for retrieval
-            retr[0].model.eval()
+            model.query.eval()
             batch = batch_decorator(batch)
-            retr[0].model.train()
+            model.query.train()
             
             loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
             running_loss += loss
