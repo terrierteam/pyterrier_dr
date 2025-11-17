@@ -7,6 +7,7 @@ from datasets import Dataset
 from torch.utils.data import DataLoader
 import pyterrier as pt, pandas as pd
 from pyterrier_dr.flex.core import FlexIndex
+from typing import Callable
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
@@ -164,6 +165,52 @@ def get_dataset(
     )
     ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes"])
     return ds
+
+def add_jpq_negs_applier(
+        retr_pipe: pt.Transformer,
+        top_k: int,
+        codes: np.ndarray,
+        cache : bool = False) -> Callable[dict, dict]:
+    retr_pipe = (retr_pipe % (top_k + 100)).compile() # +2 to account for pos and neg docs already in the index
+    if cache:
+        # many queries will be repeated due to the nature of some pairs datasets
+        # (e.g. if they are instantiated from a qrels file), so cache results to speed up
+        from pyterrier_caching import RetrieverCache
+        retr_pipe = RetrieverCache(None, retr_pipe, on='query')
+    codes_t = torch.as_tensor(codes, dtype=torch.long)
+    def _add_neg_batches(docpairs: dict[str, list[Any]]) -> dict[str, list[Any]]:
+        queries = pd.DataFrame([  {"qid" : f"q{i}", "query": qtext} for i, qtext in enumerate(docpairs['query_text'])])
+        res : pd.DataFrame = retr_pipe(queries) # type: ignore
+        docpairs = docpairs.copy()
+        docpairs['neg_jpq_codes'] = []
+        docpairs['neg_jpq_ranks'] = []
+        docpairs['pos_ranks'] = []
+        docpairs['neg_ranks'] = []
+
+        res_grouped = dict(tuple(res.groupby("qid")))
+        for i in range(len(docpairs["query_text"])):
+            res_i = res_grouped.get(f"q{i}", pd.DataFrame(columns=res.columns))
+            if len(res_i) == 0:
+                raise ValueError(f"No retrieval results for query {docpairs['query_text'][i]}")
+
+            # for jpq_negs filter out pos and neg docnos from results
+            jpq_negs_res = res_i[~res_i["docno"].isin([docpairs['pos_docno'][i], docpairs['neg_docno'][i]])]
+            jpq_negs_res = jpq_negs_res.head(top_k) # take top_k only
+            codes_negs = codes_t[jpq_negs_res["docid"].to_list()]
+            rank_negs = jpq_negs_res["rank"].to_list()
+            docpairs["neg_jpq_codes"].append(codes_negs)
+            docpairs["neg_jpq_ranks"].append(rank_negs)
+
+            # now, get the ranks for the explicit pos and neg docs, from res_i
+            for t in ["pos", "neg"]:
+                t_res = res_i["docno"] == docpairs[f'{t}_docno'][i]
+                if t_res.any():
+                    docpairs[f"{t}_ranks"].append( res_i[t_res]["rank"].values[0] )
+                else:
+                    docpairs[f"{t}_ranks"].append(100) # a deep enough rank
+        return docpairs
+    return _add_neg_batches
+    
 
 
 def add_jpq_negs(

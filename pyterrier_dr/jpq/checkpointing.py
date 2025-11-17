@@ -24,9 +24,8 @@ def _torch_rng_load(state: dict[str, Any]) -> None:
         torch.cuda.set_rng_state_all(state["torch_cuda_rng"])
     
 
-def _save_checkpoint(path: str, model, optimizer, epoch: int, step: int, best_metric: float, trainer_self) -> None:
+def _save_checkpoint(path: str, model, optimizer, step: int, best_metric: float, trainer_self) -> None:
     ckpt = {
-        "epoch": epoch,
         "step": step,
         "best_metric": best_metric,
         "state_dict": model.state_dict(),
@@ -56,7 +55,6 @@ def _save_checkpoint(path: str, model, optimizer, epoch: int, step: int, best_me
 def _export_pq(dest: str, ckpt: dict[str, Any]):
     os.makedirs(dest, exist_ok=True)
     meta = ckpt.get("trainer_meta", {})
-    meta["epoch"] = ckpt.get("epoch")
     meta["best_metric"] = ckpt.get("best_metric")
 
     np.save(os.path.join(dest, "pq_centroids.npy"), ckpt.get("pq_centroids")) # type: ignore
@@ -71,5 +69,5 @@ def _load_checkpoint(path: str, model, optimizer) -> tuple[int, int, float]:
     optimizer.load_state_dict(ckpt["optimizer"])
     if "rng_state" in ckpt and ckpt["rng_state"]:
         _torch_rng_load(ckpt["rng_state"])
-    return ckpt.get("epoch", 0), ckpt.get("step", 0), ckpt.get("best_metric", float("-inf"))
+    return ckpt.get("step", 0), ckpt.get("best_metric", float("-inf"))
 
