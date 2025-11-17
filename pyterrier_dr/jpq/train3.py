@@ -395,19 +395,19 @@ class JPQTrainer:
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
         
+        # gather the trained sub-id representations
+        centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
+        
         # information from the original index
         docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
         if self.training_setup != "full_index":
-            # TODO update the centroids in self.pq
+            self.pq.centroids = centroids
 
             # compute codes for all docids of the original index
             all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
         else:
             # we can reuse the codes computed during training
             all_codes = self.codes
-        
-        # gather the trained sub-id representations
-        centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
         
         opq = None
         if hasattr(self.pq, "opq"):
