@@ -328,14 +328,10 @@ class JPQTrainer:
             eval_qrels : pd.DataFrame, 
             topk_eval : int = 1000):
         
-        retr_pipe[0].model.eval()  # set query encoder to eval mode
-        
         rtr = pt.Evaluate(
             (retr_pipe % topk_eval)(eval_queries),  # type: ignore
             eval_qrels, 
             metrics=[RR@10, Recall@1000, nDCG@10])
-        
-        retr_pipe[0].model.train()  # set query encoder to eval mode
         return rtr
 
 
