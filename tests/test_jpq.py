@@ -62,7 +62,8 @@ class TestJPQ(unittest.TestCase):
             [oldmodel >> index] + p,
             dataset.get_topics(),
             dataset.get_qrels(),
-            eval_metrics=[RR@100, MAP, nDCG@10, "mrt"]
+            eval_metrics=[RR@100, MAP, nDCG@10, "mrt"],
+            names=["baseline", "JPQ flat", "JPQ prune", "JPQ PQ"]
         ))
         del(jpqindex)
         shutil.rmtree(dest)
