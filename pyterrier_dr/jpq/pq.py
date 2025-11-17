@@ -93,7 +93,11 @@ class ProductQuantizer:
     def centroids(self) -> np.ndarray:
         if self._centroids is None:
             raise AttributeError("Must call fit() first.")
-        return self._centroids    
+        return self._centroids
+    
+    @centroids.setter
+    def centroids(self, centroids: np.ndarray):
+        self._centroids = centroids
 
     @property
     def d(self) -> int:
