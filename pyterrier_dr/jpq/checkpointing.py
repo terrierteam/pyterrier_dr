@@ -17,7 +17,7 @@ def _torch_rng_state() -> dict[str, Any]:
 
 
 def _torch_rng_load(state: dict[str, Any]) -> None:
-    random.setstate(state["pyhon_rng"])
+    random.setstate(state["python_rng"])
     np.random.set_state(state["numpy_rng"])
     torch.set_rng_state(state["torch_rng"])
     if torch.cuda.is_available() and state["torch_cuda_rng"] is not None:
