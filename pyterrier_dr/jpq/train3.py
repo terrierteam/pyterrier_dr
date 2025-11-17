@@ -383,7 +383,12 @@ class JPQTrainer:
         self.model = model
         self.query_encoder.model.eval()
         self.fitted = True
-
+        
+        if docid_subset is None:
+            self.training_setup = "full_index"
+            self.codes = codes
+        else:
+            self.training_setup = "docid_subset"
 
     def jpq_index(self, dest : str) -> JPQIndex:
         """Return the JPQIndex using the fitted JPQ model and the original index"""
@@ -392,8 +397,15 @@ class JPQTrainer:
         
         # information from the original index
         docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
-        # compute codes for all elements of the original index
-        all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
+        if self.training_setup != "full_index":
+            # TODO update the centroids in self.pq
+
+            # compute codes for all docids of the original index
+            all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
+        else:
+            # we can reuse the codes computed during training
+            all_codes = self.codes
+        
         # gather the trained sub-id representations
         centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
         
