@@ -333,6 +333,7 @@ class JPQTrainer:
         total_steps: int = 1_000_000_000,
         patience: int = 5,
         lr:float = 2e-5,
+        eval_queries : pd.DataFrame | None = None,
         eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25,
         in_batch : bool = False,
