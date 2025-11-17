@@ -297,7 +297,7 @@ class JPQTrainer:
                 iter = range(0, len(codes), 16384) # magic number to replace recon_batch_size
                 iter = tqdm(iter, unit='batch', desc='Validation index construction')
                 for i in iter:
-                    chunk = torch.from_numpy(codes[i:i+16384]).long()
+                    chunk = torch.from_numpy(codes[i:i+16384]).long().to(self.device)
                     embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
                     for j in range(embs.shape[0]):
                         yield {'docno' : selected_docnos[i+j], 'doc_vec' : embs[j, :]}
