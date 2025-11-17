@@ -8,6 +8,7 @@ import pandas as pd
 from pyterrier import tqdm
 import tempfile
 import torch
+import time
 from datasets import Dataset
 
 import pyterrier as pt
@@ -201,6 +202,7 @@ class JPQTrainer:
         retr, cleanup, batch_decorator = self._validation_prep(model, selected_docnos, codes, jpq_negs)
         early_stop = False
         running_loss = 0.0
+        current_time = time.time()
 
         for step in range(total_steps):
             # restart the iterator if we have reached the end
@@ -220,8 +222,10 @@ class JPQTrainer:
             step += 1
 
             if step % 100 == 0:
-                logger.info(f"[JPQ] Steps {step} Training loss: {running_loss/step}")
+                end_time = time.time()
+                logger.info(f"[JPQ] Steps {step} Duration:{end_time-current_time//1000} Training loss: {running_loss/step}")
                 running_loss = 0.0
+                current_time = end_time
             
             if step % valid_every == 0:
                # remove the previous index
