@@ -178,7 +178,7 @@ def add_jpq_negs_applier(
         retr_pipe: pt.Transformer,
         top_k: int,
         codes: np.ndarray,
-        cache : bool = False) -> Callable[dict, dict]:
+        cache : bool = False) -> Callable[[dict[str, list[Any]]], dict[str, list[Any]]]:
     
     retr_pipe = (retr_pipe % (top_k + 300)).compile() # +2 to account for pos and neg docs already in the index
     
