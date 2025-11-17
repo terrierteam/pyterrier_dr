@@ -165,7 +165,7 @@ def get_dataset(
         queries_and_codes,
         remove_columns=[c for c in ds.column_names if c not in ("query_text", 'pos_docno', "pos_codes", 'neg_docno', "neg_codes")],
     )
-    ds.set_format(type="torch", columns=["query_text", "pos_codes", "neg_codes"])
+    ds.set_format(type="torch")#, columns=["query_text", "pos_codes", "neg_codes"])
     return ds
 
 def add_jpq_negs_applier(
