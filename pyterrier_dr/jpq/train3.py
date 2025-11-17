@@ -381,6 +381,7 @@ class JPQTrainer:
             save_every_steps=0, 
             resume=False)
         self.model = model
+        self.query_encoder.model.eval()
         self.fitted = True
 
 
