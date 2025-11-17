@@ -249,6 +249,7 @@ class JPQTrainer:
                             _save_checkpoint(os.path.join(ckdir, "best.pt"), model=model, optimizer=optimizer, step=0, best_metric=best_metric, trainer_self=self)
                             ckpt = torch.load(os.path.join(ckdir, "best.pt"), map_location="cpu", weights_only=False)
                             _export_pq(os.path.join(ckdir, "pq_best"), ckpt)
+                            ckpt = None
                     else:
                         valids_since_improve += 1
                         logger.info(f"[JPQ] No improvement in {valids_since_improve} validations. "
@@ -262,6 +263,7 @@ class JPQTrainer:
                 _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
                 ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
                 _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
+                ckpt = None
 
             if valids_since_improve and valids_since_improve >= patience:
                 logger.info(f"[JPQ] Early stopping at step {step}: no improvement in {patience} validations (since step {step}).")
@@ -269,6 +271,7 @@ class JPQTrainer:
                     _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
                     ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
                     _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
+                    ckpt = None
 
                 best_path = os.path.join(ckdir, "best.pt")
                 if os.path.isfile(best_path):
@@ -283,6 +286,7 @@ class JPQTrainer:
             _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
             ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
             _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
+            ckpt = None
 
         logger.info(f"[JPQ] Training loss: {running_loss/step}")
         del(retr)
