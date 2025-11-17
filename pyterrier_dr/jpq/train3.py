@@ -242,8 +242,8 @@ class JPQTrainer:
                             _save_checkpoint(os.path.join(ckdir, "best.pt"), model=model, optimizer=optimizer, step=0, best_metric=best_metric, trainer_self=self)
                             ckpt = torch.load(os.path.join(ckdir, "best.pt"), map_location="cpu", weights_only=False)
                             _export_pq(os.path.join(ckdir, "pq_best"), ckpt)
-                        else:
-                            valids_since_improve += 1
+                    else:
+                        valids_since_improve += 1
                 
             # Periodic checkpointing
             if checkpoint_dir and save_every_steps and (step % save_every_steps == 0):
