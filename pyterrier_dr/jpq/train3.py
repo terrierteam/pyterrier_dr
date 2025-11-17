@@ -234,7 +234,7 @@ class JPQTrainer:
                         best_metric = current
                         valids_since_improve = 0
                         if checkpoint_dir:
-                            best_path = os.path.join(ckdir, f"best_ep{ep:03d}_step{0:06d}.pt")
+                            best_path = os.path.join(ckdir, f"best_step{0:06d}.pt")
                             _save_checkpoint(best_path, model=model, optimizer=optimizer,  step=0, best_metric=best_metric, trainer_self=self)
                             _save_checkpoint(os.path.join(ckdir, "best.pt"), model=model, optimizer=optimizer, step=0, best_metric=best_metric, trainer_self=self)
                             ckpt = torch.load(os.path.join(ckdir, "best.pt"), map_location="cpu", weights_only=False)
@@ -341,7 +341,6 @@ class JPQTrainer:
         lambda_rank : bool = False,
     ):
         selected_docnos, selected_docids, docno2pos = get_pq_training_dataset(self.index, docid_subset)
-        # codes, centroids, pq = compute_PQ(self.M, self.nbits, pq_sample_size, 10_000, selected_docids, self.index.payload()[1], pq_impl=self.pq_impl) # type: ignore
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
         if hasattr(self.pq, "opq"):
