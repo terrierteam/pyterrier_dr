@@ -2,6 +2,7 @@ Dense Retrieval Overview
 =======================================================
 
 `pyterrier-dr <https://github.com/terrierteam/pyterrier_dr>`__ lets you construct single-vector dense indexing and retrieval pipelines.
+These methods allow for retrieving based on *semantic matching* instead of the lexical matching used in traditional retrieval methods like BM25.
 
 These processes involve two main components: **Dense Models** and **Dense Indexes**. These components are typically combined to create
 **Indexing Pipelines** and **Retrieval Pipelines**.
@@ -31,7 +32,7 @@ Dense Indexes
 ------------------------------------------
 
 **Dense Indexes** are data structures and algorithms to index and retrieve documents using dense vectors. This package provides
-various retrieval backends through :class:`~pyterrier_dr.FlexIndex`.
+:class:`~pyterrier_dr.FlexIndex`, which stores document vectors on disk and provides various retrieval backends.
 
 .. code-block:: python
    :caption: Creating a dense index
@@ -43,7 +44,7 @@ A dense index can perform several operations:
 
 - Index documents using its :meth:`~pyterrier_dr.FlexIndex.indexer`.
 - Retrieve documents using methods like :meth:`~pyterrier_dr.FlexIndex.retriever`, :meth:`~pyterrier_dr.FlexIndex.faiss_hnsw_retriever`, and more.
-- Re-rank results from its stored vectors methods like :meth:`~pyterrier_dr.FlexIndex.scorer`, :meth:`~pyterrier_dr.FlexIndex.ladr_adaptive`, and more.
+- Re-rank results using its stored vectors using methods like :meth:`~pyterrier_dr.FlexIndex.scorer`, :meth:`~pyterrier_dr.FlexIndex.ladr_adaptive`, and more.
 
 .. seealso::
     More information about dense indexes is available on the :doc:`indexing-retrieval` page.
