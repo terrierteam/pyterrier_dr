@@ -223,7 +223,7 @@ class JPQTrainer:
 
             if step % 100 == 0:
                 end_time = time.time()
-                logger.info(f"[JPQ] Steps {step} Duration: {(end_time-current_time):d} Training loss: {running_loss/step}")
+                logger.info(f"[JPQ] Steps {step} Duration: {int(end_time-current_time)} Training loss: {running_loss/step}")
                 running_loss = 0.0
                 current_time = end_time
             
