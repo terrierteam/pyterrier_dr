@@ -8,6 +8,7 @@ import pandas as pd
 from pyterrier import tqdm
 import tempfile
 import torch
+from datasets import Dataset
 
 import pyterrier as pt
 import shutil
@@ -120,11 +121,11 @@ class JPQTrainer:
 
     def _training_loop(
         self,
-        model,
-        dataset,
+        model : JPQBiencoder,
+        dataset : Dataset,
         lr: float,
         selected_docnos,
-        codes,
+        codes : np.ndarray,
         total_steps : int = 1_000_000_000,
         eval_queries: pd.DataFrame | None = None,
         eval_qrels: pd.DataFrame | None = None,
@@ -209,8 +210,10 @@ class JPQTrainer:
                 data_loader_iter = iter(data_loader)
                 batch = next(data_loader_iter)
             
-            # add jpq_negs, if applicable
+            # add jpq_negs, if applicable; switch model to eval for retrieval
+            retr[0].model.eval()
             batch = batch_decorator(batch)
+            retr[0].model.train()
             
             loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
             running_loss += loss
@@ -282,13 +285,13 @@ class JPQTrainer:
         cleanup()
 
 
-    def _currentindex(self, model, selected_docnos, codes, verbose=True) -> tuple[pt.Transformer, Callable]:
+    def _currentindex(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
         flex = FlexIndex(dstindex, verbose=False)
 
         device = next(model.passage.parameters()).device
-        passage_encoder = model.passage.to("cpu").eval()
+        passage_encoder = model.passage
         def _gen():
             with torch.no_grad():
                 iter = range(0, len(codes), 16384) # magic number to replace recon_batch_size
@@ -301,11 +304,13 @@ class JPQTrainer:
         flex.indexer(mode='overwrite').index(_gen())
 
         def _queryencoder(inp : pd.DataFrame):
+            model.query.eval()
             with torch.no_grad():
                 Q_t = model.query.forward(inp['query'].tolist(), batch_size=256)
             Q = Q_t.detach().cpu().numpy().astype('float32')
             rtr = inp.copy()
             rtr["query_vec"] = [row for row in Q]
+            model.query.train()
             return rtr
         
         def _cleanup():
@@ -323,11 +328,14 @@ class JPQTrainer:
             eval_qrels : pd.DataFrame, 
             topk_eval : int = 1000):
         
+        retr_pipe[0].model.eval()  # set query encoder to eval mode
+        
         rtr = pt.Evaluate(
             (retr_pipe % topk_eval)(eval_queries),  # type: ignore
             eval_qrels, 
             metrics=[RR@10, Recall@1000, nDCG@10])
         
+        retr_pipe[0].model.train()  # set query encoder to eval mode
         return rtr
 
 
