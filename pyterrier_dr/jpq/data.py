@@ -57,8 +57,9 @@ def get_pq_training_dataset(
         rng: Optional NumPy Generator for reproducible sampling.
 
     Returns:
-        (selected_docnos, selected_docids, docnos2pos)
+        (selected_docnos, selected_docids, docnos2pos, filtering)
         where docnos are strings and docids are internal integer ids.
+        filtering is a bool indicating whether a subset was used.
     """
     logger.info(f"Ingesting docno mapping from index ")
     doc_map = flex_index.payload()[0]
@@ -67,7 +68,6 @@ def get_pq_training_dataset(
     filtering : bool 
     if not docid_subset: # use all documents if not used or empty list
         docid_subset = list(range(N))
-        filtering = False
     if isinstance(docid_subset, int): # use a random subset of given size
         if docid_subset > N:
             raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
@@ -82,8 +82,10 @@ def get_pq_training_dataset(
             selected_docids = np.sort(docid_subset)
             selected_docnos = doc_map.fwd[docid_subset]
             logger.info(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
+            if len(selected_docids) == N:
+                filtering = False
         elif isinstance(docid_subset[0], str): # use the provided list of str docnos
-            raise ValueError(f"docno subset not yet supported - the sort is problematics")
+            raise ValueError(f"docno subset not yet supported - the sort is problematic?")
             selected_docnos = docid_subset
             selected_docids = doc_map.inv[selected_docnos] # do we need this?
             selected_docids = np.sort(selected_docids)
