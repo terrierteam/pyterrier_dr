@@ -133,7 +133,8 @@ def get_dataset(
     filter_docnos: bool = True,
     shuffle: bool = False,
     seed: int | None = None,
-) -> Dataset:       
+) -> Dataset:
+    print("filter_docnos =", filter_docnos)
 
     # we discard training pair where pos or neg documents were not used during PQ training
     docnos_set = set(docnos)

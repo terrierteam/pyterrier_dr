@@ -354,7 +354,7 @@ class JPQTrainer:
         jpq_negs : int = 0,
         lambda_rank : bool = False,
     ):
-        selected_docnos, selected_docids, docno2pos, filtered = get_pq_training_dataset(self.index, docid_subset)
+        selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
         if hasattr(self.pq, "opq"):
@@ -369,7 +369,7 @@ class JPQTrainer:
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
-        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=filtered)
+        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=needs_filtered)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
 
         self._training_loop(
