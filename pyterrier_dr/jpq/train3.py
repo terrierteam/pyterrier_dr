@@ -190,7 +190,7 @@ class JPQTrainer:
         if resume:
             last_path = os.path.join(ckdir, "last.pt")
             if os.path.isfile(last_path):
-                ep, st, bm = _load_checkpoint(last_path, model=model, optimizer=optimizer)
+                st, bm = _load_checkpoint(last_path, model=model, optimizer=optimizer)
                 best_metric = bm
                 logger.info(f"[CKPT] Resumed from {last_path}: step={st}, best={best_metric:.6f}")
         
