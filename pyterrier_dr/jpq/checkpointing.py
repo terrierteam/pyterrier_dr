@@ -63,7 +63,7 @@ def _export_pq(dest: str, ckpt: dict[str, Any]):
         json.dump(meta, f, indent=2)
 
 
-def _load_checkpoint(path: str, model, optimizer) -> tuple[int, int, float]:
+def _load_checkpoint(path: str, model, optimizer) -> tuple[int, float]:
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     model.load_state_dict(ckpt["state_dict"])
     optimizer.load_state_dict(ckpt["optimizer"])
