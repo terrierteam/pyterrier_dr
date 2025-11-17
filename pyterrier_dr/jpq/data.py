@@ -215,7 +215,11 @@ def add_jpq_negs_applier(
                 else:
                     docpairs[f"{t}_ranks"].append(100) # a deep enough rank
         # map to torch tensors
-        for j in ['neg_jpq_codes', 'neg_jpq_ranks', 'pos_ranks', 'neg_ranks']:
+
+        for j in ['neg_jpq_codes']:
+            docpairs[j] = torch.stack(docpairs[j]).long()
+        
+        for j in ['pos_ranks', 'neg_jpq_ranks', 'neg_ranks']:
             docpairs[j] = torch.Tensor(docpairs[j]).long()
         return docpairs
     
