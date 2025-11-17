@@ -35,12 +35,12 @@ class TestJPQ(unittest.TestCase):
         t.fit(
             doc_pairs, 
             total_steps=1_000_000, patience=10_000, 
-            pq_sample_size=500, 
+            pq_sample_size=10000, 
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), 
             valid_every=64,
             jpq_negs = 10,
-            lambda_rank=False,
+            lambda_rank=True,
             in_batch=True
         )
         from tempfile import mkdtemp
@@ -52,7 +52,7 @@ class TestJPQ(unittest.TestCase):
 
         p = [
             (tct >> jpqindex.retriever_flat()),
-            #(tct >> jpqindex.retriever_prune())
+            (tct >> jpqindex.retriever_prune()),
             (tct >> jpqindex.retriever_pq())
         ]
         for r in p:
