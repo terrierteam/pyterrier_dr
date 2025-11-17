@@ -244,6 +244,9 @@ class JPQTrainer:
                             _export_pq(os.path.join(ckdir, "pq_best"), ckpt)
                     else:
                         valids_since_improve += 1
+                        logger.info(f"[JPQ] No improvement in {valids_since_improve} validations. "
+                                    f"Training will terminate in {patience - valids_since_improve} validations "
+                                    f"(@ step={step+(valid_every*patience)}) if no further improvement.")
                 
             # Periodic checkpointing
             if checkpoint_dir and save_every_steps and (step % save_every_steps == 0):
