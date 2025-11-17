@@ -64,17 +64,20 @@ def get_pq_training_dataset(
     doc_map = flex_index.payload()[0]
     N = len(flex_index)
     rng = np.random.default_rng(seed=42)
-
+    filtering : bool 
     if not docid_subset: # use all documents if not used or empty list
         docid_subset = list(range(N))
+        filtering = False
     if isinstance(docid_subset, int): # use a random subset of given size
         if docid_subset > N:
             raise ValueError(f"docid_subset {docid_subset} > total docs {N}")
         selected_docids = rng.choice(N, size=docid_subset, replace=False) # type: ignore
         selected_docids = np.sort(selected_docids)
         selected_docnos = doc_map.fwd[selected_docids]
+        filtering = True
         logger.info(f"[SUBSET] using {len(selected_docnos)} random docs from index")        
-    elif isinstance(docid_subset, list):  
+    elif isinstance(docid_subset, list):
+        filtering = True
         if isinstance(docid_subset[0], int): # use the provided list of int docid
             selected_docids = np.sort(docid_subset)
             selected_docnos = doc_map.fwd[docid_subset]
@@ -91,7 +94,7 @@ def get_pq_training_dataset(
     selected_docnos = list(selected_docnos) # do we need this conversion?    
     docnos2pos = {docno: i for i, docno in enumerate(selected_docnos)} # map from docno to position in selected_docnos (for aligning with codes_sel)
 
-    return selected_docnos, selected_docids, docnos2pos
+    return selected_docnos, selected_docids, docnos2pos, filtering
 
 
 def get_dataloader(
@@ -127,6 +130,7 @@ def get_dataset(
     codes: np.ndarray, # PQ codes for used documents
     docno2pos, # map from code position to docno
     *,
+    filter_docnos: bool = True,
     shuffle: bool = False,
     seed: int | None = None,
 ) -> Dataset:       
@@ -153,7 +157,8 @@ def get_dataset(
     docpairs = list(docpairs) # in case docpairs is an iterator...
 
     ds = Dataset.from_list(docpairs)
-    ds = ds.filter(filter_in_sel)
+    if filter_docnos:
+        ds = ds.filter(filter_in_sel)
     if not len(ds):
         raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 pairs left. \n"
                          "Try increasing size of training dataset, or value of docid_subset")
@@ -163,7 +168,7 @@ def get_dataset(
         ds = ds.shuffle(seed=seed)
 
     ds = ds.map(
-        queries_and_codes,
+        queries_and_codes, desc="mapping docnos to pq codes",
         remove_columns=[c for c in ds.column_names if c not in ("query_text", 'pos_docno', "pos_codes", 'neg_docno', "neg_codes")],
     )
     ds.set_format(type="torch")#, columns=["query_text", "pos_codes", "neg_codes"])
