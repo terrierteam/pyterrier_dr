@@ -330,10 +330,9 @@ class JPQTrainer:
         pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
         docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
         batch_size: int = 32,
-        epochs: int = 3,
+        total_steps: int = 1_000_000_000,
+        patience: int = 5,
         lr:float = 2e-5,
-        max_steps_per_epoch: int = math.inf, # type: ignore
-        eval_queries : pd.DataFrame | None = None,
         eval_qrels : pd.DataFrame | None = None,
         valid_every : int = 25,
         in_batch : bool = False,
@@ -359,8 +358,22 @@ class JPQTrainer:
         dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
 
-        self._training_loop(model, dataset, epochs, lr, selected_docnos, codes, max_steps_per_epoch, eval_queries, eval_qrels, valid_every, in_batch, batch_size=batch_size, jpq_negs=jpq_negs, lambda_rank=lambda_rank,
-                            checkpoint_dir="./checkpoints_jpq", metric="nDCG@10", mode="max", patience=5, save_every_steps=0, resume=False)
+        self._training_loop(
+            model, dataset, lr, selected_docnos, codes, 
+            total_steps=total_steps, 
+            eval_queries=eval_queries, 
+            eval_qrels=eval_qrels, 
+            valid_every=valid_every, 
+            in_batch=in_batch, 
+            batch_size=batch_size, 
+            jpq_negs=jpq_negs, 
+            lambda_rank=lambda_rank,
+            checkpoint_dir="./checkpoints_jpq", 
+            metric="nDCG@10", 
+            mode="max", 
+            patience=patience, 
+            save_every_steps=0, 
+            resume=False)
         self.model = model
         self.fitted = True
 
