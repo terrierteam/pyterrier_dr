@@ -266,7 +266,7 @@ class JPQTrainer:
                 ckpt = None
 
             if valids_since_improve and valids_since_improve >= patience:
-                logger.info(f"[JPQ] Early stopping at step {step}: no improvement in {patience} validations (since step {step}).")
+                logger.info(f"[JPQ] Early stopping at step {step}: no improvement in {patience} validations (since step {best_step}).")
                 if checkpoint_dir:
                     _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
                     ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
@@ -288,7 +288,6 @@ class JPQTrainer:
             _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
             ckpt = None
 
-        logger.info(f"[JPQ] Training loss: {running_loss/step}")
         del(retr)
         cleanup()
 
