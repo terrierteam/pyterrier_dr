@@ -297,7 +297,6 @@ class JPQTrainer:
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
         flex = FlexIndex(dstindex, verbose=False)
 
-        device = next(model.passage.parameters()).device
         passage_encoder = model.passage
         def _gen():
             with torch.no_grad():
