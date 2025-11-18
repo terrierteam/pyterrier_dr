@@ -356,6 +356,7 @@ class JPQTrainer:
         jpq_negs : int = 0,
         lambda_rank : bool = False,
     ):
+        start_time = time.time()
         selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
@@ -399,6 +400,8 @@ class JPQTrainer:
             self.codes = codes
         else:
             self.training_setup = "docid_subset"
+        end_time = time.time()
+        logger.info(f"Total training time {(end_time-start_time)} seconds")
 
     def jpq_index(self, dest : str) -> JPQIndex:
         """Return the JPQIndex using the fitted JPQ model and the original index"""
