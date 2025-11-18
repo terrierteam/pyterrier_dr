@@ -199,10 +199,11 @@ class JPQRetriever(pt.Transformer):
 
 class JPQRetrieverFaissBase(JPQRetriever):
 
-    def __init__(self, *args, name: str | None = None, **kwargs):
+    def __init__(self, *args, name: str | None = None, gpu=False, **kwargs):
         super().__init__(*args, **kwargs)
         self._index = None
         self._name = name or self.__class__.__name__
+        self._gpu = gpu
 
     @abstractmethod
     def _ensure(self, bs: int = 20000) -> None:
@@ -238,6 +239,10 @@ class JPQRetrieverFlat(JPQRetrieverFaissBase):
             return
         
         index = faiss.IndexFlatIP(self.d)
+        if self._gpu:
+            res = faiss.StandardGpuResources()
+            index = faiss.index_cpu_to_gpu(res, 0, index)
+
         for start in tqdm(range(0, self.N, bs), desc=f"{self._name} / build flat", leave=False):
             stop = min(start + bs, self.N)
             chunk_codes = self.codes[start:stop, :]           # [b, M] uint8
@@ -273,6 +278,10 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         faiss.copy_array_to_vector(packed, index.codes)
 
         index.ntotal = len(self.docnos)
+
+        if self._gpu:
+            res = faiss.StandardGpuResources()
+            index = faiss.index_cpu_to_gpu(res, 0, index)
 
         self._index = index
         self._name = "JPQRetrieverPQ"
