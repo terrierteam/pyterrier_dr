@@ -291,7 +291,7 @@ class JPQTrainer:
         del(retr)
         cleanup()
 
-    def _currentindexJPQ(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
+    def _currentindexJPQ(self, model : JPQBiencoder, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
 
@@ -311,7 +311,7 @@ class JPQTrainer:
             shutil.rmtree(dstindex, ignore_errors=True)    
             passage_encoder.train()
 
-        index = self._jpq_index(dstindex, selected_docnos, codes)
+        index = self._jpq_index(dstindex, model, selected_docnos, codes)
         return (pt.apply.generic(_queryencoder) >> index.retriever_pq(topk=1000)), _cleanup # type: ignore
         
     _currentindex = _currentindexJPQ
@@ -428,15 +428,16 @@ class JPQTrainer:
         logger.info(f"Total training time {(end_time-start_time)} seconds")
 
     def _jpq_index(self, 
+                   model : JPQBiencoder,
                    dest : str, 
                    docnos : np.ndarray, 
                    codes : np.ndarray) -> JPQIndex:
         # gather the trained sub-id representations
-        centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
+        centroids = torch.stack([ model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
         
         opq = None
         if hasattr(self.pq, "opq"):
-            opq = self.model.query.R.data.detach().cpu().numpy() # type: ignore
+            opq = model.query.R.data.detach().cpu().numpy() # type: ignore
 
         return JPQIndex.build(
             dest,
@@ -463,4 +464,4 @@ class JPQTrainer:
             all_codes = self.codes
         
         logger.info("Generating final JPQIndex at " + dest)
-        return self._jpq_index(dest, docnos.fwd, all_codes)
+        return self._jpq_index(dest, self.model, docnos.fwd, all_codes)
