@@ -42,6 +42,11 @@ def _save_checkpoint(path: str, model, optimizer, step: int, best_metric: float,
     # --- PQ centroids learned during quantization
     if hasattr(trainer_self, "pq") and trainer_self.pq is not None:
         ckpt["pq_centroids"] = trainer_self.pq.centroids
+        # --- Rotation matrix learned during training
+        # OPQ rotation 
+        R = getattr(getattr(getattr(trainer_self, "model", None), "query", None), "R", None)
+        if hasattr(trainer_self.pq, "opq") and R is not None:
+            ckpt["opq_R"] = R.detach().cpu().numpy()
 
     # --- Learned JPQ sub-embeddings from the passage encoder
     if hasattr(model, "passage") and hasattr(model.passage, "sub_embeddings"):
@@ -59,14 +64,26 @@ def _export_pq(dest: str, ckpt: dict[str, Any]):
 
     np.save(os.path.join(dest, "pq_centroids.npy"), ckpt.get("pq_centroids")) # type: ignore
     np.save(os.path.join(dest, "jpq_sub_embeddings.npy"), ckpt.get("jpq_sub_embeddings")) # type: ignore
+    if "opq_R" in ckpt and ckpt["opq_R"] is not None:
+        np.save(os.path.join(dest, "opq_R.npy"), ckpt.get("opq_R")) # type: ignore
+
     with open(os.path.join(dest, "config.json"), "w") as f:
         json.dump(meta, f, indent=2)
 
 
-def _load_checkpoint(path: str, model, optimizer) -> tuple[int, float]:
+def _load_checkpoint(path: str, model, optimizer, trainer_self) -> tuple[int, float]:
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     model.load_state_dict(ckpt["state_dict"])
     optimizer.load_state_dict(ckpt["optimizer"])
+    # We don't load opq_R and sub_embedding since they are parameters in model, 
+    # and loaded automatically with model.load_state_dict(ckpt["state_dict"])
+    # We need to load the pq centroids by hand
+    if "pq_centroids" in ckpt and getattr(trainer_self, "pq", None) is not None:
+            C = ckpt["pq_centroids"]
+            if isinstance(C, np.ndarray):
+                C = torch.from_numpy(C)
+            trainer_self.pq.centroids = C
+
     if "rng_state" in ckpt and ckpt["rng_state"]:
         _torch_rng_load(ckpt["rng_state"])
     return ckpt.get("step", 0), ckpt.get("best_metric", float("-inf"))
