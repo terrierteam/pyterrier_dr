@@ -428,8 +428,8 @@ class JPQTrainer:
         logger.info(f"Total training time {(end_time-start_time)} seconds")
 
     def _jpq_index(self, 
-                   model : JPQBiencoder,
                    dest : str, 
+                   model : JPQBiencoder,
                    docnos : np.ndarray, 
                    codes : np.ndarray) -> JPQIndex:
         # gather the trained sub-id representations
