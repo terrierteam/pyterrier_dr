@@ -227,8 +227,8 @@ class JPQRetrieverFaissBase(JPQRetriever):
             scores = scores[order]
 
             for rank, (did, score) in enumerate(zip(dids, scores), start=1):
-                rows.append((qid, self.docnos[did], score, rank))
-        return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+                rows.append((qid, did, self.docnos[did], score, rank))
+        return pd.DataFrame(rows, columns=['qid', 'docid', 'docno', 'score', 'rank'])
 
 
 class JPQRetrieverFlat(JPQRetrieverFaissBase):
@@ -325,8 +325,8 @@ class JPQRetrieverPrune(JPQRetriever):
                 assert centroid_scores.shape == (self.M, self.Ks), centroid_scores.shape
                 I, D = self.scorer(centroid_scores.reshape(-1))
                 for r, (did, s) in enumerate(zip(I, D)):
-                    rows.append((qids[qoffset], self.docnos[int(did)], float(s), r))
-        return pd.DataFrame(rows, columns=['qid','docno','score','rank'])
+                    rows.append((qids[qoffset], int(did), self.docnos[int(did)], float(s), r))
+        return pd.DataFrame(rows, columns=['qid', 'docid', 'docno', 'score', 'rank'])
 
 def merge_top_k(item_score_ids_1: np.ndarray,
                 item_scores_values_1: np.ndarray,
