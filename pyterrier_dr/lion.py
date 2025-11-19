@@ -1,7 +1,5 @@
 import torch 
-from transformers import T5ForConditionalGeneration, LlamaForCausalLM, BertForMaskedLM, AutoConfig
-from peft import LoraConfig, TaskType, get_peft_model, PeftModel
-import ujson
+from transformers import LlamaForCausalLM, AutoConfig
 from huggingface_hub import hf_hub_download
 import os 
 class LLM2Retriever(torch.nn.Module):
@@ -55,6 +53,7 @@ class LLM2Retriever(torch.nn.Module):
             base_model = cls.TRANSFORMER_CLS.from_pretrained(model_name_or_path)
         
         if args.lora:
+            from peft import LoraConfig, get_peft_model
             lora_config = LoraConfig(
                     base_model_name_or_path=args.model_name_or_path,
                     task_type=None,
@@ -84,6 +83,7 @@ class LLM2Retriever(torch.nn.Module):
                                                          access_token=access_token)
         
         if lora_name_or_path:
+            from peft import LoraConfig, get_peft_model, PeftModel
             lora_config = LoraConfig.from_pretrained(lora_name_or_path)
             lora_model = PeftModel.from_pretrained(base_model, 
                                                    lora_name_or_path, 
@@ -111,6 +111,7 @@ class LLM2Retriever(torch.nn.Module):
             adapter_config_path = hf_hub_download(lora_name_or_path, "adapter_config.json")
             
         with open(adapter_config_path, "r") as f:
+            import ujson
             adapter_config = ujson.load(f)
             
         base_model_name_or_path = adapter_config["base_model_name_or_path"]
@@ -189,6 +190,7 @@ class DecoderOnlyBiDense(LLM2Retriever):
             base_model = cls.TRANSFORMER_CLS.from_pretrained(model_name_or_path)
         
         if args.lora:
+            from peft import LoraConfig, get_peft_model
             lora_config = LoraConfig(
                     base_model_name_or_path=args.model_name_or_path,
                     task_type=None,
@@ -235,6 +237,7 @@ class DecoderOnlyBiDense(LLM2Retriever):
                                                          #access_token=access_token)
         
         if lora_name_or_path:
+            from peft import LoraConfig, get_peft_model
             lora_config = LoraConfig.from_pretrained(lora_name_or_path)
             lora_model = PeftModel.from_pretrained(base_model, 
                                                    lora_name_or_path, 
@@ -274,9 +277,7 @@ from transformers.utils import logging
 from transformers.cache_utils import Cache, StaticCache
 
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
-from .utils import is_transformers_attn_greater_or_equal_4_43_1
-
-from peft import PeftModel
+#from .utils import is_transformers_attn_greater_or_equal_4_43_1
 
 logger = logging.get_logger(__name__)
 
@@ -326,10 +327,11 @@ class LlamaBiModel(LlamaModel):
     _no_split_modules = ["ModifiedLlamaDecoderLayer"]
 
     def __init__(self, config: LlamaConfig):
-        if not is_transformers_attn_greater_or_equal_4_43_1():
-            raise ValueError(
-                "The current implementation of LlamaEncoderModel follows modeling_llama.py of transformers version >= 4.43.1"
-            )
+        # TODO
+        # if not is_transformers_attn_greater_or_equal_4_43_1():
+        #     raise ValueError(
+        #         "The current implementation of LlamaEncoderModel follows modeling_llama.py of transformers version >= 4.43.1"
+        #     )
         LlamaPreTrainedModel.__init__(self, config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
@@ -458,7 +460,7 @@ class LlamaBiDense(DecoderOnlyBiDense):
 from .biencoder import BiEncoder
 import numpy as np
 from more_itertools import chunked
-class LionLLamaDense(BiEncoder):
+class LionLlamaDense(BiEncoder):
 
     def __init__(self, model_name="hzeng/Lion-DS-1B-llama3-marco-mntp", batch_size=32, text_field='text', verbose=False, device=None):
         super().__init__(batch_size=batch_size, verbose=verbose, text_field=text_field)
