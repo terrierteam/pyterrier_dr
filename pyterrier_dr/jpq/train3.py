@@ -291,8 +291,32 @@ class JPQTrainer:
         del(retr)
         cleanup()
 
+    def _currentindexJPQ(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
+        # as the rmtree doesnt work, lets just try to use the same folder each time
+        dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
 
-    def _currentindex(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
+        passage_encoder = model.passage
+        def _queryencoder(inp : pd.DataFrame):
+            model.query.eval()
+            with torch.no_grad():
+                Q_t = model.query.forward(inp['query'].tolist(), batch_size=256)
+            Q = Q_t.detach().cpu().numpy().astype('float32')
+            rtr = inp.copy()
+            rtr["query_vec"] = [row for row in Q]
+            model.query.train()
+            return rtr
+        
+        def _cleanup():
+            # dest index may still be open
+            shutil.rmtree(dstindex, ignore_errors=True)    
+            passage_encoder.train()
+
+        index = self._jpq_index(dstindex, selected_docnos, codes)
+        return (pt.apply.generic(_queryencoder) >> index.retriever_pq(topk=1000)), _cleanup # type: ignore
+        
+    _current_index = _currentindexJPQ
+
+    def _currentindexFLAT(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
         flex = FlexIndex(dstindex, verbose=False)
@@ -403,24 +427,12 @@ class JPQTrainer:
         end_time = time.time()
         logger.info(f"Total training time {(end_time-start_time)} seconds")
 
-    def jpq_index(self, dest : str) -> JPQIndex:
-        """Return the JPQIndex using the fitted JPQ model and the original index"""
-        if not self.fitted:
-            raise ValueError("JPQTrainer not fitted")
-        
+    def _jpq_index(self, 
+                   dest : str, 
+                   docnos : np.ndarray, 
+                   codes : np.ndarray) -> JPQIndex:
         # gather the trained sub-id representations
         centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
-        
-        # information from the original index
-        docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
-        if self.training_setup != "full_index":
-            self.pq.centroids = centroids
-
-            # compute codes for all docids of the original index
-            all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
-        else:
-            # we can reuse the codes computed during training
-            all_codes = self.codes
         
         opq = None
         if hasattr(self.pq, "opq"):
@@ -428,9 +440,27 @@ class JPQTrainer:
 
         return JPQIndex.build(
             dest,
-            docnos.fwd,
-            all_codes,
+            docnos,
+            codes,
             centroids,
             mode=IndexingMode.overwrite,
             opq=opq # type: ignore
         )
+
+    def jpq_index(self, dest : str) -> JPQIndex:
+        """Return a JPQIndex using the final fitted JPQ model for all documents in the final index"""
+        if not self.fitted:
+            raise ValueError("JPQTrainer not fitted")
+        
+        # information from the original index
+        docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
+        if self.training_setup != "full_index":
+            self.pq.centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
+            # compute codes for all docids of the original index
+            all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
+        else:
+            # we can reuse the codes computed during training
+            all_codes = self.codes
+        
+        logger.info("Generating final JPQIndex at " + dest)
+        return self._jpq_index(dest, docnos.fwd, all_codes)
