@@ -212,9 +212,8 @@ class JPQRetrieverFaissBase(JPQRetriever):
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
         Q, qids = self._validate_queries(topics)
         self._ensure()
-        with timer(f"{self._name} / search"):
-            k = min(self.topk, len(self.docnos))
-            D, I = self._index.search(Q, k) # type: ignore
+        k = min(self.topk, len(self.docnos))
+        D, I = self._index.search(Q, k) # type: ignore
 
         rows = []
         for i, qid in enumerate(qids):
