@@ -192,7 +192,7 @@ class JPQTrainer:
         if resume:
             last_path = os.path.join(ckdir, "last.pt")
             if os.path.isfile(last_path):
-                st, bm = _load_checkpoint(last_path, model=model, optimizer=optimizer)
+                st, bm = _load_checkpoint(last_path, model=model, optimizer=optimizer, trainer_self=self)
                 best_metric = bm
                 logger.info(f"[CKPT] Resumed from {last_path}: step={st}, best={best_metric:.6f}")
         
@@ -232,7 +232,7 @@ class JPQTrainer:
                 del(retr)
                 cleanup()
                 retr, cleanup, batch_decorator = self._validation_prep(model, selected_docnos, codes, jpq_negs)
-                if eval_queries is not None:
+                if eval_queries is not None and eval_qrels is not None:
                     val_stats = self._validation_step(retr, eval_queries, eval_qrels)
                     logger.info(f"[JPQ][val] at step {step} {str(val_stats)}")
 
@@ -275,7 +275,7 @@ class JPQTrainer:
 
                 best_path = os.path.join(ckdir, "best.pt")
                 if os.path.isfile(best_path):
-                    _load_checkpoint(best_path, model=model, optimizer=optimizer)
+                    _load_checkpoint(best_path, model=model, optimizer=optimizer, trainer_self=self)
                     logger.info(f"[JPQ] Loaded best model checkpointed so far from {best_path}")
 
                 early_stop = True

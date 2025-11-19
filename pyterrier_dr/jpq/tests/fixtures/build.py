@@ -9,7 +9,7 @@ else:
 
 print(f"Using device: {device}")
 
-tct = pyterrier_dr.TctColBert(device=device)
+tct = pyterrier_dr.TctColBert.hnp(device=device)
 
 # index = pyterrier_dr.FlexIndex("./vaswani_tct.flex")
 # (tct >> index).index(pt.get_dataset("vaswani").get_corpus_iter())
