@@ -314,7 +314,7 @@ class JPQTrainer:
         index = self._jpq_index(dstindex, selected_docnos, codes)
         return (pt.apply.generic(_queryencoder) >> index.retriever_pq(topk=1000)), _cleanup # type: ignore
         
-    _current_index = _currentindexJPQ
+    _currentindex = _currentindexJPQ
 
     def _currentindexFLAT(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
