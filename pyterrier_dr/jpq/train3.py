@@ -432,12 +432,15 @@ class JPQTrainer:
                    model : JPQBiencoder,
                    docnos : np.ndarray, 
                    codes : np.ndarray) -> JPQIndex:
+        """
+        Builds an index using embeddings from given model, for the provided docnos and codes 
+        """
         # gather the trained sub-id representations
         centroids = torch.stack([ model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
         
-        opq = None
+        opq : None | np.ndarray = None
         if hasattr(self.pq, "opq"):
-            opq = model.query.R.data.detach().cpu().numpy() # type: ignore
+            opq = model.query.R.data.detach().cpu().numpy()
 
         return JPQIndex.build(
             dest,
@@ -445,7 +448,7 @@ class JPQTrainer:
             codes,
             centroids,
             mode=IndexingMode.overwrite,
-            opq=opq # type: ignore
+            opq=opq
         )
 
     def jpq_index(self, dest : str) -> JPQIndex:
