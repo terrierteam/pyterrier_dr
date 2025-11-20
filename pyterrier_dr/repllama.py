@@ -18,56 +18,91 @@ def _get_model(peft_model_name):
 def replace_with_xformers_attention():
     import torch
     import xformers.ops as xops
-
-    from typing import Optional, Tuple
     from transformers.models.llama.modeling_llama import LlamaAttention, apply_rotary_pos_emb
 
-    def custom_forward(
+    def llama_xformers_forward(
         self,
         hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_value: Optional[Tuple[torch.Tensor]] = None,
-        output_attentions: bool = False,
-        use_cache: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
-        bsz, q_len, _ = hidden_states.size()
+        position_embeddings: tuple[torch.Tensor, torch.Tensor],
+        attention_mask: torch.Tensor | None = None,
+        past_key_values = None,
+        cache_position: torch.LongTensor | None = None,
+        **kwargs,
+    ):
+        """
+        A drop-in replacement for LlamaAttention.forward that uses xformers memory-efficient attention.
 
-        query_states = self.q_proj(hidden_states)
-        key_states = self.k_proj(hidden_states)
-        value_states = self.v_proj(hidden_states)
+        Args:
+            hidden_states: (batch, seq_len, hidden_size)
+            position_embeddings: tuple(cos, sin) for RoPE
+            attention_mask: causal / padding mask if needed
+            past_key_values: Cache object (new HF API)
+            cache_position: positions for caching (new API)
+            **kwargs: other unused HF args
+        Returns:
+            (attn_output, new_past_key_values)
+        """
+        bsz, seq_len, hidden_size = hidden_states.size()
 
-        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        # Project to q, k, v
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
 
-        kv_seq_len = key_states.shape[-2]
-        if past_key_value is not None:
-            kv_seq_len += past_key_value[0].shape[-2]
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
+        # Reshape into multi-head
+        q = q.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        kv_seq_len = seq_len
+        # For k, v, use number of key/value heads
+        k = k.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        v = v.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
 
-        if past_key_value is not None:
-            # reuse k, v, self_attention
-            key_states = torch.cat([past_key_value[0], key_states], dim=2)
-            value_states = torch.cat([past_key_value[1], value_states], dim=2)
+        # Apply rotary embeddings
+        cos, sin = position_embeddings
+        q, k = apply_rotary_pos_emb(q, k, cos, sin)
 
-        past_key_value = (key_states, value_states) if use_cache else None
+        # Handle cache (past_key_values)
+        if past_key_values is not None:
+            # This depends on how the Cache object works.
+            # The typical HuggingFace Cache interface allows updating:
+            # new_k, new_v = past_key_values.update(...)
+            new_k, new_v = past_key_values.update(k, v, layer_id=self.layer_idx, 
+                                                    cache_kwargs={"cos": cos, "sin": sin, "cache_position": cache_position})
+            k = new_k
+            v = new_v
+            kv_seq_len = k.shape[-2]
 
-        attn_weights = None
-        attn_output = xops.memory_efficient_attention(
-            query_states.transpose(1, 2), key_states.transpose(1, 2), value_states.transpose(1, 2),
-            attn_bias=xops.LowerTriangularMask()
-        ).reshape(bsz, q_len, self.hidden_size)
+        # Use xformers memory-efficient attention
+        # Note: xformers expects shape [B, M, H, K] for q, k, v
+        # Our q, k, v are [B, heads, seq_len, head_dim] => transpose heads & seq
+        # Actually, xops.memory_efficient_attention expects [B, M, H, K], so we need to rearrange.
+        # Here’s a typical approach:
 
-        attn_output = self.o_proj(attn_output)
+        # transpose back: (batch, seq_len, heads, head_dim)
+        q2 = q.transpose(1, 2).contiguous()
+        k2 = k.transpose(1, 2).contiguous()
+        v2 = v.transpose(1, 2).contiguous()
 
-        if not output_attentions:
-            attn_weights = None
+        # Compute attention via xformers
+        # Use a causal mask if required
+        attn_bias = None
+        if attention_mask is not None:
+            # If your mask is lower triangular, you can use:
+            attn_bias = xops.LowerTriangularMask()
 
-        return attn_output, attn_weights, past_key_value
+        out = xops.memory_efficient_attention(q2, k2, v2, attn_bias=attn_bias)
+        # out: [batch, seq_len, hidden_size] (since heads * head_dim flattened)
 
-    LlamaAttention.forward = custom_forward
+        # Project back
+        attn_output = self.o_proj(out)
+
+        # Prepare new cache
+        new_past = past_key_values if past_key_values is not None else None
+
+        # Return (output, key_value_cache)
+        return attn_output, new_past
+
+    # Monkey-patch it in
+    LlamaAttention.forward = llama_xformers_forward
 
 class _RepLLamaBiEncoderBase(BiEncoder):
     def __init__(self, model: str, tokenizer, batch_size=32, text_field='text', verbose=False, device=None):
