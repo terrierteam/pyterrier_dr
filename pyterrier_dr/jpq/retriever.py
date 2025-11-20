@@ -261,6 +261,9 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         if self._index is not None:
             return
         
+        if self._gpu:
+            raise ValueError("IndexPQ cannot be moved to gpu")
+        
         index = faiss.IndexPQ(self.d, self.M, self.nbits, faiss.METRIC_INNER_PRODUCT)
         index.is_trained = True
 
@@ -277,10 +280,6 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         faiss.copy_array_to_vector(packed, index.codes)
 
         index.ntotal = len(self.docnos)
-
-        if self._gpu:
-            res = faiss.StandardGpuResources()
-            index = faiss.index_cpu_to_gpu(res, 0, index)
 
         self._index = index
         self._name = "JPQRetrieverPQ"
