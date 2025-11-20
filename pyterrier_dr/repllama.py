@@ -68,9 +68,8 @@ class _RepLLamaBiEncoder(_RepLLamaBiEncoderBase, metaclass=Variants):
     VARIANTS: dict = None
     def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
         self.model_name = model_name or next(iter(self.VARIANTS.values()))
-        model = AutoModel.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
-        super().__init__(model, tokenizer, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
+        super().__init__(model_name, tokenizer, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
 
     def __repr__(self):
         inv_variants = {v: k for k, v in self.VARIANTS.items()}
