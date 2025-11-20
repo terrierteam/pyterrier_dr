@@ -80,9 +80,12 @@ class _RepLLamaBiEncoder(_RepLLamaBiEncoderBase, metaclass=Variants):
 
 class RepLLama(_RepLLamaBiEncoder):
     """
-
-    .. automethod:: 7b()
+    pip requirements:
+     - tiktoken
+     - peft
+    
+    .. automethod:: v1_7b()
     """
     VARIANTS = {
-        '7b': 'castorini/repllama-v1-7b-lora-passage',
+        'v1_7b': 'castorini/repllama-v1-7b-lora-passage',
     }
