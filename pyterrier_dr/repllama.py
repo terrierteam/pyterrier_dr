@@ -23,7 +23,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         self.model = _get_model(model).to(self.device).eval()
         self.tokenizer = tokenizer
 
-    def encoder_queries_torch(self, texts, batch_size=None):
+    def encode_queries_torch(self, texts, batch_size=None):
         results = []
         for chunk in chunked(texts, batch_size or self.batch_size):
             inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt')
