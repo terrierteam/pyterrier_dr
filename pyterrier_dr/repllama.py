@@ -50,11 +50,17 @@ def replace_with_xformers_attention():
         v = self.v_proj(hidden_states)
 
         # Reshape into multi-head
-        q = q.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        kv_seq_len = seq_len
-        # For k, v, use number of key/value heads
-        k = k.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        v = v.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        # Reshape into heads
+        q = q.view(bsz, seq_len, self.num_attn_heads, self.head_dim).transpose(1, 2)
+        k = k.view(bsz, seq_len, self.num_kv_heads, self.head_dim).transpose(1, 2)
+        v = v.view(bsz, seq_len, self.num_kv_heads, self.head_dim).transpose(1, 2)
+
+
+        # q = q.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        # kv_seq_len = seq_len
+        # # For k, v, use number of key/value heads
+        # k = k.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        # v = v.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
 
         # Apply rotary embeddings
         cos, sin = position_embeddings
@@ -94,6 +100,7 @@ def replace_with_xformers_attention():
 
         # Project back
         attn_output = self.o_proj(out)
+        attn_output = attn_output.reshape(bsz, seq_len, self.embed_dim)
 
         # Prepare new cache
         new_past = past_key_values if past_key_values is not None else None
