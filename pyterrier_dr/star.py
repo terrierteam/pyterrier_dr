@@ -27,20 +27,19 @@ class STAR(BiEncoder):
         super().__init__(batch_size=batch_size, verbose=verbose, text_field=text_field)
         from transformers import AutoTokenizer 
         self.device = device or torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        self.model = RobertaDot.from_pretrained(model_name)
+        self.model = RobertaDot.from_pretrained(model_name).to(self.device).eval()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    def encode_queries(self, texts, batch_size=None):
+    def encode_queries_torch(self, texts, batch_size=None):
         results = []
-        with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
-                inps = {k: v.to(self.device) for k, v in inps.items()}
-                res = self.model.forward(**inps)
-                results.append(res.cpu().numpy())
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
+            inps = {k: v.to(self.device) for k, v in inps.items()}
+            res = self.model.forward(**inps)
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.zeros(shape=(0, 0))
+        return torch.cat(results, dim=0)
     
     def encode_docs(self, texts, batch_size=None):
         results = []
