@@ -21,6 +21,9 @@ class _RepLLamaBiEncoderBase(BiEncoder):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
         self.model = _get_model(model).to(self.device).eval()
+        tokenizer.pad_token_id = tokenizer.unk_token_id
+        tokenizer.pad_token = tokenizer.unk_token
+        tokenizer.padding_side = "right"
         self.tokenizer = tokenizer
 
     def encode_queries_torch(self, texts, batch_size=None):
