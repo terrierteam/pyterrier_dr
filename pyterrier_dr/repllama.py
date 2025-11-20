@@ -6,7 +6,7 @@ from .biencoder import BiEncoder
 from .util import Variants
 
 def _get_model(peft_model_name):
-    #replace_with_xformers_attention()
+    replace_with_xformers_attention()
     from peft import PeftModel, PeftConfig
     config = PeftConfig.from_pretrained(peft_model_name)
     base_model = AutoModel.from_pretrained(config.base_model_name_or_path)
@@ -82,13 +82,14 @@ def replace_with_xformers_attention():
 
         # Handle cache (past_key_values)
         if past_key_values is not None:
-            # This depends on how the Cache object works.
-            # The typical HuggingFace Cache interface allows updating:
-            # new_k, new_v = past_key_values.update(...)
-            new_k, new_v = past_key_values.update(k, v, layer_id=self.layer_idx, 
-                                                    cache_kwargs={"cos": cos, "sin": sin, "cache_position": cache_position})
-            k = new_k
-            v = new_v
+            # Append new keys/values to the cache
+            # Depending on HF version, this either returns the updated cache
+            # or updates in-place. Usually, you just do:
+            past_key_values.add(k, v, sequence_len=k.shape[2])  # sometimes sequence_len or position needed
+
+            # Then use the cached k/v for attention
+            k = past_key_values.get_kv()[0]  # or past_key_values.k
+            v = past_key_values.get_kv()[1]  # or past_key_values.v
             kv_seq_len = k.shape[-2]
 
         # Use xformers memory-efficient attention
