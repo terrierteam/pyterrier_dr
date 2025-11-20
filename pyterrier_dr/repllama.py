@@ -31,9 +31,15 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         for chunk in chunked(texts, batch_size or self.batch_size):
             inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt', padding=True, truncation=True, max_length=32)
             inps = {k: v.to(self.device) for k, v in inps.items()}
-            res = self.model(**inps).last_hidden_state[:, -1] # last
-            res = torch.nn.functional.normalize(res, p=2, dim=1)
-            results.append(res)
+            res = self.model(**inps, output_hidden_states=True)
+            q_hidden = res.hidden_states[-1]
+            attention_mask = inps['attention_mask']
+            # we want the last token representation that is not padding
+            sequence_lengths = attention_mask.sum(dim=1)
+            last_token_indices = sequence_lengths - 1
+            q_reps = q_hidden[torch.arange(q_hidden.size(0)), last_token_indices]
+            q_reps = torch.nn.functional.normalize(q_reps, p=2, dim=-1)
+            results.append(q_reps)
         if not results:
             return torch.empty((0, 0))
         return torch.cat(results, dim=0)
@@ -42,12 +48,18 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         results = []
         with torch.no_grad():
             for chunk in chunked(texts, batch_size or self.batch_size):
-                # TODO what about titles, as per original model
+                # NB: titles should be prepended in the indexing pipeline, if available
                 inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=256)
                 inps = {k: v.to(self.device) for k, v in inps.items()}
-                res = self.model(**inps).last_hidden_state[:, -1]
-                res = torch.nn.functional.normalize(res, p=2, dim=1)
-                results.append(res.cpu().numpy())
+                psg_out = self.lm_p(**inps, output_hidden_states=True)
+                p_hidden = psg_out.hidden_states[-1]
+                attention_mask = inps['attention_mask']
+                # we want the last token representation that is not padding
+                sequence_lengths = attention_mask.sum(dim=1)
+                last_token_indices = sequence_lengths - 1
+                p_reps = p_hidden[torch.arange(p_hidden.size(0)), last_token_indices]
+                p_reps = torch.nn.functional.normalize(p_reps, p=2, dim=-1)
+                results.append(p_reps.cpu().numpy())
         if not results:
             return np.empty(shape=(0, 0))
         return np.concatenate(results, axis=0)
