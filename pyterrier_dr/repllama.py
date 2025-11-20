@@ -82,15 +82,8 @@ def replace_with_xformers_attention():
 
         # Handle cache (past_key_values)
         if past_key_values is not None:
-            # Append new keys/values to the cache
-            # Depending on HF version, this either returns the updated cache
-            # or updates in-place. Usually, you just do:
-            past_key_values.add(k, v, sequence_len=k.shape[2])  # sometimes sequence_len or position needed
-
-            # Then use the cached k/v for attention
-            k = past_key_values.get_kv()[0]  # or past_key_values.k
-            v = past_key_values.get_kv()[1]  # or past_key_values.v
-            kv_seq_len = k.shape[-2]
+            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
+            k, v = past_key_values.update(k, v, self.layer_idx, cache_kwargs)
 
         # Use xformers memory-efficient attention
         # Note: xformers expects shape [B, M, H, K] for q, k, v
