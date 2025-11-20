@@ -52,7 +52,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
     @classmethod
     def from_pretrained(cls, model_name, batch_size=32, text_field='text', verbose=False, device=None):
         model = AutoModel.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
         config = AutoConfig.from_pretrained(model_name)
         res = cls(model, tokenizer, config, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
         res.model_name = model_name
@@ -68,8 +68,8 @@ class _RepLLamaBiEncoder(_RepLLamaBiEncoderBase, metaclass=Variants):
     VARIANTS: dict = None
     def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
         self.model_name = model_name or next(iter(self.VARIANTS.values()))
-        model = AutoModel.from_pretrained('meta-llama/Llama-2-7b-hf')
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        model = AutoModel.from_pretrained()
+        tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
         super().__init__(model, tokenizer, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
 
     def __repr__(self):
