@@ -29,7 +29,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
             inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt')
             inps = {k: v.to(self.device) for k, v in inps.items()}
             res = self.model(**inps).last_hidden_state[:, -1] # last
-            res = torch.nn.functional.normalize(res, p=2, dim=0)
+            res = torch.nn.functional.normalize(res, p=2, dim=1)
             results.append(res)
         if not results:
             return torch.empty((0, 0))
@@ -43,7 +43,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
                 inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt')
                 inps = {k: v.to(self.device) for k, v in inps.items()}
                 res = self.model(**inps).last_hidden_state[:, -1]
-                res = torch.nn.functional.normalize(res, p=2, dim=0)
+                res = torch.nn.functional.normalize(res, p=2, dim=1)
                 results.append(res.cpu().numpy())
         if not results:
             return np.empty(shape=(0, 0))
