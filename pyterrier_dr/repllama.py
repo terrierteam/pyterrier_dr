@@ -29,7 +29,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
     def encode_queries_torch(self, texts, batch_size=None):
         results = []
         for chunk in chunked(texts, batch_size or self.batch_size):
-            inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt', padding=True, truncation=True)
+            inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt', padding=True, truncation=True, max_length=32)
             inps = {k: v.to(self.device) for k, v in inps.items()}
             res = self.model(**inps).last_hidden_state[:, -1] # last
             res = torch.nn.functional.normalize(res, p=2, dim=1)
@@ -43,7 +43,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         with torch.no_grad():
             for chunk in chunked(texts, batch_size or self.batch_size):
                 # TODO what about titles, as per original model
-                inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True)
+                inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=256)
                 inps = {k: v.to(self.device) for k, v in inps.items()}
                 res = self.model(**inps).last_hidden_state[:, -1]
                 res = torch.nn.functional.normalize(res, p=2, dim=1)
