@@ -311,7 +311,10 @@ class JPQTrainer:
             shutil.rmtree(dstindex, ignore_errors=True)    
             passage_encoder.train()
 
-        index = self._jpq_index(dstindex, model, selected_docnos, codes)
+        # gather the trained sub-id representations
+        centroids = torch.stack([ model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
+        # NB: model.query.forward already applies the OPQ rotation, so we dont specify it for this index
+        index = self._jpq_index(dstindex, centroids, selected_docnos, codes, opq_R=None)
         return (pt.apply.generic(_queryencoder) >> index.retriever_pq(topk=1000)), _cleanup # type: ignore
         
     _currentindex = _currentindexJPQ
@@ -325,7 +328,7 @@ class JPQTrainer:
         def _gen():
             with torch.no_grad():
                 iter = range(0, len(codes), 16384) # magic number to replace recon_batch_size
-                iter = tqdm(iter, unit='batch', desc='Validation index construction')
+                iter = tqdm(iter, unit='batch', desc='Flat validation index construction')
                 for i in iter:
                     chunk = torch.from_numpy(codes[i:i+16384]).long().to(self.device)
                     embs = passage_encoder(chunk).detach().cpu().numpy().astype('float32')
@@ -350,7 +353,6 @@ class JPQTrainer:
 
         return (pt.apply.generic(_queryencoder) >> flex.retriever(num_results=1000)), _cleanup # type: ignore
 
-
     def _validation_step(
             self, 
             retr_pipe : pt.Transformer, 
@@ -358,10 +360,13 @@ class JPQTrainer:
             eval_qrels : pd.DataFrame, 
             topk_eval : int = 1000):
         
+        start_time = time.time()
         rtr = pt.Evaluate(
             (retr_pipe % topk_eval)(eval_queries),  # type: ignore
             eval_qrels, 
             metrics=[RR@10, Recall@1000, nDCG@10])
+        end_time = time.time()
+        logger.info(f"Validation query execution took {end_time-start_time} sec")
         return rtr
 
 
@@ -429,26 +434,21 @@ class JPQTrainer:
 
     def _jpq_index(self, 
                    dest : str, 
-                   model : JPQBiencoder,
+                   centroids : np.ndarray,
                    docnos : np.ndarray, 
-                   codes : np.ndarray) -> JPQIndex:
+                   codes : np.ndarray,
+                   opq_R : np.ndarray = None) -> JPQIndex:
         """
-        Builds an index using embeddings from given model, for the provided docnos and codes 
+        Builds an index using the provided centroid embeddings, for the provided docnos and codes 
         """
-        # gather the trained sub-id representations
-        centroids = torch.stack([ model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
         
-        opq : None | np.ndarray = None
-        if hasattr(self.pq, "opq"):
-            opq = model.query.R.data.detach().cpu().numpy()
-
         return JPQIndex.build(
             dest,
             docnos,
             codes,
             centroids,
             mode=IndexingMode.overwrite,
-            opq=opq
+            opq=opq_R
         )
 
     def jpq_index(self, dest : str) -> JPQIndex:
@@ -456,15 +456,21 @@ class JPQTrainer:
         if not self.fitted:
             raise ValueError("JPQTrainer not fitted")
         
+        centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
+        
         # information from the original index
         docnos, original_embs, _ = self.index.payload(return_docnos=True, return_dvecs=True)
         if self.training_setup != "full_index":
-            self.pq.centroids = torch.stack([ self.model.passage.sub_embeddings[m].weight for m in range(self.M) ]).detach().cpu().numpy() # type: ignore [M, Ks, dsub]
+            self.pq.centroids = centroids
             # compute codes for all docids of the original index
             all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
         else:
             # we can reuse the codes computed during training
             all_codes = self.codes
+
+        opq : None | np.ndarray = None
+        if hasattr(self.pq, "opq"):
+            opq = self.model.query.R.data.detach().cpu().numpy()
         
         logger.info("Generating final JPQIndex at " + dest)
-        return self._jpq_index(dest, self.model, docnos.fwd, all_codes)
+        return self._jpq_index(dest, centroids, docnos.fwd, all_codes, opq_R=opq)
