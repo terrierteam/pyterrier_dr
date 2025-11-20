@@ -51,9 +51,18 @@ def replace_with_xformers_attention():
 
         # Reshape into multi-head
         # Reshape into heads
-        num_heads = getattr(self, "num_heads", getattr(self, "num_attn_heads"))
-        num_kv_heads = getattr(self, "num_key_value_heads", getattr(self, "num_kv_heads"))
-        hidden_size = getattr(self, "hidden_size", getattr(self, "embed_dim"))
+
+        # Embedding / output dimension
+        hidden_size = getattr(self, "hidden_size", getattr(self, "embed_dim", None))
+
+        # Head dimension
+        head_dim = self.head_dim
+
+        # Total query heads (derived)
+        num_heads = self.q_proj.weight.shape[0] // head_dim
+
+        # KV heads (derived using grouping)
+        num_kv_heads = num_heads // self.num_key_value_groups
 
         q = q.view(bsz, seq_len, num_heads, self.head_dim).transpose(1, 2)
         k = k.view(bsz, seq_len, num_kv_heads, self.head_dim).transpose(1, 2)
