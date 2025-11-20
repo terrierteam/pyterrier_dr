@@ -88,8 +88,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         for chunk in chunked(texts, batch_size or self.batch_size):
             inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt', padding=True, truncation=True, max_length=32)
             inps = {k: v.to(self.device) for k, v in inps.items()}
-            res = self.model(**inps, output_hidden_states=True)
-            q_hidden = res.hidden_states[-1]
+            q_hidden = self.model(**inps).last_hidden_state
             attention_mask = inps['attention_mask']
             # we want the last token representation that is not padding
             sequence_lengths = attention_mask.sum(dim=1)
@@ -108,8 +107,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
                 # NB: titles should be prepended in the indexing pipeline, if available
                 inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=256)
                 inps = {k: v.to(self.device) for k, v in inps.items()}
-                psg_out = self.model(**inps, output_hidden_states=True)
-                p_hidden = psg_out.hidden_states[-1]
+                p_hidden = self.model(**inps).last_hidden_state
                 attention_mask = inps['attention_mask']
                 # we want the last token representation that is not padding
                 sequence_lengths = attention_mask.sum(dim=1)
