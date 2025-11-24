@@ -317,8 +317,6 @@ class JPQTrainer:
         index = self._jpq_index(dstindex, centroids, selected_docnos, codes, opq_R=None)
         return (pt.apply.generic(_queryencoder) >> index.retriever_pq(topk=1000)), _cleanup # type: ignore
         
-    _currentindex = _currentindexJPQ
-
     def _currentindexFLAT(self, model, selected_docnos, codes : np.ndarray, verbose=True) -> tuple[pt.Transformer, Callable]:
         # as the rmtree doesnt work, lets just try to use the same folder each time
         dstindex = "/tmp/valid_index" # tempfile.mkdtemp()
@@ -352,6 +350,9 @@ class JPQTrainer:
             passage_encoder.train()
 
         return (pt.apply.generic(_queryencoder) >> flex.retriever(num_results=1000)), _cleanup # type: ignore
+
+    _currentindex = _currentindexJPQ
+    #_currentindex = _currentindexFLAT
 
     def _validation_step(
             self, 
