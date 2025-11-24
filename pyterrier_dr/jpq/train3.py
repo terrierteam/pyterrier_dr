@@ -47,6 +47,7 @@ class JPQTrainer:
         pq_impl: Literal['faiss','sklearn','faiss2', 'faiss2opq'] = 'sklearn', # the PQ implementation
         M: int = 8, # number of subquantizers (splits of the vector)
         nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
+        train_query_encoder = True
     ):
         super().__init__()
         self.fitted = False
@@ -58,6 +59,7 @@ class JPQTrainer:
         self.Ks = 2** nbits
         self.pq_impl = pq_impl
         self.device = autodevice(device)
+        self.train_query_encoder = train_query_encoder
         logger.info(f"[JPQTrainer init] device={self.device}")
 
     def _compute_PQ(
@@ -142,6 +144,10 @@ class JPQTrainer:
         resume: bool = False,
         lambda_rank = False
     ):
+        def _query_encoder_train():
+            if self.train_query_encoder:
+                model.query.dr.model.train()
+
         # Loss function modes:
         # - lambda_rank: use lambda rank loss, with or without jpq_negs negative, with or without in-batch negatives
         # - in_batch: use in-batch negatives, can also have jpq_negs negatives
@@ -168,16 +174,22 @@ class JPQTrainer:
             lr = 2e-5
         elif self.M > 32:
             lr = 1e-4
-
-        # separate learning rates, as per paper
-        optimizer = torch.optim.AdamW(
-            [
-                {'params' : model.passage.parameters(), 'lr': lr},
-                {'params' : model.query.dr.model.parameters(), 'lr' : 5e-6}
-            ], weight_decay=0.0)
+        if self.train_query_encoder:
+            optimizer = torch.optim.AdamW(
+                [    # separate learning rates, as per original paper
+                    {'params' : model.passage.parameters(), 'lr': lr},
+                    {'params' : model.query.dr.model.parameters(), 'lr' : 5e-6}
+                ], weight_decay=0.0)
+        else:
+            # query encoder is frozen
+            optimizer = torch.optim.AdamW(
+                [
+                    {'params' : model.passage.parameters(), 'lr': lr},
+                ], weight_decay=0.0)
+            for p in model.query.parameters(recurse=True): p.requires_grad = False
         
         # set both models to train
-        model.query.dr.model.train()
+        _query_encoder_train()
         model.passage.to(self.device).train()
         
         # Checkpointing
@@ -215,7 +227,7 @@ class JPQTrainer:
             # add jpq_negs, if applicable; switch model to eval for retrieval
             model.query.eval()
             batch = batch_decorator(batch)
-            model.query.train()
+            _query_encoder_train()
             
             loss = self._training_step(batch=batch, loss_f=loss_f, optimizer=optimizer)
             running_loss += loss
@@ -303,7 +315,8 @@ class JPQTrainer:
             Q = Q_t.detach().cpu().numpy().astype('float32')
             rtr = inp.copy()
             rtr["query_vec"] = [row for row in Q]
-            model.query.train()
+            if self.train_query_encoder:
+                model.query.train()
             return rtr
         
         def _cleanup():
@@ -341,7 +354,8 @@ class JPQTrainer:
             Q = Q_t.detach().cpu().numpy().astype('float32')
             rtr = inp.copy()
             rtr["query_vec"] = [row for row in Q]
-            model.query.train()
+            if self.train_query_encoder:
+                model.query.train()
             return rtr
         
         def _cleanup():
