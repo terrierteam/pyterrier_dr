@@ -3,9 +3,15 @@ from pathlib import Path
 import shutil
 import pyterrier as pt
 import numpy as np
+import more_itertools
 import json
 from npids import Lookup
 from pyterrier_dr.flex.core import IndexingMode
+from pyterrier_dr import FlexIndex
+from pyterrier_dr.jpq.pq import (
+    ProductQuantizerFAISSIndexPQ, 
+    ProductQuantizerFAISSIndexPQOPQ,
+)
 from .retriever import JPQRetrieverFlat, JPQRetrieverPrune, JPQRetrieverPQ
 
 
@@ -151,6 +157,59 @@ class JPQIndex(pt.Artifact):
         ).save(path / JPQIndex._META_FN)
 
         return JPQIndex(path)
+
+    @staticmethod
+    def build_zero_shot_index(
+        source_index: "JPQIndex",
+        target_index: FlexIndex,
+        path: str,
+        batch_size: int = 2**16,
+        mode: IndexingMode = IndexingMode.create,
+    ) -> "JPQIndex":
+        """Build a new JPQ index which quantizes vectors from `target_index` using learned parameters of `source_index`.
+
+        Args:
+            source_index (JPQIndex): A learned JPQ index.
+            target_index (FlexIndex): Target index with document vectors to be quantized.
+            path (str): Path to save the resulting JPQ index.
+            batch_size (int, optional): Batch size to iterate over the corpus of `target_index`. Defaults to 2**16.
+
+        Returns:
+            JPQIndex: The resulting zero-shot JPQ index.
+        """
+        opq = source_index.opq
+        centroids = source_index.dvecs
+        pq_cls = ProductQuantizerFAISSIndexPQ if opq is None else ProductQuantizerFAISSIndexPQOPQ
+        pq = pq_cls(M=centroids.shape[0], Ks=centroids.shape[1])
+        if opq is not None:
+            pq.opq = opq
+        pq.centroids = centroids
+        pq.d = centroids.shape[0] * centroids.shape[-1]
+
+        # encode_batch for all docs from targetindex to get codes for new index
+        all_codes = []
+        all_docnos = []
+        for docs_batch in more_itertools.batched(target_index.get_corpus_iter(), batch_size):
+            vecs = []
+            for doc in docs_batch:
+                vecs.append(doc["doc_vec"])
+                all_docnos.append(doc["docno"])
+
+            X_batch = np.stack(vecs, axis=0)
+            codes = pq.encode_batch(X_batch, selected=np.arange(X_batch.shape[0]), bs=batch_size, verbose=False)
+            all_codes.append(codes)
+            
+        all_codes = np.concatenate(all_codes, axis=0)
+
+        # call and return JPQIndex.build() using the docnos from targetindex, centroids from jpqsource index, and newly computed codes
+        return JPQIndex.build(
+            path=path,
+            docnos=all_docnos,
+            codes=all_codes,
+            centroids=centroids,
+            opq=opq,
+            mode=mode,
+        )
 
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
         return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq)
