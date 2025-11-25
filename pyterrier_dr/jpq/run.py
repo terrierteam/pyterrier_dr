@@ -54,7 +54,7 @@ def compute_index_name(data_cfg, train_cfg) -> str:
         _slug(data_cfg.train_ds),
         _slug(data_cfg.model_name),
         _slug(train_cfg.pq_impl),
-        f"M{train_cfg.M}",
+        f"M{train_cfg.M}_nbits{train_cfg.nbits}",
         f"ps{train_cfg.pq_sample_size}",
         f"neg{train_cfg.jpq_negs}" if train_cfg.jpq_negs else "",
         "ibn" if train_cfg.in_batch_negs else "",
@@ -81,6 +81,7 @@ class DataConfig:
 class TrainingConfig:
     pq_impl: Literal['faiss', 'sklearn', 'faiss2', 'faiss2opq'] = "faiss2opq"
     M: int = 96
+    nbits: int = 8
     pq_sample_size: int = 159_744
     valid_every: int = 500
     in_batch_negs: bool = True
@@ -105,6 +106,7 @@ def add_training_args(parser: argparse.ArgumentParser):
     p = parser.add_argument_group("Training")
     p.add_argument("--pq-impl", choices=['faiss', 'sklearn', 'faiss2', 'faiss2opq'], default="faiss2opq")
     p.add_argument("--M", type=int, default=96)
+    p.add_argument("--nbits", type=int, default=8)
     p.add_argument("--pq-sample-size", type=int, default=159744)
     p.add_argument("--valid-every", type=int, default=500)
     p.add_argument("--in-batch-negs", action="store_true", default=True)
@@ -166,7 +168,7 @@ if __name__ == "__main__":
     eval_dataset = pt.get_dataset(data.eval_ds)
     print("eval dataset loaded")
 
-    t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl)
+    t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl, nbits=train.nbits)
     t.fit(
         merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:train.pairs_cap]), 
         pq_sample_size=train.pq_sample_size,
