@@ -154,6 +154,7 @@ class JPQTrainer:
         # - jpq_negs only: NOT YET SUPPORTED.
         # - default: CE loss only on the pairs
         if lambda_rank:
+            assert jpq_negs, "lambdarank requires jpqnegs"
             loss_f = JPQCELossJPQNegsLambdaRank(model.query, model.passage, use_inbatch_negatives=in_batch, jpq_negs=jpq_negs)
         elif in_batch:
             loss_f = JPQCELossInBatchNegs(model.query, model.passage)

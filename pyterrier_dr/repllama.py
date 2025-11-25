@@ -205,6 +205,9 @@ class RepLLama(_RepLLamaBiEncoder):
      - peft
     
     .. automethod:: v1_7b()
+
+    https://arxiv.org/pdf/2310.08319
+    
     """
     VARIANTS = {
         'v1_7b': 'castorini/repllama-v1-7b-lora-passage',
