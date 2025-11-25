@@ -183,7 +183,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
 
 class ProductQuantizerFAISS(ProductQuantizer):
     def __init__(self, M=4, Ks=256):
-        super().__init__(M, Ks)
+        super().__init__(M=M, Ks=Ks)
         self._pq = None
 
     def fit(self, X: np.ndarray) -> None:
