@@ -136,7 +136,7 @@ class JPQTrainer:
         in_batch : bool = False,
         batch_size : int = 32,
         jpq_negs : int = 0,
-        checkpoint_dir: str | None = None,
+        checkpoint_dir: str = None,
         metric: str = "nDCG@10",
         mode: Literal["max", "min"] = "max",
         patience: int = 500,
@@ -194,7 +194,7 @@ class JPQTrainer:
         model.passage.to(self.device).train()
         
         # Checkpointing
-        ckdir = checkpoint_dir or "./checkpoints_jpq"
+        assert checkpoint_dir is not None, "directory for checkpoints must be specified"
         best_metric = float("-inf") if mode == "max" else float("+inf")
         better = (lambda new, best: new > best) if mode == "max" else (lambda new, best: new < best)
         valids_since_improve = 0
@@ -203,7 +203,7 @@ class JPQTrainer:
 
         # Resuming
         if resume:
-            last_path = os.path.join(ckdir, "last.pt")
+            last_path = os.path.join(checkpoint_dir, "last.pt")
             if os.path.isfile(last_path):
                 st, bm = _load_checkpoint(last_path, model=model, optimizer=optimizer, trainer_self=self)
                 best_metric = bm
@@ -257,11 +257,11 @@ class JPQTrainer:
                         valids_since_improve = 0
                         best_step = step
                         if checkpoint_dir:
-                            best_path = os.path.join(ckdir, f"best_step{0:06d}.pt")
+                            best_path = os.path.join(checkpoint_dir, f"best_step{0:06d}.pt")
                             _save_checkpoint(best_path, model=model, optimizer=optimizer,  step=0, best_metric=best_metric, trainer_self=self)
-                            _save_checkpoint(os.path.join(ckdir, "best.pt"), model=model, optimizer=optimizer, step=0, best_metric=best_metric, trainer_self=self)
-                            ckpt = torch.load(os.path.join(ckdir, "best.pt"), map_location="cpu", weights_only=False)
-                            _export_pq(os.path.join(ckdir, "pq_best"), ckpt)
+                            _save_checkpoint(os.path.join(checkpoint_dir, "best.pt"), model=model, optimizer=optimizer, step=0, best_metric=best_metric, trainer_self=self)
+                            ckpt = torch.load(os.path.join(checkpoint_dir, "best.pt"), map_location="cpu", weights_only=False)
+                            _export_pq(os.path.join(checkpoint_dir, "pq_best"), ckpt)
                             ckpt = None
                     else:
                         valids_since_improve += 1
@@ -271,22 +271,22 @@ class JPQTrainer:
                 
             # Periodic checkpointing
             if checkpoint_dir and save_every_steps and (step % save_every_steps == 0):
-                last_path = os.path.join(ckdir, f"last_step{0:06d}.pt")
+                last_path = os.path.join(checkpoint_dir, f"last_step{0:06d}.pt")
                 _save_checkpoint(last_path, model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
-                _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
-                ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
-                _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
+                _save_checkpoint(os.path.join(checkpoint_dir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
+                ckpt = torch.load(os.path.join(checkpoint_dir, "last.pt"), map_location="cpu", weights_only=False)
+                _export_pq(os.path.join(checkpoint_dir, "pq_last"), ckpt)
                 ckpt = None
 
             if valids_since_improve and valids_since_improve >= patience:
                 logger.info(f"[JPQ] Early stopping at step {step}: no improvement in {patience} validations (since step {best_step}).")
                 if checkpoint_dir:
-                    _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
-                    ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
-                    _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
+                    _save_checkpoint(os.path.join(checkpoint_dir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
+                    ckpt = torch.load(os.path.join(checkpoint_dir, "last.pt"), map_location="cpu", weights_only=False)
+                    _export_pq(os.path.join(checkpoint_dir, "pq_last"), ckpt)
                     ckpt = None
 
-                best_path = os.path.join(ckdir, "best.pt")
+                best_path = os.path.join(checkpoint_dir, "best.pt")
                 if os.path.isfile(best_path):
                     _load_checkpoint(best_path, model=model, optimizer=optimizer, trainer_self=self)
                     logger.info(f"[JPQ] Loaded best model checkpointed so far from {best_path}")
@@ -296,9 +296,9 @@ class JPQTrainer:
             
         # Save end-of-epoch "last"]
         if checkpoint_dir and not early_stop:
-            _save_checkpoint(os.path.join(ckdir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
-            ckpt = torch.load(os.path.join(ckdir, "last.pt"), map_location="cpu", weights_only=False)
-            _export_pq(os.path.join(ckdir, "pq_last"), ckpt)
+            _save_checkpoint(os.path.join(checkpoint_dir, "last.pt"), model=model, optimizer=optimizer, step=step, best_metric=best_metric, trainer_self=self)
+            ckpt = torch.load(os.path.join(checkpoint_dir, "last.pt"), map_location="cpu", weights_only=False)
+            _export_pq(os.path.join(checkpoint_dir, "pq_last"), ckpt)
             ckpt = None
 
         del(retr)
@@ -400,6 +400,7 @@ class JPQTrainer:
         in_batch : bool = False,
         jpq_negs : int = 0,
         lambda_rank : bool = False,
+        checkpoint_dir : str|None = None
     ):
         start_time = time.time()
         selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
@@ -419,7 +420,13 @@ class JPQTrainer:
 
         dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=needs_filtered)
         eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
-
+        
+        # use a temporary directory for checkpoints
+        if checkpoint_dir is None:
+            import atexit
+            checkpoint_dir = tempfile.mkdtemp("jpq_checkpoints")
+            atexit.register(shutil.rmtree, checkpoint_dir)
+        
         self._training_loop(
             model, dataset, lr, selected_docnos, codes, 
             total_steps=total_steps, 
@@ -430,7 +437,7 @@ class JPQTrainer:
             batch_size=batch_size, 
             jpq_negs=jpq_negs, 
             lambda_rank=lambda_rank,
-            checkpoint_dir="./checkpoints_jpq", 
+            checkpoint_dir=checkpoint_dir, 
             metric="nDCG@10", 
             mode="max", 
             patience=patience, 
