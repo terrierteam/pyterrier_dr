@@ -7,15 +7,18 @@ from ir_measures import RR, Recall, nDCG
 import ir_datasets
 from pyterrier_dr.jpq.utils import merge_queries_into_docpairs
 from pyterrier_dr.jpq import JPQTrainer
-
+import os
 import pyterrier_dr
 import pyterrier as pt
+import torch 
+torch.set_float32_matmul_precision('high')
 
 
 DEFAULT_INIT_BY_NAME: dict[str, str] = {
     "tct_colbert": "pyterrier_dr.TctColBert.hnp()",
     "tas_b": "pyterrier_dr.TasB()",
-    "star": "pyterrier_dr.STAR()",
+    "star": "pyterrier_dr.STAR('/root/nfs/jpq/provided_models/star/')",
+    "repllama": "pyterrier_dr.RepLLama.v1_7b()"
 }
 
 
@@ -66,10 +69,12 @@ class DataConfig:
     target_dir: str
     model_name: Literal["tct_colbert", "tas_b", "star"] = "tct_colbert"
     train_ds: str = "msmarco-passage/train"
-    eval_ds: str = "msmarco_passage"
-    eval_split: str = "test-2019"
+    #eval_ds: str = "msmarco_passage"
+    #eval_split: str = "test-2019"
+    eval_ds : str = 'irds:msmarco-passage/dev/small'
+    eval_split : str|None = None
     test_ds: str = "msmarco_passage"
-    test_split: str = "test-2019"
+    test_split: str = "test-2019,test-2020"
 
 
 @dataclass
@@ -90,10 +95,10 @@ def add_data_args(parser: argparse.ArgumentParser):
     p.add_argument("--target-dir", required=True)
     p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star"], default="tct_colbert")    
     p.add_argument("--train-ds", default="msmarco-passage/train")
-    p.add_argument("--eval-ds", default="msmarco_passage")
-    p.add_argument("--eval-split", default="test-2019")
+    p.add_argument("--eval-ds", default="irds:msmarco-passage/dev/small")
+    p.add_argument("--eval-split", default=None)
     p.add_argument("--test-ds", default="msmarco_passage")
-    p.add_argument("--test-split", default="test-2019")
+    p.add_argument("--test-split", default="test-2019,test-2020")
 
 
 def add_training_args(parser: argparse.ArgumentParser):
@@ -181,14 +186,23 @@ if __name__ == "__main__":
     dataset = pt.get_dataset(data.test_ds)
     p = [
         oldmodel >> index.retriever(), # type: ignore
-        t.query_encoder >> newindex.retriever_flat(),
+        #t.query_encoder >> newindex.retriever_flat(),
         t.query_encoder >> newindex.retriever_pq()
     ]
-    print(pt.Experiment(
-        p,
-        dataset.get_topics(data.test_split),
-        dataset.get_qrels(data.test_split),
-        eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10, "mrt"],
-        names=["baseline", "JPQ flat", "JPQ pq"]
-))
+    save_dir = target + "/" + 'runs'
+    for ts in data.test_split.split(","):
+        print(ts)
+        ts_savedir = save_dir + "/" + ts
+        os.makedirs(ts_savedir, exist_ok=True)
+        df = pt.Experiment(
+            p,
+            dataset.get_topics(ts),
+            dataset.get_qrels(ts),
+            eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10, "mrt"],
+            names=["baseline", "JPQ pq"],
+            save_dir = ts_savedir,
+            baseline=0
+        )
+        df.to_csv(ts_savedir + "/metrics.csv")
+        print(df)
 
