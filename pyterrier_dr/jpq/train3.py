@@ -25,7 +25,7 @@ from pyterrier_dr.jpq.data import (
 )
 from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
 from pyterrier_dr.jpq.model import JPQBiencoder, OPQQueryEncoder, PassageEncoder, QueryEncoder
-from pyterrier_dr.jpq.utils import timer, autodevice
+from pyterrier_dr.jpq.utils import code_type_from_Ks, timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
 from typing import Callable
 
@@ -97,7 +97,7 @@ class JPQTrainer:
             pq.fit(vecs[sample_docids])
 
         logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
-        codes = np.empty((sample_size, self.M), dtype=np.uint8) # not sure this is ok if we return sklearn codes
+        codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
         with timer("PQ / compute codes (selected)"):
             codes = pq.encode_batch(vecs, docids, batch_size)
         

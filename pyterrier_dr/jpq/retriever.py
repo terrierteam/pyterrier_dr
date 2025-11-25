@@ -141,7 +141,7 @@ class JPQRetriever(pt.Transformer):
     def __init__(
         self, 
         docnos: list[str], # list of [N] docids
-        codes: np.ndarray, # PQ codes of shape [N, M] (uint8)
+        codes: np.ndarray, # PQ codes of shape [N, M] (uint8 or uint16)
         sub_embeddings: np.ndarray, #  PQ centroids of shape [M, Ks, dsub] where Ks = 2^nbits and d = M * dsub (aka the centroids, float32)
         topk: int = 1000, # number of results to retrieve
         opq : np.ndarray | None = None,
@@ -244,7 +244,7 @@ class JPQRetrieverFlat(JPQRetrieverFaissBase):
 
         for start in tqdm(range(0, self.N, bs), desc=f"{self._name} / build flat", leave=False):
             stop = min(start + bs, self.N)
-            chunk_codes = self.codes[start:stop, :]           # [b, M] uint8
+            chunk_codes = self.codes[start:stop, :]           # [b, M] uint8 or uint16
             parts = [self.sub_embeddings[m, chunk_codes[:, m], :] for m in range(self.M)]
             embs = np.concatenate(parts, axis=-1).astype(np.float32, copy=False)  # [b, M*dsub]
             embs = np.ascontiguousarray(embs)
@@ -274,7 +274,7 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         # pack codes if needed
         if self.nbits == 8:
             packed = self.codes.reshape(-1)
-        else:
+        elif self.nbits < 8:
             packed = _pack_pq_codes(self.codes, self.nbits)
 
         faiss.copy_array_to_vector(packed, index.codes)

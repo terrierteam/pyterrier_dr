@@ -6,6 +6,8 @@ import math
 import faiss
 from sklearn.cluster import KMeans
 
+from pyterrier_dr.jpq.utils import code_type_from_Ks
+
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
@@ -125,7 +127,7 @@ class ProductQuantizer:
     ) -> np.ndarray:
         """Take some embeddings from X according to selected and encodes them in batches"""
         N = len(selected)
-        codes = np.empty((N, self._M), dtype=np.uint8) # [N, M]
+        codes = np.empty((N, self._M), dtype=code_type_from_Ks(self._Ks)) # [N, M]
         total_error = 0.0
 
         iter = range(0, N, bs)
@@ -165,7 +167,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
     def encode(self, X: np.ndarray) -> np.ndarray: # [N, D] -> [N, M]
         """Encode each vector in X [N,D] into M integer codes."""
         N = len(X)
-        codes = np.empty((N, self._M), dtype=np.uint8) # [N, M]
+        codes = np.empty((N, self._M), dtype=code_type_from_Ks(self._Ks)) # [N, M]
         for m, X_m in enumerate(np.hsplit(X, self._M)): # X_m has shape [N, dsub]
             centers = self.centroids[m] # [Ks, dsub]
             distances = np.linalg.norm(X_m[:, None, :] - centers[None, :, :], axis=2)
@@ -217,7 +219,7 @@ class ProductQuantizerFAISS(ProductQuantizer):
     #     n_samples = len(X)
     
     #     # Prepare an empty array for the codes
-    #     codes = np.zeros((n_samples, self._M), dtype=np.uint8)
+    #     codes = np.zeros((n_samples, self._M), dtype=code_type_from_Ks(self._Ks))
     
     #     # Compute PQ codes directly into the array
     #     faiss_pq = self.pq

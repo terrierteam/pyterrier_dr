@@ -12,6 +12,7 @@ from pyterrier_dr.jpq.pq import (
     ProductQuantizerFAISSIndexPQ, 
     ProductQuantizerFAISSIndexPQOPQ,
 )
+from pyterrier_dr.jpq.utils import code_type_from_Ks
 from .retriever import JPQRetrieverFlat, JPQRetrieverPrune, JPQRetrieverPQ
 
 
@@ -45,7 +46,7 @@ class JPQIndex(pt.Artifact):
     _META_FN = "pt_meta.json"
     _DOCNOS_FN = "docnos.npids"
     _OPQ_FN = "opq.f4"       # float32 [d, d]
-    _CODES_FN = "codes.f4"     # uint8   [N, M]
+    _CODES_FN = "codes.f4"     # uint8 or uint16 or uint32  [N, M]
     _SUBVECS_FN = "subvecs.f4" # float32 [M, Ks, dsub]
 
     def __init__(self, path: str | Path):
@@ -74,7 +75,8 @@ class JPQIndex(pt.Artifact):
     def codes(self) -> np.ndarray:
         if self._codes is None:
             shape = (self.meta.doc_count, self.meta.M)
-            self._codes = np.memmap(self.index_path / JPQIndex._CODES_FN, mode="r", dtype=np.uint8, shape=shape)
+            dtype = code_type_from_Ks(self.meta.Ks)
+            self._codes = np.memmap(self.index_path / JPQIndex._CODES_FN, mode="r", dtype=dtype, shape=shape)
         return self._codes
 
     @property
@@ -115,9 +117,11 @@ class JPQIndex(pt.Artifact):
                 raise RuntimeError(f'Index already exists at {path}. If you want to delete and re-create an existing index, you can pass mode="overwrite"')
         path.mkdir(parents=True, exist_ok=True)
 
+        _, Ks, _ = centroids.shape
+
         centroids = np.asarray(centroids, dtype=np.float32)
         opq = np.asarray(opq, dtype=np.float32) if opq is not None else None
-        codes = np.asarray(codes, dtype=np.uint8)
+        codes = np.asarray(codes, dtype=code_type_from_Ks(Ks))
         docnos = list(docnos)
 
         if centroids.ndim != 3:
@@ -125,7 +129,7 @@ class JPQIndex(pt.Artifact):
         if codes.ndim != 2:
             raise ValueError(f"codes must have shape [N, M], got {codes.shape}")
 
-        M, Ks, dsub = centroids.shape
+        M, _, dsub = centroids.shape # we already have Ks
         N, M_codes = codes.shape
         if M != M_codes:
             raise ValueError(f"M mismatch: embs={M}, codes={M_codes}")

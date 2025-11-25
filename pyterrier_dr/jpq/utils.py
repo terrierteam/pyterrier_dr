@@ -20,6 +20,15 @@ def timer(name: str):
     t2 = time.perf_counter() 
     logger.info(f"[TIMER] {name}: {(t2-t1)/60:.2f} min ({t2-t1:.1f} s)")
 
+def code_type_from_nbits(nbits : int) -> np.dtype:
+    if nbits <= 8:
+        return np.uint8
+    if nbits <= 16:
+        return np.uint16
+    raise KeyError("max nbits for Faiss is 16")
+
+def code_type_from_Ks(Ks : int):
+    return code_type_from_nbits(int(np.log2(Ks)))
 
 def autodevice(device) -> Any | Literal['mps'] | Literal['cuda'] | Literal['cpu']:
     return device or ("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
