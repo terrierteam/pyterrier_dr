@@ -9,12 +9,13 @@ else:
 
 print(f"Using device: {device}")
 
-tct = pyterrier_dr.TctColBert.hnp(device=device)
+#tct = pyterrier_dr.TctColBert.hnp(device=device)
+tasb = pyterrier_dr.Ance(device=device, batch_size=256)
 
 # index = pyterrier_dr.FlexIndex("./vaswani_tct.flex")
 # (tct >> index).index(pt.get_dataset("vaswani").get_corpus_iter())
 
-index = pyterrier_dr.FlexIndex("./msmarco-passage.tct-hnp.flex")
-(tct >> index).index(pt.get_dataset("msmarco_passage").get_corpus_iter()) # type: ignore
+index = pyterrier_dr.FlexIndex("./msmarco-passage.ance.flex")
+(tasb >> index).index(pt.get_dataset("msmarco_passage").get_corpus_iter()) # type: ignore
 
 print(len(index))
