@@ -46,7 +46,7 @@ class JPQTrainer:
         device = None,
         pq_impl: Literal['faiss','sklearn','faiss2', 'faiss2opq'] = 'sklearn', # the PQ implementation
         M: int = 8, # number of subquantizers (splits of the vector)
-        nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8)
+        nbits: int = 8, #  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8. Max is 16, which would need a very large training size)
         train_query_encoder = True
     ):
         super().__init__()
@@ -56,6 +56,11 @@ class JPQTrainer:
         self.d = index.payload()[2]['vec_size']
         self.M = M
         self.nbits = nbits
+        if nbits %2 == 1:
+            raise ValueError("nbits should be even")
+        if nbits < 4 or nbits > 16:
+            raise ValueError("nbits should be in range 4-16")
+        
         self.Ks = 2** nbits
         self.pq_impl = pq_impl
         self.device = autodevice(device)
