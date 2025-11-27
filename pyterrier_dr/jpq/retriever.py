@@ -226,8 +226,17 @@ class JPQRetrieverFaissBase(JPQRetriever):
             scores = scores[order]
 
             for rank, (did, score) in enumerate(zip(dids, scores), start=1):
-                rows.append((qid, did, self.docnos[did], score, rank))
-        return pd.DataFrame(rows, columns=['qid', 'docid', 'docno', 'score', 'rank'])
+                row = [qid, did, self.docnos[did], score, rank]
+                if "query" in topics:
+                    row.append(topics.iloc[i]["query"])
+
+                rows.append(row)
+        
+        cols = ['qid', 'docid', 'docno', 'score', 'rank']
+        if "query" in topics:
+            cols.append("query")
+            
+        return pd.DataFrame(rows, columns=cols)
 
 
 class JPQRetrieverFlat(JPQRetrieverFaissBase):

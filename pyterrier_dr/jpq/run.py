@@ -137,6 +137,7 @@ def parse_args():
     train = TrainingConfig(
         pq_impl=args.pq_impl,
         M=args.M,
+        nbits=args.nbits,
         pq_sample_size=args.pq_sample_size,
         valid_every=args.valid_every,
         in_batch_negs=args.in_batch_negs,
