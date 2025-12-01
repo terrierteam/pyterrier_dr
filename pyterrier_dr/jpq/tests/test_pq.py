@@ -134,6 +134,14 @@ class TestProductQuantizerFAISS(unittest.TestCase):
         with self.assertRaises(ValueError):
             pq.fit(X_bad)
 
+    @unittest.skipUnless(HAS_FAISS, "faiss not installed")
+    def test_encode_matches_encode_gpu(self):
+        pq = ProductQuantizerFAISS(M=self.M, Ks=self.Ks)
+        pq.fit(self.X)
+        codes_ref = pq.encode(self.X)
+        codes_gpu = pq.encode_gpu(self.X)
+        np.testing.assert_array_equal(codes_ref, codes_gpu)
+
 
 class TestProductQuantizerFAISSIndexPQ(unittest.TestCase):
     def setUp(self):

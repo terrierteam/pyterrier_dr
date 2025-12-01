@@ -213,11 +213,10 @@ class ProductQuantizerFAISS(ProductQuantizer):
     def encode_gpu(self, X: np.ndarray) -> np.ndarray:
         X_t = torch.from_numpy(X).cuda()  # [N, D]
         N, D = X_t.shape
-        X_view = X_t.view(N, self._M, self.dsub)  # [N, M, dsub]
-        # X_view:    [N, M, dsub]
-        # centroids: [M, Ks, dsub]
+        X_view = X_t.view(N, self._M, self.dsub)              # [N, M, dsub]
+        centroids_t = torch.from_numpy(self.centroids).cuda() # [M, Ks, dsub]
         # similarity[n, m, k] = dot(X_view[n, m, :], centroids[m, k, :])
-        similarity = torch.einsum('nmd,nkd->nmk', X_view, self.centroids)
+        similarity = torch.einsum('nmd,mkd->nmk', X_view, centroids_t)
         codes_t = similarity.argmax(dim=-1)  # [N, M], int64 on GPU
         return codes_t.cpu().numpy().astype(np.int64)
 
