@@ -163,7 +163,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
             kmeans = KMeans(n_clusters=self._Ks, random_state=self.random_state)
             kmeans.fit(X_m)
             centroids.append(kmeans.cluster_centers_) # [Ks, dsub]
-        self._centroids = np.array(centroids)  # shape (M, Ks, dsub)
+        self.centroids = np.array(centroids)  # shape (M, Ks, dsub)
         
     def encode(self, X: np.ndarray) -> np.ndarray: # [N, D] -> [N, M]
         """Encode each vector in X [N,D] into M integer codes."""
@@ -262,7 +262,7 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
         # Initialize FAISS PQ
         pqi.train(X.astype(np.float32)) # type: ignore
         self.pq = pqi.pq
-        self._centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self.dsub).astype('float32')
+        self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self.dsub).astype('float32')
 
     
 class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
