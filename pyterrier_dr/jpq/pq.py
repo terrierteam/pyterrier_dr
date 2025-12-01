@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import logging
 import numpy as np
+import torch
 from tqdm import tqdm
 import math
 import faiss
@@ -209,6 +210,17 @@ class ProductQuantizerFAISS(ProductQuantizer):
             codes[:, m] = idx
         return codes
     
+    def encode_gpu(self, X: np.ndarray) -> np.ndarray:
+        X_t = torch.from_numpy(X).cuda()  # [N, D]
+        N, D = X_t.shape
+        X_view = X_t.view(N, self._M, self.dsub)  # [N, M, dsub]
+        # X_view:    [N, M, dsub]
+        # centroids: [M, Ks, dsub]
+        # similarity[n, m, k] = dot(X_view[n, m, :], centroids[m, k, :])
+        similarity = torch.einsum('nmd,nkd->nmk', X_view, self.centroids)
+        codes_t = similarity.argmax(dim=-1)  # [N, M], int64 on GPU
+        return codes_t.cpu().numpy().astype(np.int64)
+
     # def encode_(self, X: np.ndarray) -> np.ndarray:
     #     """
     #     Encode vectors into PQ codes (n_samples, M).
