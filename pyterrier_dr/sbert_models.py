@@ -36,7 +36,7 @@ class SBertBiEncoder(BiEncoder):
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
-    encode_queries_torch = _sbert_encode
+    encode_queries_torch = partialmethod(_sbert_encode, tensor=True)
     encode_docs = _sbert_encode
 
     def __repr__(self):
@@ -80,7 +80,7 @@ class E5(_SBertBiEncoder):
     .. automethod:: large()
     """
 
-    encode_queries_torch = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
+    encode_queries_torch = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True, tensor=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
 
     VARIANTS = {
