@@ -80,7 +80,7 @@ class E5(_SBertBiEncoder):
     .. automethod:: large()
     """
 
-    encode_queries_torch = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True, tensor=True)
+    encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
 
     VARIANTS = {
@@ -88,6 +88,21 @@ class E5(_SBertBiEncoder):
         'small': 'intfloat/e5-small-v2', 
         'large': 'intfloat/e5-large-v2',
     }
+
+    def encode_queries_torch(self, texts: list[str], prompt: str = "query: ") -> torch.Tensor:
+        """Encode queries while enabling gradients (for training)."""
+        if not texts:
+            return torch.empty((0, 0), device=self.model.device)
+
+        inputs = self.model.tokenizer(
+            [prompt + text for text in texts],
+            return_tensors="pt",
+            truncation=True,
+            padding=True,
+        ).to(self.model.device)
+
+        return self.model.forward(inputs)["sentence_embedding"]
+
 
 class GTR(_SBertBiEncoder):
     """Dense encoder for GTR (Generalizable T5-based dense Retrievers)
