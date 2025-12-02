@@ -7,7 +7,7 @@ from .biencoder import BiEncoder, BiQueryEncoder
 from .util import Variants
 from tqdm import tqdm
 
-def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embeddings=False):
+def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embeddings=False, tensor=False):
     show_progress = False
     if isinstance(texts, tqdm):
         texts.disable = True
@@ -20,7 +20,8 @@ def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embedding
     return self.model.encode(texts, 
                              batch_size=batch_size or self.batch_size, 
                              show_progress_bar=show_progress,
-                             normalize_embeddings=normalize_embeddings
+                             normalize_embeddings=normalize_embeddings,
+                             convert_to_tensor=tensor
                              )
 
 
@@ -35,7 +36,7 @@ class SBertBiEncoder(BiEncoder):
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
-    encode_queries = _sbert_encode
+    encode_queries_torch = _sbert_encode
     encode_docs = _sbert_encode
 
     def __repr__(self):
@@ -79,7 +80,7 @@ class E5(_SBertBiEncoder):
     .. automethod:: large()
     """
 
-    encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
+    encode_queries_torch = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
 
     VARIANTS = {
