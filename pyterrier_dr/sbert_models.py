@@ -1,3 +1,4 @@
+from typing import Optional, Any
 import numpy as np
 import torch
 import pyterrier as pt
@@ -36,11 +37,38 @@ class SBertBiEncoder(BiEncoder):
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
-    encode_queries_torch = partialmethod(_sbert_encode, tensor=True)
+    encode_queries = _sbert_encode
     encode_docs = _sbert_encode
 
     def __repr__(self):
         return f'SBertBiEncoder({repr(self.model_name)})'
+
+    def encode_queries_torch(
+        self,
+        texts: list[str],
+        prompt: Optional[str] = None,
+        normalize_embeddings: bool = False,
+        **kwargs: Any, 
+    ) -> torch.Tensor:
+        """Encode queries while enabling gradients (for training)."""
+        if not texts:
+            return torch.empty((0, 0), device=self.model.device)
+
+        if prompt:
+            texts = [prompt + text for text in texts]
+
+        inputs = self.model.tokenizer(
+            texts,
+            return_tensors="pt",
+            truncation=True,
+            padding=True,
+        ).to(self.model.device)
+
+        embs = self.model.forward(inputs)["sentence_embedding"]
+        if normalize_embeddings:
+            embs = torch.nn.functional.normalize(embs, p=2, dim=1)
+
+        return embs
 
 
 class _SBertBiEncoder(SBertBiEncoder, metaclass=Variants):
@@ -89,19 +117,8 @@ class E5(_SBertBiEncoder):
         'large': 'intfloat/e5-large-v2',
     }
 
-    def encode_queries_torch(self, texts: list[str], prompt: str = "query: ") -> torch.Tensor:
-        """Encode queries while enabling gradients (for training)."""
-        if not texts:
-            return torch.empty((0, 0), device=self.model.device)
-
-        inputs = self.model.tokenizer(
-            [prompt + text for text in texts],
-            return_tensors="pt",
-            truncation=True,
-            padding=True,
-        ).to(self.model.device)
-
-        return self.model.forward(inputs)["sentence_embedding"]
+    def encode_queries_torch(self, texts, prompt='query: ', normalize_embeddings=True, **kwargs):
+        return super().encode_queries_torch(texts, prompt, normalize_embeddings, **kwargs)
 
 
 class GTR(_SBertBiEncoder):
