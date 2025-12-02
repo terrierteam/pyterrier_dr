@@ -46,6 +46,7 @@ class SBertBiEncoder(BiEncoder):
     def encode_queries_torch(
         self,
         texts: list[str],
+        batch_size: Optional[int] = None,
         prompt: Optional[str] = None,
         normalize_embeddings: bool = False,
         **kwargs: Any, 
@@ -56,15 +57,22 @@ class SBertBiEncoder(BiEncoder):
 
         if prompt:
             texts = [prompt + text for text in texts]
+        
+        batch_size = batch_size or self.batch_size
+        embs = []
+        for start_idx in range(0, len(texts), batch_size):
+            texts_batch = texts[start_idx: start_idx + batch_size]
+            inputs = self.model.tokenizer(
+                texts_batch,
+                return_tensors="pt",
+                truncation=True,
+                padding=True,
+            ).to(self.model.device)
 
-        inputs = self.model.tokenizer(
-            texts,
-            return_tensors="pt",
-            truncation=True,
-            padding=True,
-        ).to(self.model.device)
+            embs.append(self.model.forward(inputs)["sentence_embedding"])
+        
+        embs = torch.cat(embs, dim=0)
 
-        embs = self.model.forward(inputs)["sentence_embedding"]
         if normalize_embeddings:
             embs = torch.nn.functional.normalize(embs, p=2, dim=1)
 
@@ -110,15 +118,13 @@ class E5(_SBertBiEncoder):
 
     encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
+    encode_queries_torch = partialmethod(SBertBiEncoder.encode_queries_torch, prompt='query: ', normalize_embeddings=True)
 
     VARIANTS = {
         'base' : 'intfloat/e5-base-v2',
         'small': 'intfloat/e5-small-v2', 
         'large': 'intfloat/e5-large-v2',
     }
-
-    def encode_queries_torch(self, texts, prompt='query: ', normalize_embeddings=True, **kwargs):
-        return super().encode_queries_torch(texts, prompt, normalize_embeddings, **kwargs)
 
 
 class GTR(_SBertBiEncoder):
