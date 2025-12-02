@@ -118,7 +118,7 @@ class E5(_SBertBiEncoder):
 
     encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
-    encode_queries_torch = partialmethod(SBertBiEncoder.encode_queries_torch, prompt='query: ', normalize_embeddings=True)
+    encode_queries_torch = partialmethod(SBertBiEncoder.encode_queries_torch, prompt='query: ')  # E5 has a normalization module
 
     VARIANTS = {
         'base' : 'intfloat/e5-base-v2',
