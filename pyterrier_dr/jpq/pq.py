@@ -124,18 +124,23 @@ class ProductQuantizer:
             selected: np.ndarray, # vector indexes to encode
             bs: int=10_000, 
             verbose: bool=True, 
-            error: bool=True
+            error: bool=True,
+            gpu : None|torch.device = None
     ) -> np.ndarray:
         """Take some embeddings from X according to selected and encodes them in batches"""
         N = len(selected)
         codes = np.empty((N, self._M), dtype=code_type_from_Ks(self._Ks)) # [N, M]
         total_error = 0.0
+        encode_method = self.encode
+        if gpu is not None:
+            self.centroids_t = torch.from_numpy(self.centroids).to(gpu)
+            encode_method = self.encode_gpu
 
         iter = range(0, N, bs)
         for start in tqdm(iter, desc="[PQ] Encoding PQ batches", total = math.ceil(N / bs)) if verbose else iter:
             end = min(start + bs, N) 
             X_sel = X[selected[start:end]] # [B, D]
-            batch_codes = self.encode(X_sel) # [B, M]
+            batch_codes = encode_method(X_sel) # [B, M]
             codes[start:end] = batch_codes # [B, M]
             
             if error:
@@ -214,9 +219,11 @@ class ProductQuantizerFAISS(ProductQuantizer):
         X_t = torch.from_numpy(X).cuda()  # [N, D]
         N, D = X_t.shape
         X_view = X_t.view(N, self._M, self.dsub)              # [N, M, dsub]
-        centroids_t = torch.from_numpy(self.centroids).cuda() # [M, Ks, dsub]
+        assert hasattr(self, "centroids_t") 
+        assert self.centroids_t is not None
+        #centroids_t = torch.from_numpy(self.centroids).cuda() # [M, Ks, dsub]
         # similarity[n, m, k] = dot(X_view[n, m, :], centroids[m, k, :])
-        similarity = torch.einsum('nmd,mkd->nmk', X_view, centroids_t)
+        similarity = torch.einsum('nmd,mkd->nmk', X_view, self.centroids_t)
         codes_t = similarity.argmax(dim=-1)  # [N, M], int64 on GPU
         return codes_t.cpu().numpy().astype(np.int64)
 
