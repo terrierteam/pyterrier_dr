@@ -214,6 +214,14 @@ class JPQIndex(pt.Artifact):
             opq=opq,
             mode=mode,
         )
+    
+    def get_corpus_iter(self, full_vecs=False):
+        docnos = self.docnos
+        codes = self.codes
+        assert not full_vecs, "full_vecs not yet supported"
+        for i in range(len(self)):
+            docdict = {'docno' : docnos.fwd[i], 'codes' : codes[i, :].tolist() }
+            yield docdict
 
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
         return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq)
