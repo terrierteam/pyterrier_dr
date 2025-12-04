@@ -98,7 +98,6 @@ class BiEncoder(pt.Transformer):
         """
 
 
-    @abstractmethod
     def encode_queries(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
         """Abstract method to encode a list of query texts into dense vectors. 
 

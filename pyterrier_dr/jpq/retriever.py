@@ -118,7 +118,8 @@ def _pack_pq_codes(codes: np.ndarray, nbits: int) -> np.ndarray:
     Returns a flat uint8 array of length N * code_size, where code_size = ceil(M*nbits/8).
     Packing is LSB-first per code value, contiguous over sub-quantizers.
     """
-    assert codes.dtype == np.uint8 and codes.ndim == 2
+    assert codes.dtype in [np.uint8, np.uint16], str(codes.dtype)
+    assert codes.ndim == 2, str(codes.ndim)
     N, M = codes.shape
     code_size = (M * nbits + 7) // 8  # bytes per vector
     out = np.zeros((N, code_size), dtype=np.uint8)
@@ -279,11 +280,11 @@ class JPQRetrieverPQ(JPQRetrieverFaissBase):
         # Copy centroids: flat float array length M*Ks*dsub
         faiss.copy_array_to_vector(self.sub_embeddings.reshape(-1), index.pq.centroids)
 
-        # Copy codes: flat uint8 array length N*M
+        # Copy codes: flat uint8 or unit16 array length N*M
         # pack codes if needed
         if self.nbits == 8:
             packed = self.codes.reshape(-1)
-        elif self.nbits < 8:
+        else:
             packed = _pack_pq_codes(self.codes, self.nbits)
 
         faiss.copy_array_to_vector(packed, index.codes)

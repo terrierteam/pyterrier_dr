@@ -104,7 +104,7 @@ class JPQTrainer:
         logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
         codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
         with timer("PQ / compute codes (selected)"):
-            codes = pq.encode_batch(vecs, docids, batch_size)
+            codes = pq.encode_batch(vecs, docids, batch_size, gpu=self.device if self.device != torch.device("cpu") else None)
         
         return codes, pq.centroids, pq
 
@@ -491,7 +491,7 @@ class JPQTrainer:
         if self.training_setup != "full_index":
             self.pq.centroids = centroids
             # compute codes for all docids of the original index
-            all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)))
+            all_codes = self.pq.encode_batch(original_embs, np.arange(len(self.index)), gpu=self.device if self.device != torch.device("cpu") else None)
         else:
             # we can reuse the codes computed during training
             all_codes = self.codes

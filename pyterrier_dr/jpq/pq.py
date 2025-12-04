@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import logging
 import numpy as np
+import torch
 from tqdm import tqdm
 import math
 import faiss
@@ -123,18 +124,23 @@ class ProductQuantizer:
             selected: np.ndarray, # vector indexes to encode
             bs: int=10_000, 
             verbose: bool=True, 
-            error: bool=True
+            error: bool=True,
+            gpu : None|torch.device = None
     ) -> np.ndarray:
         """Take some embeddings from X according to selected and encodes them in batches"""
         N = len(selected)
         codes = np.empty((N, self._M), dtype=code_type_from_Ks(self._Ks)) # [N, M]
         total_error = 0.0
+        encode_method = self.encode
+        if gpu is not None:
+            self.centroids_t = torch.from_numpy(self.centroids).to(gpu)
+            encode_method = self.encode_gpu
 
         iter = range(0, N, bs)
         for start in tqdm(iter, desc="[PQ] Encoding PQ batches", total = math.ceil(N / bs)) if verbose else iter:
             end = min(start + bs, N) 
             X_sel = X[selected[start:end]] # [B, D]
-            batch_codes = self.encode(X_sel) # [B, M]
+            batch_codes = encode_method(X_sel) # [B, M]
             codes[start:end] = batch_codes # [B, M]
             
             if error:
@@ -162,7 +168,7 @@ class ProductQuantizerSKLearn(ProductQuantizer):
             kmeans = KMeans(n_clusters=self._Ks, random_state=self.random_state)
             kmeans.fit(X_m)
             centroids.append(kmeans.cluster_centers_) # [Ks, dsub]
-        self._centroids = np.array(centroids)  # shape (M, Ks, dsub)
+        self.centroids = np.array(centroids)  # shape (M, Ks, dsub)
         
     def encode(self, X: np.ndarray) -> np.ndarray: # [N, D] -> [N, M]
         """Encode each vector in X [N,D] into M integer codes."""
@@ -209,6 +215,18 @@ class ProductQuantizerFAISS(ProductQuantizer):
             codes[:, m] = idx
         return codes
     
+    def encode_gpu(self, X: np.ndarray) -> np.ndarray:
+        X_t = torch.from_numpy(X).cuda()  # [N, D]
+        N, D = X_t.shape
+        X_view = X_t.view(N, self._M, self.dsub)              # [N, M, dsub]
+        assert hasattr(self, "centroids_t") 
+        assert self.centroids_t is not None
+        #centroids_t = torch.from_numpy(self.centroids).cuda() # [M, Ks, dsub]
+        # similarity[n, m, k] = dot(X_view[n, m, :], centroids[m, k, :])
+        similarity = torch.einsum('nmd,mkd->nmk', X_view, self.centroids_t)
+        codes_t = similarity.argmax(dim=-1)  # [N, M], int64 on GPU
+        return codes_t.cpu().numpy().astype(np.int64)
+
     # def encode_(self, X: np.ndarray) -> np.ndarray:
     #     """
     #     Encode vectors into PQ codes (n_samples, M).
@@ -251,7 +269,7 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
         # Initialize FAISS PQ
         pqi.train(X.astype(np.float32)) # type: ignore
         self.pq = pqi.pq
-        self._centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self.dsub).astype('float32')
+        self.centroids = faiss.vector_to_array(self.pq.centroids).reshape(self._M, self._Ks, self.dsub).astype('float32')
 
     
 class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
