@@ -78,7 +78,7 @@ class JPQTrainer:
         if self.pq_impl == 'faiss':
             pq_class = ProductQuantizerFAISS
         elif self.pq_impl == 'faiss2':
-            self.pq_class = ProductQuantizerFAISSIndexPQ
+            pq_class = ProductQuantizerFAISSIndexPQ
         elif self.pq_impl == 'sklearn':
             pq_class = ProductQuantizerSKLearn
         elif self.pq_impl == 'faiss2opq':
@@ -151,7 +151,8 @@ class JPQTrainer:
     ):
         def _query_encoder_train():
             if self.train_query_encoder:
-                model.query.dr.model.train()
+                # model.query.dr.model.train()
+                model.query.train()
 
         # Loss function modes:
         # - lambda_rank: use lambda rank loss, with or without jpq_negs negative, with or without in-batch negatives
