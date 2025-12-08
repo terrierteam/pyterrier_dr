@@ -208,7 +208,8 @@ def _build_hnsw_graph(hnsw, out_dir):
          ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
         for did in pt.tqdm(range(num_docs), unit='doc', smoothing=1):
             start = hnsw.offsets.at(did)
-            dids = [hnsw.neighbors.at(i) for i in range(start, start+lvl_0_size)]
+            end = min(start + lvl_0_size, hnsw.neighbors.size())
+            dids = [hnsw.neighbors.at(i) for i in range(start, end)]
             dids = [(d if d != -1 else did) for d in dids] # replace with self if missing value
             fe.write(np.array(dids, dtype=np.uint32).tobytes())
             fw.write(scores.tobytes())
