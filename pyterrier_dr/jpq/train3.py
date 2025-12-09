@@ -105,7 +105,7 @@ class JPQTrainer:
         codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
         with timer("PQ / compute codes (selected)"):
             codes = pq.encode_batch(vecs, docids, batch_size, gpu=self.device if self.device != torch.device("cpu") else None)
-        
+                    
         return codes, pq.centroids, pq
 
     def _training_step(self, batch, loss_f, optimizer) -> float:

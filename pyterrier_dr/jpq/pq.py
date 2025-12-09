@@ -290,6 +290,11 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
         X = X @ self.opq
         return super().encode(X)
     
+    def encode_gpu(self, X: np.ndarray) -> np.ndarray:
+        # rotate before PQ encoding
+        X_rot = X @ self.opq
+        return super().encode_gpu(X_rot)
+
     def decode(self, codes: np.ndarray) -> np.ndarray:
         # decode with PQ, then apply inverse rotate
         X_recon = super().decode(codes)
