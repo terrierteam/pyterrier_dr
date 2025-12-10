@@ -98,8 +98,11 @@ class JPQTrainer:
         # vector lookups from np.memmap are quicker when sorted
         # this sort is safe because we just want the vectors
         sample_docids = np.sort(sample_docids)
+        with timer(f"PQ / loading sample vecs (samples={len(sample_docids):,})"):
+            sample_vecs = vecs[sample_docids]
         with timer(f"PQ / train (samples={len(sample_docids):,})"):
-            pq.fit(vecs[sample_docids])
+            pq.fit(sample_vecs)
+            sample_vecs = None  # free memory
 
         logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
         codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
