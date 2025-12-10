@@ -20,7 +20,7 @@ class VectorPrf(pt.Transformer):
 
     Example::
     
-            prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.vector_prf() >> index 
+            prf_pipe = model >> index >> index.vec_loader() >> pyterrier_dr.vector_prf() >> index 
 
     .. cite.dblp:: journals/tois/0009MZKZ23
     """
@@ -71,7 +71,7 @@ class AveragePrf(pt.Transformer):
 
     Example::
     
-            prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.average_prf() >> index 
+            prf_pipe = model >> index >> index.vec_loader() >> pyterrier_dr.average_prf() >> index 
 
     .. cite.dblp:: journals/tois/0009MZKZ23
     """
