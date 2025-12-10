@@ -55,6 +55,8 @@ class JPQTrainer:
         self.index = index
         self.d = index.payload()[2]['vec_size']
         self.M = M
+        if self.d % M != 0:
+            raise ValueError(f"d={self.d} not divisible by M={M}")
         self.nbits = nbits
         if nbits %2 == 1:
             raise ValueError("nbits should be even")
