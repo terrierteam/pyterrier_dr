@@ -182,7 +182,7 @@ if __name__ == "__main__":
     )
 
     newindex = t.jpq_index(target)
-    t.query_encoder.model.save_pretrained(target, from_pt=True) # type: ignore
+    t.query_encoder.model.save_pretrained(target) # type: ignore
 
     oldmodel = instantiate_model(data.model_name)
 
