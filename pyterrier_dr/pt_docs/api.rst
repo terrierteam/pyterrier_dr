@@ -80,7 +80,7 @@ Indexing and Retrieval
        - URLs: :meth:`~pyterrier.Artifact.from_url`
 
 
-Pseudo-Relevacne Feedback
+Pseudo-Relevance Feedback
 =====================================================
 
 
