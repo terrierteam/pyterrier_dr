@@ -198,20 +198,19 @@ FlexIndex.faiss_hnsw_graph = _faiss_hnsw_graph
 
 
 def _build_hnsw_graph(hnsw, out_dir):
+    import faiss
     lvl_0_size = hnsw.nb_neighbors(0)
     num_docs = hnsw.offsets.size() - 1
     scores = np.zeros(lvl_0_size, dtype=np.float16)
     out_dir.mkdir(parents=True, exist_ok=True)
     edges_path = out_dir/'edges.u32.np'
     weights_path = out_dir/'weights.f16.np'
+    neighbors = faiss.vector_to_array(hnsw.neighbors)
     with ir_datasets.util.finialized_file(str(edges_path), 'wb') as fe, \
          ir_datasets.util.finialized_file(str(weights_path), 'wb') as fw:
         for did in pt.tqdm(range(num_docs), unit='doc', smoothing=1):
             start = hnsw.offsets.at(did)
-            end = min(start + lvl_0_size, hnsw.neighbors.size())
-            dids = [hnsw.neighbors.at(i) for i in range(start, end)]
-            for i in range(end - start):
-                print("neighbour", i, hnsw.distances.at(i))
+            dids = [neighbors[i] for i in range(start, start + lvl_0_size)]
             dids = [(d if d != -1 else did) for d in dids] # replace with self if missing value
             fe.write(np.array(dids, dtype=np.uint32).tobytes())
             fw.write(scores.tobytes())
