@@ -237,7 +237,7 @@ class DecoderOnlyBiDense(LLM2Retriever):
                                                          #access_token=access_token)
         
         if lora_name_or_path:
-            from peft import LoraConfig, get_peft_model
+            from peft import LoraConfig, get_peft_model, PeftModel
             lora_config = LoraConfig.from_pretrained(lora_name_or_path)
             lora_model = PeftModel.from_pretrained(base_model, 
                                                    lora_name_or_path, 
@@ -468,17 +468,16 @@ class LionLlamaDense(BiEncoder):
         self.model = LlamaBiDense.load_from_lora(model_name) 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    def encode_queries(self, texts, batch_size=None):
+    def encode_queries_torch(self, texts, batch_size=None):
         results = []
-        with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
-                #inps = {k: v.to(self.device) for k, v in inps.items()}
-                res = self.model.query_encode(**inps)
-                results.append(res.cpu().numpy())
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
+            #inps = {k: v.to(self.device) for k, v in inps.items()}
+            res = self.model.query_encode(**inps)
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.zeros(shape=(0, 0))
+        return torch.stack(results, axis=0)
     
     def encode_docs(self, texts, batch_size=None):
         results = []
