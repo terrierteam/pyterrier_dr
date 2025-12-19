@@ -490,7 +490,6 @@ class LionLlamaDense(BiEncoder):
         for chunk in chunked(texts, batch_size or self.batch_size):
             inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
             inps = inps.to(self.device)
-            #inps = {k: v.to(self.device) for k, v in inps.items()}
             res = self.model.query_encode(**inps)
             results.append(res)
         if not results:
@@ -503,7 +502,6 @@ class LionLlamaDense(BiEncoder):
             for chunk in chunked(texts, batch_size or self.batch_size):
                 inps = self.tokenizer(list(chunk), max_length=192, return_tensors='pt', padding='longest', truncation=True)
                 inps = inps.to(self.device)
-                #inps = {k: v.to(self.device) for k, v in inps.items()}
                 res = self.model.doc_encode(**inps)
                 results.append(res.cpu().numpy())
         if not results:
