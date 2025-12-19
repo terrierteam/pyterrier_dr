@@ -16,9 +16,9 @@ class Dragon(BiEncoder):
                  device: Optional[Union[str, torch.device]] = None,
                  **kwargs):
         self.query_encoder_name = query_encoder
-        self.query_encoder = None
+        self.query_encoder_model = None
         self.doc_encoder_name = doc_encoder
-        self.doc_encoder = None
+        self.doc_encoder_model = None
         self.tokenizer = AutoTokenizer.from_pretrained(query_encoder)
         if device is None:
             if torch.cuda.is_available():
