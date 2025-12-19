@@ -2,6 +2,14 @@ import torch
 from transformers import LlamaForCausalLM, AutoConfig
 from huggingface_hub import hf_hub_download
 import os 
+
+
+## Requirements:
+# transformers==4.43.1
+# peft==0.14.0
+# ujson
+
+
 class LLM2Retriever(torch.nn.Module):
     _tied_weights_keys = None
     def __init__(self, base_model):
