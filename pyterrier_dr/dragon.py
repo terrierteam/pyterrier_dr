@@ -31,8 +31,8 @@ class Dragon(BiEncoder):
         super().__init__(*args, **kwargs)
 
     def _query_model(self):
-        if self.query_encoder is not None:
-            return self.query_encoder
+        if self.query_encoder_model is not None:
+            return self.query_encoder_model
         from transformers import AutoModel
         self.query_encoder_model = AutoModel.from_pretrained(self.query_encoder_name)
         if self.device is not None:
@@ -40,8 +40,8 @@ class Dragon(BiEncoder):
         return self.query_encoder_model
     
     def _doc_model(self):
-        if self.doc_encoder is not None:
-            return self.doc_encoder
+        if self.doc_encoder_model is not None:
+            return self.doc_encoder_model
         from transformers import AutoModel
         self.doc_encoder_model = AutoModel.from_pretrained(self.doc_encoder_name)
         if self.device is not None:
@@ -50,11 +50,11 @@ class Dragon(BiEncoder):
 
     def encode_queries_torch(self, texts: List[str], batch_size: Optional[int] = None) -> torch.Tensor:
         results = []
-        query_encoder = self._query_model()
+        query_encoder_model = self._query_model()
         for chunk in chunked(texts, batch_size or self.batch_size):
             inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
             inps = inps.to(self.device)
-            res = query_encoder(**inps).last_hidden_state[:, 0, :]
+            res = query_encoder_model(**inps).last_hidden_state[:, 0, :]
             results.append(res)
         if not results:
             return torch.zeros(shape=(0, 0))
@@ -62,12 +62,12 @@ class Dragon(BiEncoder):
     
     def encode_docs(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
         results = []
-        doc_encoder = self._doc_model()
+        doc_encoder_model = self._doc_model()
         with torch.no_grad():
             for chunk in chunked(texts, batch_size or self.batch_size):
                 inps = self.tokenizer(list(chunk),  max_length=512, return_tensors='pt', padding="longest", truncation=True)
                 inps = inps.to(self.device)
-                res = doc_encoder(**inps).last_hidden_state[:, 0, :]
+                res = doc_encoder_model(**inps).last_hidden_state[:, 0, :]
                 results.append(res.cpu().numpy())
         if not results:
             return np.empty(shape=(0, 0))
