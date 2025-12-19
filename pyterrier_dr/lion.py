@@ -8,7 +8,7 @@ import os
 # transformers==4.43.1
 # peft==0.14.0
 # ujson
-
+# Source code from https://github.com/HansiZeng/scaling-retriever
 
 class LLM2Retriever(torch.nn.Module):
     _tied_weights_keys = None
