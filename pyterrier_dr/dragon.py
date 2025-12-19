@@ -34,19 +34,19 @@ class Dragon(BiEncoder):
         if self.query_encoder is not None:
             return self.query_encoder
         from transformers import AutoModel
-        self.query_encoder = AutoModel.from_pretrained(self.query_encoder_name)
+        self.query_encoder_model = AutoModel.from_pretrained(self.query_encoder_name)
         if self.device is not None:
-            self.query_encoder = self.query_encoder.to(self.device)
-        return self.query_encoder
+            self.query_encoder_model = self.query_encoder_model.to(self.device)
+        return self.query_encoder_model
     
     def _doc_model(self):
         if self.doc_encoder is not None:
             return self.doc_encoder
         from transformers import AutoModel
-        self.doc_encoder = AutoModel.from_pretrained(self.doc_encoder_name)
+        self.doc_encoder_model = AutoModel.from_pretrained(self.doc_encoder_name)
         if self.device is not None:
-            self.doc_encoder = self.doc_encoder.to(self.device)
-        return self.doc_encoder
+            self.doc_encoder_model = self.doc_encoder_model.to(self.device)
+        return self.doc_encoder_model
 
     def encode_queries_torch(self, texts: List[str], batch_size: Optional[int] = None) -> torch.Tensor:
         results = []
