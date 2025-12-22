@@ -65,7 +65,7 @@ class JPQTrainer:
         self.pq_impl = pq_impl
         self.device = autodevice(device)
         self.train_query_encoder = train_query_encoder
-        logger.info(f"[JPQTrainer init] device={self.device}")
+        logger.info(f"[JPQTrainer init] device={self.device} train_query_encoder={train_query_encoder}")
 
     def _compute_PQ(
         self,
@@ -107,7 +107,7 @@ class JPQTrainer:
         logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
         codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
         with timer("PQ / compute codes (selected)"):
-            codes = pq.encode_batch(vecs, docids, batch_size, gpu=None) # self.device if self.device != torch.device("cpu") else None)
+            codes = pq.encode_batch(vecs, docids, batch_size, gpu=self.device if self.device != torch.device("cpu") else None)
         return codes, pq.centroids, pq
 
     def _training_step(self, batch, loss_f, optimizer) -> float:
