@@ -18,7 +18,10 @@ DEFAULT_INIT_BY_NAME: dict[str, str] = {
     "tct_colbert": "pyterrier_dr.TctColBert.hnp()",
     "tas_b": "pyterrier_dr.TasB()",
     "star": "pyterrier_dr.STAR('/root/nfs/jpq/provided_models/star/')",
-    "repllama": "pyterrier_dr.RepLLama.v1_7b()"
+    "repllama": "pyterrier_dr.RepLLama.v1_7b()",
+    "e5": "pyterrier_dr.E5()",
+    "dragon" : 'pyterrier_dr.Dragon()',
+    "lion" : 'pyterrier_dr.LionLlamaDense()',
 }
 
 
@@ -59,6 +62,7 @@ def compute_index_name(data_cfg, train_cfg) -> str:
         f"neg{train_cfg.jpq_negs}" if train_cfg.jpq_negs else "",
         "ibn" if train_cfg.in_batch_negs else "",
         "lr" if train_cfg.lambda_rank else "",
+        "frozen" if train_cfg.frozen_query_encoder else "",
     ]
     return "__".join(parts)
 
@@ -67,7 +71,7 @@ def compute_index_name(data_cfg, train_cfg) -> str:
 class DataConfig:
     base_index: str
     target_dir: str
-    model_name: Literal["tct_colbert", "tas_b", "star"] = "tct_colbert"
+    model_name: Literal["tct_colbert", "tas_b", "star", "e5", "repllama"] = "tct_colbert"
     train_ds: str = "msmarco-passage/train"
     #eval_ds: str = "msmarco_passage"
     #eval_split: str = "test-2019"
@@ -88,13 +92,14 @@ class TrainingConfig:
     lambda_rank: bool = True
     jpq_negs: int = 200
     pairs_cap: int | None = 2_000_000
+    frozen_query_encoder : bool = False
 
 
 def add_data_args(parser: argparse.ArgumentParser):
     p = parser.add_argument_group("Data")
     p.add_argument("--base-index", required=True)
     p.add_argument("--target-dir", required=True)
-    p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star"], default="tct_colbert")    
+    p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star", "repllama", "e5", "dragon", "lion"], default="tct_colbert")    
     p.add_argument("--train-ds", default="msmarco-passage/train")
     p.add_argument("--eval-ds", default="irds:msmarco-passage/dev/small")
     p.add_argument("--eval-split", default=None)
@@ -111,10 +116,11 @@ def add_training_args(parser: argparse.ArgumentParser):
     p.add_argument("--valid-every", type=int, default=500)
     p.add_argument("--in-batch-negs", action="store_true", default=True)
     p.add_argument("--no-in-batch", dest="in_batch_negs", action="store_false")
-    p.add_argument("--lambda-rank", action="store_true", default=True)
+    p.add_argument("--lambda-rank", action="store_true", default=False)
     p.add_argument("--no-lambda-rank", dest="lambda_rank", action="store_false")
     p.add_argument("--jpq-negs", type=int, default=0)
     p.add_argument("--pairs-cap", type=int, default=2_000_000)
+    p.add_argument("--frozen-query-encoder", action="store_true", default=False)
 
 
 def parse_args():
@@ -144,6 +150,7 @@ def parse_args():
         lambda_rank=args.lambda_rank,
         jpq_negs=args.jpq_negs,
         pairs_cap=args.pairs_cap,
+        frozen_query_encoder=args.frozen_query_encoder
     )
     return data, train
 
@@ -169,7 +176,7 @@ if __name__ == "__main__":
     eval_dataset = pt.get_dataset(data.eval_ds)
     print("eval dataset loaded")
 
-    t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl, nbits=train.nbits)
+    t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl, nbits=train.nbits, train_query_encoder=not train.frozen_query_encoder)
     t.fit(
         merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:train.pairs_cap]), 
         pq_sample_size=train.pq_sample_size,

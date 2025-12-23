@@ -148,7 +148,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
             results.append(q_reps)
         if not results:
             return torch.empty((0, 0))
-        return torch.cat(results, dim=0)
+        return torch.cat(results, dim=0).float()
 
     def encode_docs(self, texts, batch_size=None):
         results = []

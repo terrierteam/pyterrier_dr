@@ -18,7 +18,7 @@ class TestJPQ(unittest.TestCase):
         index = FlexIndex("./tests/fixtures/vaswani_tct.flex")
         from pyterrier_dr.jpq import JPQTrainer
         #t = JPQTrainer(tct, index, pq_impl='sklearn', M=4, nbits=4)
-        t = JPQTrainer(tct, index, pq_impl='faiss2opq', M=96, nbits=8)
+        t = JPQTrainer(tct, index, pq_impl='faiss2opq', M=96, nbits=7)
         
         dataset = pt.get_dataset("vaswani")
         doc_pairs = pyterrier_dr.jpq.utils.queries_qrels_to_pairsiter(
@@ -34,7 +34,8 @@ class TestJPQ(unittest.TestCase):
         doc_pairs = list(doc_pairs)[:256] # limit for test speed
         t.fit(
             doc_pairs, 
-            total_steps=1_000_000, patience=10_000, 
+            total_steps=1_000_000, 
+            patience=2, 
             pq_sample_size=10000, 
             eval_queries=dataset.get_topics(), 
             eval_qrels= dataset.get_qrels(), 
@@ -57,6 +58,7 @@ class TestJPQ(unittest.TestCase):
         ]
         for r in p:
             res = r.search("chemical reactions")
+            print(res.head())
             print(len(res))
         print(pt.Experiment(
             [oldmodel >> index] + p,

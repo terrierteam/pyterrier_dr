@@ -99,7 +99,7 @@ class BiEncoder(pt.Transformer):
 
 
     def encode_queries(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
-        """Abstract method to encode a list of query texts into dense vectors. 
+        """Default method to encode a list of query texts into dense vectors and return as numpy array.
 
         This function is used by the transformer returned by :meth:`query_encoder`.
 

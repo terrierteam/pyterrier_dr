@@ -132,12 +132,14 @@ class ProductQuantizer:
         codes = np.empty((N, self._M), dtype=code_type_from_Ks(self._Ks)) # [N, M]
         total_error = 0.0
         encode_method = self.encode
+        gpu_msg = "cpu"
         if gpu is not None:
             self.centroids_t = torch.from_numpy(self.centroids).to(gpu)
             encode_method = self.encode_gpu
+            gpu_msg = str(gpu)
 
         iter = range(0, N, bs)
-        for start in tqdm(iter, desc="[PQ] Encoding PQ batches", total = math.ceil(N / bs)) if verbose else iter:
+        for start in tqdm(iter, desc=f"[PQ] Encoding PQ batches ({gpu_msg})", total = math.ceil(N / bs)) if verbose else iter:
             end = min(start + bs, N) 
             X_sel = X[selected[start:end]] # [B, D]
             batch_codes = encode_method(X_sel) # [B, M]

@@ -30,6 +30,11 @@ dependencies = {file = ["requirements.txt"]}
 bgem3 = [
   "FlagEmbedding",
 ]
+lion = [
+  "transformers==4.43.1",
+  "ujson",
+  "peft==0.14.0"
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
