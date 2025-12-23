@@ -161,12 +161,15 @@ def get_dataset(
     ds = Dataset.from_list(docpairs)
     if filter_docnos:
         ds = ds.filter(filter_in_sel)
+        logger.info(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
+    else:
+        logger.info(f"[DATA] Not filtering training pairs, using all {len(docpairs)} pairs")
     if not len(ds):
         raise ValueError(f"After filtering {len(docpairs)} in the training dataset down to the sampled {len(docnos_set)}, we have 0 pairs left. \n"
                          "Try increasing size of training dataset, or value of docid_subset")
-    logger.info(f"[DATA] After filtering, we have {len(ds)} remaining from {len(docpairs)} pairs")
 
     if shuffle:
+        logger.info(f"[DATA] Shuffling training data with seed {seed}")
         ds = ds.shuffle(seed=seed)
 
     ds = ds.map(
@@ -174,6 +177,7 @@ def get_dataset(
         remove_columns=[c for c in ds.column_names if c not in ("query_text", 'pos_docno', "pos_codes", 'neg_docno', "neg_codes")],
     )
     ds.set_format(type="torch")#, columns=["query_text", "pos_codes", "neg_codes"])
+    logger.info(f"[DATA] Final dataset prepared")
     return ds
 
 def add_jpq_negs_applier(

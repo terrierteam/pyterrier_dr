@@ -32,7 +32,12 @@ from typing import Callable
 from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerFAISSIndexPQ, ProductQuantizerSKLearn,ProductQuantizerFAISSIndexPQOPQ
 
 
-logging.basicConfig(level=logging.INFO, force=True)
+#logging.basicConfig(level=logging.INFO, force=True)
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S', force=True)
+
 logger = logging.getLogger(__name__)
 
 
