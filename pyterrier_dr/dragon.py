@@ -37,6 +37,7 @@ class Dragon(BiEncoder):
         self.query_encoder_model = AutoModel.from_pretrained(self.query_encoder_name)
         if self.device is not None:
             self.query_encoder_model = self.query_encoder_model.to(self.device)
+        self.model = self.query_encoder_model # required for jpq training
         return self.query_encoder_model
     
     def _doc_model(self):
