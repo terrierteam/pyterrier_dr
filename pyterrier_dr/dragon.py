@@ -29,6 +29,7 @@ class Dragon(BiEncoder):
                 self.device = torch.device("cpu")
         self.batch_size = batch_size
         super().__init__(*args, **kwargs)
+        self._query_model()
 
     def _query_model(self):
         if self.query_encoder_model is not None:
