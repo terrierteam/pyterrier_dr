@@ -58,7 +58,7 @@ class Dragon(BiEncoder):
             results.append(res)
         if not results:
             return torch.zeros(shape=(0, 0))
-        return torch.stack(results, axis=0)
+        return torch.cat(results, dim=0)
     
     def encode_docs(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
         results = []
