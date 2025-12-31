@@ -22,11 +22,14 @@ class LionLlamaDense(BiEncoder):
         self.model = self.model.to(self.device)
         self.batch_size = batch_size
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer.padding_side = "left"
+        assert self.tokenizer.pad_token == self.tokenizer.eos_token
+
 
     def encode_queries_torch(self, texts, batch_size=None):
         results = []
         for chunk in chunked(texts, batch_size or self.batch_size):
-            inps = self.tokenizer(list(chunk),  max_length=192, return_tensors='pt', padding="longest", truncation=True)
+            inps = self.tokenizer(list(chunk), max_length=64, return_tensors='pt', padding="longest", truncation=True)
             inps = inps.to(self.device)
             res = self.model.query_encode(**inps)
             results.append(res)
