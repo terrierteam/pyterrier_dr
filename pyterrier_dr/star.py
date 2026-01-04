@@ -25,10 +25,10 @@ class STAR(BiEncoder):
 
     def __init__(self, model_name, batch_size=32, text_field='text', verbose=False, device=None):
         super().__init__(batch_size=batch_size, verbose=verbose, text_field=text_field)
-        from transformers import AutoTokenizer 
         self.device = device or torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.model = RobertaDot.from_pretrained(model_name).to(self.device).eval()
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        from ._star_tokenizer import RobertaTokenizer
+        self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
 
     def encode_queries_torch(self, texts, batch_size=None):
         results = []
