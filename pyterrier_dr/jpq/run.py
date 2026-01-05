@@ -18,6 +18,7 @@ DEFAULT_INIT_BY_NAME: dict[str, str] = {
     "tct_colbert": "pyterrier_dr.TctColBert.hnp()",
     "tas_b": "pyterrier_dr.TasB()",
     "star": "pyterrier_dr.STAR('/root/nfs/jpq/provided_models/star/')",
+    "adore_star" : "pyterrier_dr.STAR('/root/nfs/jpq/provided_models/adore_star/')",
     "repllama": "pyterrier_dr.RepLLama.v1_7b()",
     "e5": "pyterrier_dr.E5()",
     "dragon" : 'pyterrier_dr.Dragon()',
