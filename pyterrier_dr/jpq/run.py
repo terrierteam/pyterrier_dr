@@ -72,7 +72,7 @@ def compute_index_name(data_cfg, train_cfg) -> str:
 class DataConfig:
     base_index: str
     target_dir: str
-    model_name: Literal["tct_colbert", "tas_b", "star", "e5", "repllama"] = "tct_colbert"
+    model_name: Literal["tct_colbert", "tas_b", "star", "adore_star", "e5", "repllama"] = "tct_colbert"
     train_ds: str = "msmarco-passage/train"
     #eval_ds: str = "msmarco_passage"
     #eval_split: str = "test-2019"
@@ -100,7 +100,7 @@ def add_data_args(parser: argparse.ArgumentParser):
     p = parser.add_argument_group("Data")
     p.add_argument("--base-index", required=True)
     p.add_argument("--target-dir", required=True)
-    p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star", "repllama", "e5", "dragon", "lion"], default="tct_colbert")    
+    p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star", "repllama", "adore_star", "e5", "dragon", "lion"], default="tct_colbert")    
     p.add_argument("--train-ds", default="msmarco-passage/train")
     p.add_argument("--eval-ds", default="irds:msmarco-passage/dev/small")
     p.add_argument("--eval-split", default=None)
