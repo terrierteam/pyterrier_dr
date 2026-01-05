@@ -35,7 +35,7 @@ class STAR(BiEncoder):
     def encode_queries_torch(self, texts, batch_size=None):
         results = []
         for chunk in chunked(texts, batch_size or self.batch_size):
-            inps = self.tokenizer.batch_encode_plus(list(chunk),  max_length=192, return_tensors='pt', pad_to_max_length=True, truncation=True)
+            inps = self.tokenizer.batch_encode_plus(list(chunk), max_length=32, return_tensors='pt', pad_to_max_length=True, truncation=True)
             inps = {k: v.to(self.device) for k, v in inps.items()}
             res = self.model.forward(**inps)
             results.append(res)
@@ -47,7 +47,7 @@ class STAR(BiEncoder):
         results = []
         with torch.no_grad():
             for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer.batch_encode_plus(list(chunk), max_length=192, return_tensors='pt', pad_to_max_length=True, truncation=True)
+                inps = self.tokenizer.batch_encode_plus(list(chunk), max_length=256, return_tensors='pt', pad_to_max_length=True, truncation=True)
                 inps = {k: v.to(self.device) for k, v in inps.items()}
                 res = self.model.forward(**inps)
                 results.append(res.cpu().numpy())
