@@ -43,11 +43,11 @@ class QueryEncoder(nn.Module):
     # pass train() and eval() calls to the underlying DR model
     def train(self, mode=True):
         super().train(mode)
-        self.dr_model.model.train(mode)
+        self.dr.model.train(mode)
 
     def eval(self):
         super().eval()
-        self.dr_model.model.eval()
+        self.dr.model.eval()
 
     @torch.no_grad()
     def encode_texts(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:
