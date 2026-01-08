@@ -105,6 +105,7 @@ class JPQTrainer:
         # vector lookups from np.memmap are quicker when sorted
         # this sort is safe because we just want the vectors
         sample_docids = np.sort(sample_docids)
+        logger.info(f"[PQ] First sampled docid: {sample_docids[0]}, last: {sample_docids[-1]}")
         with timer(f"PQ / loading sample vecs (samples={len(sample_docids):,})"):
             sample_vecs = vecs[sample_docids]
         with timer(f"PQ / train (samples={len(sample_docids):,})"):
