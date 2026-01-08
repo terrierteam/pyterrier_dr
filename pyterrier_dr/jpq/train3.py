@@ -231,6 +231,10 @@ class JPQTrainer:
         running_loss = 0.0
         current_time = time.time()
 
+        if eval_queries is not None and eval_qrels is not None:
+            val_stats = self._validation_step(retr, eval_queries, eval_qrels)
+            logger.info(f"[JPQ][val] at step 0 {str(val_stats)}")
+
         for step in range(total_steps):
             # restart the iterator if we have reached the end
             try:
