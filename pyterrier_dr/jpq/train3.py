@@ -335,7 +335,8 @@ class JPQTrainer:
             Q = Q_t.detach().cpu().numpy().astype('float32')
             rtr = inp.copy()
             rtr["query_vec"] = [row for row in Q]
-            self._query_encoder_train()
+            if self.train_query_encoder:
+                model.query.train()
             return rtr
         
         def _cleanup():
