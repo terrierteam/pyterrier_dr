@@ -123,6 +123,61 @@ class JPQCELossInBatchNegs(nn.Module):
         # 7. Compute loss
         return self.loss_f(scores, labels)
 
+class JPQCELossWithJPQNegs(nn.Module):
+    """
+    CE loss with explicit negatives and JPQ negatives only.
+    No in-batch negatives.
+    """
+    def __init__(self, query_encoder, passage_encoder):
+        super().__init__()
+        self.query_encoder = query_encoder
+        self.passage_encoder = passage_encoder
+        self.loss_f = nn.CrossEntropyLoss()
+        print("Using CE loss with explicit + JPQ negatives")
+
+    def forward(self, batch):
+        device = next(self.passage_encoder.parameters()).device
+        B = len(batch["query_text"])
+
+        # 1. Encode queries
+        q = self.query_encoder.forward(batch["query_text"]).to(device)  # [B, D]
+
+        # 2. Encode positives
+        pos = self.passage_encoder(batch["pos_codes"].to(device))  # [B, D]
+
+        # 3. Collect explicit + JPQ negatives
+        if "neg_jpq_codes" in batch:
+            # explicit negs: [B, D_code] -> [B, 1, D_code]
+            # jpq negs:      [B, N_jpq, D_code]
+            all_neg_codes = torch.cat(
+                (
+                    batch["neg_codes"].unsqueeze(1),
+                    batch["neg_jpq_codes"]
+                ),
+                dim=1
+            )  # [B, N_total, D_code]
+        else:
+            # only explicit negatives
+            all_neg_codes = batch["neg_codes"].unsqueeze(1)  # [B, 1, D_code]
+
+        B, N, D_code = all_neg_codes.shape
+
+        # 4. Encode negatives
+        neg = self.passage_encoder(
+            all_neg_codes.view(B * N, D_code).to(device)
+        ).view(B, N, -1)  # [B, N, D]
+
+        # 5. Compute similarity scores
+        s_pos = torch.sum(q * pos, dim=-1, keepdim=True)  # [B, 1]
+        s_neg = torch.matmul(q.unsqueeze(1), neg.transpose(1, 2)).squeeze(1)  # [B, N]
+
+        # 6. Concatenate scores: [pos | negatives]
+        scores = torch.cat([s_pos, s_neg], dim=1)  # [B, 1 + N]
+
+        # 7. Labels: positive is always index 0
+        labels = torch.zeros(B, dtype=torch.long, device=device)
+
+        return self.loss_f(scores, labels)
 
 def lambdarank_fixed_ranks(scores, ranks, labels, sigma=1.0):
     """

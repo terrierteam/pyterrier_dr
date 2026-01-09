@@ -23,7 +23,7 @@ from pyterrier_dr.jpq.data import (
     get_pq_training_dataset, 
     prepare_validation_data, 
 )
-from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
+from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossWithJPQNegs, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
 from pyterrier_dr.jpq.model import JPQBiencoder, OPQQueryEncoder, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import code_type_from_Ks, timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
@@ -164,9 +164,9 @@ class JPQTrainer:
                 model.query.train()
 
         # Loss function modes:
-        # - lambda_rank: use lambda rank loss, with or without jpq_negs negative, with or without in-batch negatives
-        # - in_batch: use in-batch negatives, can also have jpq_negs negatives
-        # - jpq_negs only: NOT YET SUPPORTED.
+        # - lambda_rank: use lambda rank loss, *with* jpq_negs negative, with or without in-batch negatives
+        # - in_batch: use in-batch negatives, can also have jpq_negs negatives, CE Loss
+        # - jpq_negs only: uses explicit and jpq_negs negatives, CE loss
         # - default: CE loss only on the pairs
         if lambda_rank:
             assert jpq_negs, "lambdarank requires jpqnegs"
@@ -175,8 +175,10 @@ class JPQTrainer:
             loss_f = JPQCELossInBatchNegs(model.query, model.passage)
             # supports with or without jpq_negs
         else:
-            assert not jpq_negs, "jpq_negs cannot be used when in_batch is False"
-            loss_f = JPQCELoss(model.query, model.passage)
+            if jpq_negs:
+                loss_f = JPQCELossWithJPQNegs(model.query, model.passage)
+            else:
+                loss_f = JPQCELoss(model.query, model.passage)
         loss_f = loss_f.to(self.device)
 
         if eval_qrels is None or eval_queries is None:
