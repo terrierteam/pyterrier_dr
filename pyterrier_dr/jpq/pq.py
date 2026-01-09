@@ -288,15 +288,18 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
 class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
     def fit(self, X):
         _, self.d = X.shape
+        print("X fingerprint", fingerprint_tensor_bits_np(X))
 
         opq = faiss.OPQMatrix(self.d, self._M)
         opq.train(X) # type: ignore
         
         x_rotated = opq.apply_py(X) # type: ignore
+        print("X rotated fingerprint", fingerprint_tensor_bits_np(x_rotated))
         super().fit(x_rotated)
 
         # I've checked, T is what we want.
         self.opq = faiss.vector_to_array(opq.A).reshape(self.d, self.d).T.astype('float32')
+        print("OPQ fingerprint", fingerprint_tensor_bits_np(self.opq))
     
     def encode(self, X: np.ndarray) -> np.ndarray:
         # rotate before PQ encoding
