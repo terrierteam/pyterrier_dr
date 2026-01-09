@@ -180,6 +180,16 @@ if __name__ == "__main__":
     if train.lambda_rank and not train.jpq_negs:
         raise ValueError("lambda_rank loss fn currently requires jpq_negs to be set")
 
+    # reproducibilty settings
+    import faiss
+    thread_count = faiss.omp_get_max_threads()
+    import os
+    os.environ["MKL_CBWR"] = "COMPATIBLE"
+    faiss.omp_set_num_threads(1)
+
+    import torch
+    torch.manual_seed(0)
+
     t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl, nbits=train.nbits, train_query_encoder=not train.frozen_query_encoder)
     t.fit(
         merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:train.pairs_cap]), 
@@ -191,6 +201,8 @@ if __name__ == "__main__":
         lambda_rank=train.lambda_rank,
         jpq_negs=train.jpq_negs
     )
+    faiss.omp_set_num_threads(thread_count)
+    os.environ["MKL_CBWR"] = "AUTO"
 
     newindex = t.jpq_index(target)
     t.query_encoder.model.save_pretrained(target) # type: ignore
