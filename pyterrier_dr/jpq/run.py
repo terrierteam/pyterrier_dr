@@ -177,6 +177,9 @@ if __name__ == "__main__":
     eval_dataset = pt.get_dataset(data.eval_ds)
     print("eval dataset loaded")
 
+    if train.lambda_rank and not train.jpq_negs:
+        raise ValueError("lambda_rank loss fn currently requires jpq_negs to be set")
+
     t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl, nbits=train.nbits, train_query_encoder=not train.frozen_query_encoder)
     t.fit(
         merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:train.pairs_cap]), 
@@ -197,7 +200,6 @@ if __name__ == "__main__":
     dataset = pt.get_dataset(data.test_ds)
     p = [
         oldmodel >> index.retriever(), # type: ignore
-        #t.query_encoder >> newindex.retriever_flat(),
         t.query_encoder >> newindex.retriever_pq()
     ]
     save_dir = target + "/" + 'runs'
