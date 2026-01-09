@@ -12,6 +12,15 @@ from pyterrier_dr.jpq.utils import code_type_from_Ks
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
+import hashlib
+
+def fingerprint_tensor_bits_torch(t: torch.Tensor) -> str:
+    t_cpu = t.detach().cpu().contiguous()
+    return hashlib.sha256(t_cpu.numpy().tobytes()).hexdigest()
+
+def fingerprint_tensor_bits_np(t: np.ndarray) -> str:
+    return hashlib.sha256(t.tobytes()).hexdigest()
+
 # def _unpack_pq_codes_batch(packed: np.ndarray, M: int, nbits: int) -> np.ndarray:
 #     """Unpack FAISS PQ codes to shape (B, M) uint8.
 
@@ -134,6 +143,7 @@ class ProductQuantizer:
         encode_method = self.encode
         gpu_msg = "cpu"
         if gpu is not None:
+            print("Centroid fingerprint", fingerprint_tensor_bits_np(self.centroids))
             self.centroids_t = torch.from_numpy(self.centroids).to(gpu)
             encode_method = self.encode_gpu
             gpu_msg = str(gpu)
@@ -150,6 +160,7 @@ class ProductQuantizer:
                 err = np.square(X_sel - X_sel_recon).sum(axis=1)  # [B]
                 total_error += err.sum()
         
+        print("Codes fingerprint", fingerprint_tensor_bits_np(codes))
         root_mean_recon_error = np.sqrt(total_error / N)
         if error:
             logger.info(f"[PQ] Reconstruction RMSE: {root_mean_recon_error:.6f}")
