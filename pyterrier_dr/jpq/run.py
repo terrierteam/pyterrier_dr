@@ -153,7 +153,7 @@ def parse_args():
         lambda_rank=args.lambda_rank,
         jpq_negs=args.jpq_negs,
         pairs_cap=args.pairs_cap,
-        frozen_query_encoder=args.frozen_query_encoder
+        frozen_query_encoder=args.frozen_query_encoder,
         pq_only=args.pq_only
     )
     return data, train

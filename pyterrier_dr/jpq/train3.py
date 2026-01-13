@@ -428,7 +428,7 @@ class JPQTrainer:
         selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
-        if hasattr(self.pq, "opq") and not pq_only:
+        if hasattr(self.pq, "opq"):
             logger.info(f"[JPQTrainer] using OPQ rotation matrix")
             # TODO: consider if R should be trainable 
             R = torch.Tensor(self.pq.opq).to(self.device) # type: ignore
