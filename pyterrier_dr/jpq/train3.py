@@ -421,13 +421,14 @@ class JPQTrainer:
         in_batch : bool = False,
         jpq_negs : int = 0,
         lambda_rank : bool = False,
-        checkpoint_dir : str|None = None
+        checkpoint_dir : str|None = None,
+        pq_only: bool = False,
     ):
         start_time = time.time()
         selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
-        if hasattr(self.pq, "opq"):
+        if hasattr(self.pq, "opq") and not pq_only:
             logger.info(f"[JPQTrainer] using OPQ rotation matrix")
             # TODO: consider if R should be trainable 
             R = torch.Tensor(self.pq.opq).to(self.device) # type: ignore
@@ -439,35 +440,38 @@ class JPQTrainer:
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
-        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=needs_filtered)
-        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
+        if not pq_only:
+            dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=needs_filtered)
+            eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
         
-        # use a temporary directory for checkpoints
-        if checkpoint_dir is None:
-            import atexit
-            checkpoint_dir = tempfile.mkdtemp("jpq_checkpoints")
-            atexit.register(shutil.rmtree, checkpoint_dir)
-        
-        self._training_loop(
-            model, dataset, lr, selected_docnos, codes, 
-            total_steps=total_steps, 
-            eval_queries=eval_queries, 
-            eval_qrels=eval_qrels, 
-            valid_every=valid_every, 
-            in_batch=in_batch, 
-            batch_size=batch_size, 
-            jpq_negs=jpq_negs, 
-            lambda_rank=lambda_rank,
-            checkpoint_dir=checkpoint_dir, 
-            metric="nDCG@10", 
-            mode="max", 
-            patience=patience, 
-            save_every_steps=0, 
-            resume=False)
+            # use a temporary directory for checkpoints
+            if checkpoint_dir is None:
+                import atexit
+                checkpoint_dir = tempfile.mkdtemp("jpq_checkpoints")
+                atexit.register(shutil.rmtree, checkpoint_dir)
+            
+            self._training_loop(
+                model, dataset, lr, selected_docnos, codes, 
+                total_steps=total_steps, 
+                eval_queries=eval_queries, 
+                eval_qrels=eval_qrels, 
+                valid_every=valid_every, 
+                in_batch=in_batch, 
+                batch_size=batch_size, 
+                jpq_negs=jpq_negs, 
+                lambda_rank=lambda_rank,
+                checkpoint_dir=checkpoint_dir, 
+                metric="nDCG@10", 
+                mode="max", 
+                patience=patience, 
+                save_every_steps=0, 
+                resume=False)
+            
+            self.fitted = True
+
         self.model = model
         self.query_encoder.model.eval()
-        self.fitted = True
-        
+
         if docid_subset is None:
             self.training_setup = "full_index"
             self.codes = codes

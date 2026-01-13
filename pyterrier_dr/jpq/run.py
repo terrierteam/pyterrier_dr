@@ -93,7 +93,8 @@ class TrainingConfig:
     lambda_rank: bool = True
     jpq_negs: int = 200
     pairs_cap: int | None = 2_000_000
-    frozen_query_encoder : bool = False
+    frozen_query_encoder: bool = False
+    pq_only: bool = False
 
 
 def add_data_args(parser: argparse.ArgumentParser):
@@ -122,6 +123,7 @@ def add_training_args(parser: argparse.ArgumentParser):
     p.add_argument("--jpq-negs", type=int, default=0)
     p.add_argument("--pairs-cap", type=int, default=2_000_000)
     p.add_argument("--frozen-query-encoder", action="store_true", default=False)
+    p.add_argument("--pq-only", action="store_true", default=False)
 
 
 def parse_args():
@@ -152,6 +154,7 @@ def parse_args():
         jpq_negs=args.jpq_negs,
         pairs_cap=args.pairs_cap,
         frozen_query_encoder=args.frozen_query_encoder
+        pq_only=args.pq_only
     )
     return data, train
 
@@ -199,7 +202,8 @@ if __name__ == "__main__":
         eval_qrels = eval_dataset.get_qrels(data.eval_split),
         in_batch=train.in_batch_negs,
         lambda_rank=train.lambda_rank,
-        jpq_negs=train.jpq_negs
+        jpq_negs=train.jpq_negs,
+        pq_only=train.pq_only,
     )
     faiss.omp_set_num_threads(thread_count)
     os.environ["MKL_CBWR"] = "AUTO"
