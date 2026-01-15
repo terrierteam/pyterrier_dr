@@ -63,8 +63,8 @@ class JPQTrainer:
         if self.d % M != 0:
             raise ValueError(f"d={self.d} not divisible by M={M}")
         self.nbits = nbits
-        if nbits %2 == 1:
-            raise ValueError("nbits should be even")
+        #if nbits %2 == 1:
+        #    raise ValueError("nbits should be even")
         if nbits < 4 or nbits > 16:
             raise ValueError("nbits should be in range 4-16")
         
