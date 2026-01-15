@@ -111,11 +111,17 @@ class JPQTrainer:
         with timer(f"PQ / train (samples={len(sample_docids):,})"):
             pq.fit(sample_vecs)
             sample_vecs = None  # free memory
+            
+        assert pq.centroids.shape == (self.M, self.Ks, self.d // self.M), \
+            f"centroids shape {pq.centroids.shape}, expected {(self.M, self.Ks, self.d // self.M)}"
 
-        logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
-        codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
-        with timer("PQ / compute codes (selected)"):
+        # compute codes for all docids in the index, not just sample_size
+        logger.info(f"[PQ] computing codes for {len(docids)} docs in chunks of {batch_size}...")
+        with timer("PQ / compute codes (all docs)"):
             codes = pq.encode_batch(vecs, docids, batch_size, gpu=self.device if self.device != torch.device("cpu") else None)
+        
+        assert codes.shape[0] == len(docids), f"codes shape {codes.shape}, expected {len(docids)} rows"
+        assert codes.shape[1] == self.M, f"codes shape {codes.shape}, expected {self.M} columns"
         return codes, pq.centroids, pq
 
     def _training_step(self, batch, loss_f, optimizer) -> float:
