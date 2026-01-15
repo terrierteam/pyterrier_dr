@@ -143,7 +143,7 @@ class ProductQuantizer:
         encode_method = self.encode
         gpu_msg = "cpu"
         if gpu is not None:
-            logger.info("Centroid fingerprint", fingerprint_tensor_bits_np(self.centroids))
+            logger.info("Centroid fingerprint " + str( fingerprint_tensor_bits_np(self.centroids)))
             self.centroids_t = torch.from_numpy(self.centroids).to(gpu)
             encode_method = self.encode_gpu
             gpu_msg = str(gpu)
@@ -160,7 +160,7 @@ class ProductQuantizer:
                 err = np.square(X_sel - X_sel_recon).sum(axis=1)  # [B]
                 total_error += err.sum()
         
-        logger.info("Codes fingerprint", fingerprint_tensor_bits_np(codes))
+        logger.info("Codes fingerprint " + str( fingerprint_tensor_bits_np(codes)))
         root_mean_recon_error = np.sqrt(total_error / N)
         if error:
             logger.info(f"[PQ] Reconstruction RMSE: {root_mean_recon_error:.6f}")
@@ -288,18 +288,18 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
 class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
     def fit(self, X):
         _, self.d = X.shape
-        logger.info("X fingerprint", fingerprint_tensor_bits_np(X))
+        logger.info("X fingerprint " + str(fingerprint_tensor_bits_np(X)))
 
         opq = faiss.OPQMatrix(self.d, self._M)
         opq.train(X) # type: ignore
         
         x_rotated = opq.apply_py(X) # type: ignore
-        logger.info("X rotated fingerprint", fingerprint_tensor_bits_np(x_rotated))
+        logger.info("X rotated fingerprint "  + str(fingerprint_tensor_bits_np(x_rotated)))
         super().fit(x_rotated)
 
         # I've checked, T is what we want.
         self.opq = faiss.vector_to_array(opq.A).reshape(self.d, self.d).T.astype('float32')
-        logger.info("OPQ fingerprint", fingerprint_tensor_bits_np(self.opq))
+        logger.info("OPQ fingerprint "  + str(fingerprint_tensor_bits_np(self.opq)))
     
     def encode(self, X: np.ndarray) -> np.ndarray:
         # rotate before PQ encoding
