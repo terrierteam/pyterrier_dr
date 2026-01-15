@@ -206,6 +206,11 @@ class JPQRetrieverFaissBase(JPQRetriever):
         self._name = name or self.__class__.__name__
         self._gpu = gpu
 
+    def __del__(self):
+        if self._index is not None:
+            del self._index
+            self._index = None
+
     @abstractmethod
     def _ensure(self, bs: int = 20000) -> None:
         ...
