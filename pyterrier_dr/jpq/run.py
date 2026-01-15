@@ -219,9 +219,9 @@ if __name__ == "__main__":
         t.query_encoder >> newindex.retriever_pq()
     ]
     save_dir = target + "/" + 'runs'
-    for ts in data.test_split.split(","):
+    for ts in data.test_split.split(",") + [data.eval_ds]:
         print(ts)
-        ts_savedir = save_dir + "/" + ts
+        ts_savedir = save_dir + "/" + ts.replace(":", "_").replace("/", "_")
         os.makedirs(ts_savedir, exist_ok=True)
         df = pt.Experiment(
             p,
