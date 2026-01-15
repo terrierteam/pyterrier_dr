@@ -39,6 +39,15 @@ class QueryEncoder(nn.Module):
         if not texts:
             return torch.empty((0, 0), dtype=torch.float32)
         return self.dr.encode_queries_torch(texts, batch_size=batch_size) # type: ignore
+    
+    # pass train() and eval() calls to the underlying DR model
+    def train(self, mode=True):
+        super().train(mode)
+        self.dr.model.train(mode)
+
+    def eval(self):
+        super().eval()
+        self.dr.model.eval()
 
     @torch.no_grad()
     def encode_texts(self, texts: list[str], batch_size: int | None = None) -> torch.Tensor:

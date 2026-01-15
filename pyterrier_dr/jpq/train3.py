@@ -23,7 +23,7 @@ from pyterrier_dr.jpq.data import (
     get_pq_training_dataset, 
     prepare_validation_data, 
 )
-from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
+from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossWithJPQNegs, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
 from pyterrier_dr.jpq.model import JPQBiencoder, OPQQueryEncoder, PassageEncoder, QueryEncoder
 from pyterrier_dr.jpq.utils import code_type_from_Ks, timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
@@ -63,8 +63,8 @@ class JPQTrainer:
         if self.d % M != 0:
             raise ValueError(f"d={self.d} not divisible by M={M}")
         self.nbits = nbits
-        if nbits %2 == 1:
-            raise ValueError("nbits should be even")
+        #if nbits %2 == 1:
+        #    raise ValueError("nbits should be even")
         if nbits < 4 or nbits > 16:
             raise ValueError("nbits should be in range 4-16")
         
@@ -105,16 +105,23 @@ class JPQTrainer:
         # vector lookups from np.memmap are quicker when sorted
         # this sort is safe because we just want the vectors
         sample_docids = np.sort(sample_docids)
+        logger.info(f"[PQ] First sampled docid: {sample_docids[0]}, last: {sample_docids[-1]}")
         with timer(f"PQ / loading sample vecs (samples={len(sample_docids):,})"):
             sample_vecs = vecs[sample_docids]
         with timer(f"PQ / train (samples={len(sample_docids):,})"):
             pq.fit(sample_vecs)
             sample_vecs = None  # free memory
+            
+        assert pq.centroids.shape == (self.M, self.Ks, self.d // self.M), \
+            f"centroids shape {pq.centroids.shape}, expected {(self.M, self.Ks, self.d // self.M)}"
 
-        logger.info(f"[PQ] computing codes for {sample_size} selected docs in chunks of {batch_size}...")
-        codes = np.empty((sample_size, self.M), dtype=code_type_from_Ks(self.Ks)) # not sure this is ok if we return sklearn codes
-        with timer("PQ / compute codes (selected)"):
+        # compute codes for all docids in the index, not just sample_size
+        logger.info(f"[PQ] computing codes for {len(docids)} docs in chunks of {batch_size}...")
+        with timer("PQ / compute codes (all docs)"):
             codes = pq.encode_batch(vecs, docids, batch_size, gpu=self.device if self.device != torch.device("cpu") else None)
+        
+        assert codes.shape[0] == len(docids), f"codes shape {codes.shape}, expected {len(docids)} rows"
+        assert codes.shape[1] == self.M, f"codes shape {codes.shape}, expected {self.M} columns"
         return codes, pq.centroids, pq
 
     def _training_step(self, batch, loss_f, optimizer) -> float:
@@ -160,13 +167,12 @@ class JPQTrainer:
     ):
         def _query_encoder_train():
             if self.train_query_encoder:
-                # model.query.dr.model.train()
                 model.query.train()
 
         # Loss function modes:
-        # - lambda_rank: use lambda rank loss, with or without jpq_negs negative, with or without in-batch negatives
-        # - in_batch: use in-batch negatives, can also have jpq_negs negatives
-        # - jpq_negs only: NOT YET SUPPORTED.
+        # - lambda_rank: use lambda rank loss, *with* jpq_negs negative, with or without in-batch negatives
+        # - in_batch: use in-batch negatives, can also have jpq_negs negatives, CE Loss
+        # - jpq_negs only: uses explicit and jpq_negs negatives, CE loss
         # - default: CE loss only on the pairs
         if lambda_rank:
             assert jpq_negs, "lambdarank requires jpqnegs"
@@ -175,8 +181,10 @@ class JPQTrainer:
             loss_f = JPQCELossInBatchNegs(model.query, model.passage)
             # supports with or without jpq_negs
         else:
-            assert not jpq_negs, "jpq_negs cannot be used when in_batch is False"
-            loss_f = JPQCELoss(model.query, model.passage)
+            if jpq_negs:
+                loss_f = JPQCELossWithJPQNegs(model.query, model.passage)
+            else:
+                loss_f = JPQCELoss(model.query, model.passage)
         loss_f = loss_f.to(self.device)
 
         if eval_qrels is None or eval_queries is None:
@@ -231,6 +239,10 @@ class JPQTrainer:
         early_stop = False
         running_loss = 0.0
         current_time = time.time()
+
+        if eval_queries is not None and eval_qrels is not None:
+            val_stats = self._validation_step(retr, eval_queries, eval_qrels)
+            logger.info(f"[JPQ][val] at step 0 {str(val_stats)}")
 
         for step in range(total_steps):
             # restart the iterator if we have reached the end
@@ -415,7 +427,8 @@ class JPQTrainer:
         in_batch : bool = False,
         jpq_negs : int = 0,
         lambda_rank : bool = False,
-        checkpoint_dir : str|None = None
+        checkpoint_dir : str|None = None,
+        pq_only: bool = False,
     ):
         start_time = time.time()
         selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
@@ -433,35 +446,38 @@ class JPQTrainer:
             PassageEncoder(self.M, 2**self.nbits, self.d // self.M, centroids)
         ).to(self.device)
 
-        dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=needs_filtered)
-        eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
+        if not pq_only:
+            dataset = get_dataset(training_docpairs, selected_docnos, codes, docno2pos, filter_docnos=needs_filtered)
+            eval_queries, eval_qrels = prepare_validation_data(eval_queries, eval_qrels, selected_docnos) # type: ignore
         
-        # use a temporary directory for checkpoints
-        if checkpoint_dir is None:
-            import atexit
-            checkpoint_dir = tempfile.mkdtemp("jpq_checkpoints")
-            atexit.register(shutil.rmtree, checkpoint_dir)
-        
-        self._training_loop(
-            model, dataset, lr, selected_docnos, codes, 
-            total_steps=total_steps, 
-            eval_queries=eval_queries, 
-            eval_qrels=eval_qrels, 
-            valid_every=valid_every, 
-            in_batch=in_batch, 
-            batch_size=batch_size, 
-            jpq_negs=jpq_negs, 
-            lambda_rank=lambda_rank,
-            checkpoint_dir=checkpoint_dir, 
-            metric="nDCG@10", 
-            mode="max", 
-            patience=patience, 
-            save_every_steps=0, 
-            resume=False)
+            # use a temporary directory for checkpoints
+            if checkpoint_dir is None:
+                import atexit
+                checkpoint_dir = tempfile.mkdtemp("jpq_checkpoints")
+                atexit.register(shutil.rmtree, checkpoint_dir)
+            
+            self._training_loop(
+                model, dataset, lr, selected_docnos, codes, 
+                total_steps=total_steps, 
+                eval_queries=eval_queries, 
+                eval_qrels=eval_qrels, 
+                valid_every=valid_every, 
+                in_batch=in_batch, 
+                batch_size=batch_size, 
+                jpq_negs=jpq_negs, 
+                lambda_rank=lambda_rank,
+                checkpoint_dir=checkpoint_dir, 
+                metric="nDCG@10", 
+                mode="max", 
+                patience=patience, 
+                save_every_steps=0, 
+                resume=False)
+            
+            self.fitted = True
+
         self.model = model
         self.query_encoder.model.eval()
-        self.fitted = True
-        
+
         if docid_subset is None:
             self.training_setup = "full_index"
             self.codes = codes

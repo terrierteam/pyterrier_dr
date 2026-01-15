@@ -72,7 +72,7 @@ def compute_index_name(data_cfg, train_cfg) -> str:
 class DataConfig:
     base_index: str
     target_dir: str
-    model_name: Literal["tct_colbert", "tas_b", "star", "e5", "repllama"] = "tct_colbert"
+    model_name: Literal["tct_colbert", "tas_b", "star", "adore_star", "e5", "repllama"] = "tct_colbert"
     train_ds: str = "msmarco-passage/train"
     #eval_ds: str = "msmarco_passage"
     #eval_split: str = "test-2019"
@@ -93,14 +93,15 @@ class TrainingConfig:
     lambda_rank: bool = True
     jpq_negs: int = 200
     pairs_cap: int | None = 2_000_000
-    frozen_query_encoder : bool = False
+    frozen_query_encoder: bool = False
+    pq_only: bool = False
 
 
 def add_data_args(parser: argparse.ArgumentParser):
     p = parser.add_argument_group("Data")
     p.add_argument("--base-index", required=True)
     p.add_argument("--target-dir", required=True)
-    p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star", "repllama", "e5", "dragon", "lion"], default="tct_colbert")    
+    p.add_argument("--model-name", choices=["tct_colbert", "tas_b", "star", "repllama", "adore_star", "e5", "dragon", "lion"], default="tct_colbert")    
     p.add_argument("--train-ds", default="msmarco-passage/train")
     p.add_argument("--eval-ds", default="irds:msmarco-passage/dev/small")
     p.add_argument("--eval-split", default=None)
@@ -122,6 +123,7 @@ def add_training_args(parser: argparse.ArgumentParser):
     p.add_argument("--jpq-negs", type=int, default=0)
     p.add_argument("--pairs-cap", type=int, default=2_000_000)
     p.add_argument("--frozen-query-encoder", action="store_true", default=False)
+    p.add_argument("--pq-only", action="store_true", default=False)
 
 
 def parse_args():
@@ -151,7 +153,8 @@ def parse_args():
         lambda_rank=args.lambda_rank,
         jpq_negs=args.jpq_negs,
         pairs_cap=args.pairs_cap,
-        frozen_query_encoder=args.frozen_query_encoder
+        frozen_query_encoder=args.frozen_query_encoder,
+        pq_only=args.pq_only
     )
     return data, train
 
@@ -177,6 +180,19 @@ if __name__ == "__main__":
     eval_dataset = pt.get_dataset(data.eval_ds)
     print("eval dataset loaded")
 
+    if train.lambda_rank and not train.jpq_negs:
+        raise ValueError("lambda_rank loss fn currently requires jpq_negs to be set")
+
+    # reproducibilty settings
+    import faiss
+    thread_count = faiss.omp_get_max_threads()
+    import os
+    os.environ["MKL_CBWR"] = "COMPATIBLE"
+    faiss.omp_set_num_threads(1)
+
+    import torch
+    torch.manual_seed(0)
+
     t = JPQTrainer(model, index, M=train.M, pq_impl=train.pq_impl, nbits=train.nbits, train_query_encoder=not train.frozen_query_encoder)
     t.fit(
         merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:train.pairs_cap]), 
@@ -186,8 +202,11 @@ if __name__ == "__main__":
         eval_qrels = eval_dataset.get_qrels(data.eval_split),
         in_batch=train.in_batch_negs,
         lambda_rank=train.lambda_rank,
-        jpq_negs=train.jpq_negs
+        jpq_negs=train.jpq_negs,
+        pq_only=train.pq_only,
     )
+    faiss.omp_set_num_threads(thread_count)
+    os.environ["MKL_CBWR"] = "AUTO"
 
     newindex = t.jpq_index(target)
     t.query_encoder.model.save_pretrained(target) # type: ignore
@@ -197,13 +216,12 @@ if __name__ == "__main__":
     dataset = pt.get_dataset(data.test_ds)
     p = [
         oldmodel >> index.retriever(), # type: ignore
-        #t.query_encoder >> newindex.retriever_flat(),
         t.query_encoder >> newindex.retriever_pq()
     ]
     save_dir = target + "/" + 'runs'
-    for ts in data.test_split.split(","):
+    for ts in data.test_split.split(",") + [data.eval_ds]:
         print(ts)
-        ts_savedir = save_dir + "/" + ts
+        ts_savedir = save_dir + "/" + ts.replace(":", "_").replace("/", "_")
         os.makedirs(ts_savedir, exist_ok=True)
         df = pt.Experiment(
             p,
