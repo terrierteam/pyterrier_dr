@@ -474,6 +474,9 @@ class JPQTrainer:
                 resume=False)
             
             self.fitted = True
+        else:
+            logger.info("[JPQTrainer] PQ-only mode: skipping training loop.")
+            self.fitted = True  # not trained yet
 
         self.model = model
         self.query_encoder.model.eval()
