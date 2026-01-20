@@ -213,25 +213,29 @@ if __name__ == "__main__":
 
     oldmodel = instantiate_model(data.model_name)
 
-    dataset = pt.get_dataset(data.test_ds)
     p = [
         oldmodel >> index.retriever(), # type: ignore
         t.query_encoder >> newindex.retriever_pq()
     ]
     save_dir = target + "/" + 'runs'
-    for ts in data.test_split.split(",") + [data.eval_ds]:
-        print(ts)
-        ts_savedir = save_dir + "/" + ts.replace(":", "_").replace("/", "_")
-        os.makedirs(ts_savedir, exist_ok=True)
-        df = pt.Experiment(
-            p,
-            dataset.get_topics(ts),
-            dataset.get_qrels(ts),
-            eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10, "mrt"],
-            names=["baseline", "JPQ pq"],
-            save_dir = ts_savedir,
-            baseline=0
-        )
-        df.to_csv(ts_savedir + "/metrics.csv")
-        print(df)
+    def _do_runs(dataset, splits):
+        for split in splits:
+            print(split)
+            split_savedir = save_dir + "/" + split.replace(":", "_").replace("/", "_")
+            os.makedirs(split_savedir, exist_ok=True)
+            df = pt.Experiment(
+                p,
+                dataset.get_topics(split),
+                dataset.get_qrels(split),
+                eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10, "mrt"],
+                names=["baseline", "JPQ pq"],
+                save_dir = split_savedir,
+                baseline=0
+            )
+            df.to_csv(split_savedir + "/metrics.csv")
+            print(df)
+
+    _do_runs(pt.get_dataset(data.test_ds), data.test_split.split(","))
+    if data.eval_ds is not None:
+        _do_runs(pt.get_dataset(data.eval_ds), data.eval_split.split(","))
 
