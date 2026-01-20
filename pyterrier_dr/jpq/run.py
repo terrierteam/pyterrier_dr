@@ -218,24 +218,25 @@ if __name__ == "__main__":
         t.query_encoder >> newindex.retriever_pq()
     ]
     save_dir = target + "/" + 'runs'
-    def _do_runs(dataset, splits):
-        for split in splits:
-            print(split)
-            split_savedir = save_dir + "/" + split.replace(":", "_").replace("/", "_")
-            os.makedirs(split_savedir, exist_ok=True)
-            df = pt.Experiment(
-                p,
-                dataset.get_topics(split),
-                dataset.get_qrels(split),
-                eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10, "mrt"],
-                names=["baseline", "JPQ pq"],
-                save_dir = split_savedir,
-                baseline=0
-            )
-            df.to_csv(split_savedir + "/metrics.csv")
-            print(df)
 
-    _do_runs(pt.get_dataset(data.test_ds), data.test_split.split(","))
+    def _do_run(dataset, split, name):
+        print(split, name)
+        split_savedir = save_dir + "/" + name.replace(":", "_").replace("/", "_")
+        os.makedirs(split_savedir, exist_ok=True)
+        df = pt.Experiment(
+            p,
+            dataset.get_topics(split),
+            dataset.get_qrels(split),
+            eval_metrics=[RR@10, Recall(rel=2)@100, Recall@100, nDCG@10, "mrt"],
+            names=["baseline", "JPQ pq"],
+            save_dir = split_savedir,
+            baseline=0
+        )
+        df.to_csv(split_savedir + "/metrics.csv")
+        print(df)
+
+    for split in data.test_split.split(","):
+        _do_run(pt.get_dataset(data.test_ds), split, split)
     if data.eval_ds is not None:
-        _do_runs(pt.get_dataset(data.eval_ds), data.eval_split.split(","))
+        _do_run(pt.get_dataset(data.eval_ds), data.eval_split, "dev")
 
