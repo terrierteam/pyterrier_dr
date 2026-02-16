@@ -1,6 +1,60 @@
 # pyterrier_dr (Dense Retrieval for PyTerrier)
 
-This provides various Dense Retrieval functionality for [PyTerrier](https://github.com/terrier-org/pyterrier).
+
+
+## JPQ Fork
+
+This is the fork of PyTerrier_DR that provides training and retrieval for JPQ. If the JPQ reproducibility paper is accepted, this will be submitted as Pull Request for PyTerrier DR.
+
+### Training
+
+jpq/run.py provides a useful script for training:
+
+```bash
+INDEX=/root/nfs/jpq/indices/tct-hnp
+DEST=/root/nfs/jpq/runs/default
+python pyterrier_dr/jpq/run.py  --base-index $INDEX --target-dir $DEST --M 96 --pq-sample-size 159744 --in-batch-negs
+```
+
+Alternatively, pyterrier_dr.jpq.JPQTrainer can be used from Python:
+
+```python
+tct = pyterrier_dr.TctColBert.hnp()
+index = pyterrier_dr.FlexIndex("./msmarco-passage.tct-hnp.flex")
+train_dataset = ir_datasets.load("msmarco-passage/train")
+trainer = JPQTrainer(tct, index, pq_impl='faiss2opq', M=96, nbits=7)
+trainer.fit(
+      merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:2_000_000]), 
+      pq_sample_size=50_000,
+      eval_queries = pt.get_dataset('msmarco_passage').get_topics('test-2019'),
+      eval_qrels = pt.get_dataset('msmarco_passage').get_qrels('test-2019'),
+  )
+jpqindex = trainer.jpq_index()
+```
+
+### Retrieval
+
+JPQIndex is similar to FlexIndex: 
+
+```python
+import pyterrier_dr, pyterrier_dr.jpq
+from pyterrier.measures import *
+jpqindex = pyterrier_dr.jpq.JPQIndex("/path/to/index")
+model = pyterrier_dr.TctColBert.hnp()
+model.model.from_pretrained("/path/to/index")
+jpq_pipe = model >> jpqindex.retriever_pq()
+
+jpq_pipe.search("what are chemical reactions?")
+pt.Experiment(
+  [tct >> index, jpq_pipe],
+  pt.get_dataset('msmarco_passage').get_topics('test-2019'),
+  pt.get_dataset('msmarco_passage').get_qrels('test-2019'),
+  [nDCG@10],
+  names=["Flat", "JPQ"]
+)
+```
+
+A sample JPQ index for TCT is available from <GOOGLE_DRIVE_LINK>
 
 ## Installation
 
