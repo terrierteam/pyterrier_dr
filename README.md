@@ -60,6 +60,8 @@ A sample JPQ index for TCT is available as a zip from https://drive.google.com/f
 
 Our colab notebook to allow you to reproduce a TCT result from the paper is at https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing
 
+NB: Everything below this point is the standard pyterrier_dr readme.
+
 ---
 
 ## Installation
