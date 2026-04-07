@@ -130,6 +130,10 @@ class TestFlexIndex(unittest.TestCase):
     def test_faiss_ivf_retriever(self):
         self._test_retr(FlexIndex.faiss_ivf_retriever, exact=False)
 
+    @unittest.skipIf(not pyterrier_dr.util.kannolo_available(), "kannolo not available")
+    def test_kannolo_hnsw_retriever(self):
+        self._test_retr(FlexIndex.kannolo_hnsw_retriever, exact=False)
+
     @unittest.skipIf(not pyterrier_dr.util.scann_available(), "scann not available")
     def test_scann_retriever(self):
         self._test_retr(FlexIndex.scann_retriever, exact=False)

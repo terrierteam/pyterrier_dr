@@ -5,5 +5,6 @@ pytest-json-report
 voyager
 FlagEmbedding
 faiss-cpu
+kannolo
 ruff
 numpy<2.0.0 # needed for some operations with faiss
