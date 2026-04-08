@@ -1,6 +1,5 @@
 
 
-#class KannoloRetriever(pt.Transformner:)
 import pyterrier as pt
 import pandas as pd
 from pyterrier_dr.flex.core import FlexIndex
@@ -29,14 +28,26 @@ class KannoloRetriever(pt.Transformer):
         return pt.model.add_ranks( pd.DataFrame(out, columns=['qid', 'query', 'docno', 'score']) )
 
 def _kannolo_retr_hsnw(self, ef_construction: int = 32, num_results: int = 1000) -> pt.Transformer:
-    #TODO: expose ef_construction and ef_search parameters
+    """Returns a retriever that searchers over a `kannolo` <https://github.com/TusKANNy/kannolo/>_ 
+    HSWN index.
+
+    Args:
+        num_results (int): the number of results to return per query
+
+    .. note::
+        This transformer requires the ``kannolo`` package to be installed. Instructions are available
+        in the `kannolo repository <https://github.com/TusKANNy/kannolo>`__.
+
+    """
+    #TODO: expose ef_construction and ef_search and any other relevant parameters
     assert_kannolo()
     from kannolo import DensePlainHNSW
     
     assert len(self) < num_results, "Number of results must be less than the number of documents in the index"
     docnos, dvecs, meta = self.payload(return_docnos=True, return_dvecs=True)
     # hack because kannolo doesn't know about memory-mapped numpy arrays,
-    # but they are compatible with np.ndarray
+    # but they are compatible with np.ndarray -- this causes the index to be
+    # loaded into memory
     dvecs = dvecs.view(np.ndarray).flatten() 
     kindex = DensePlainHNSW.build_from_array(dvecs, dim=meta['vec_size'], metric="dotproduct")
     return KannoloRetriever(kindex, docnos, num_results=num_results)
