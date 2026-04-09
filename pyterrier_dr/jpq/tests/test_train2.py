@@ -1,12 +1,5 @@
 import unittest
-from unittest.mock import patch
 import numpy as np
-from contextlib import nullcontext
-
-from pyterrier_dr.jpq.pq import (
-    ProductQuantizerFAISS, 
-    ProductQuantizerSKLearn
-)
 
 from pyterrier_dr.jpq.train2 import (
     get_pq_training_dataset,

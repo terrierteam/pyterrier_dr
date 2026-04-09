@@ -5,7 +5,8 @@ import numpy as np
 import torch
 from datasets import Dataset
 from torch.utils.data import DataLoader
-import pyterrier as pt, pandas as pd
+import pyterrier as pt
+import pandas as pd
 from pyterrier_dr.flex.core import FlexIndex
 from typing import Callable
 
@@ -61,7 +62,7 @@ def get_pq_training_dataset(
         where docnos are strings and docids are internal integer ids.
         filtering is a bool indicating whether a subset was used.
     """
-    logger.info(f"Ingesting docno mapping from index ")
+    logger.info("Ingesting docno mapping from index ")
     doc_map = flex_index.payload()[0]
     N = len(flex_index)
     rng = np.random.default_rng(seed=42)
@@ -85,13 +86,13 @@ def get_pq_training_dataset(
             if len(selected_docids) == N:
                 filtering = False
         elif isinstance(docid_subset[0], str): # use the provided list of str docnos
-            raise ValueError(f"docno subset not yet supported - the sort is problematic?")
+            raise ValueError("docno subset not yet supported - the sort is problematic?")
             selected_docnos = docid_subset
             selected_docids = doc_map.inv[selected_docnos] # do we need this?
             selected_docids = np.sort(selected_docids)
             logger.info(f"[SUBSET] using {len(selected_docnos)} provided docs from index")
         else:
-            raise ValueError(f"list on integers or strings must be provided")
+            raise ValueError("list on integers or strings must be provided")
         
     selected_docnos = list(selected_docnos) # do we need this conversion?    
     docnos2pos = {docno: i for i, docno in enumerate(selected_docnos)} # map from docno to position in selected_docnos (for aligning with codes_sel)
@@ -177,7 +178,7 @@ def get_dataset(
         remove_columns=[c for c in ds.column_names if c not in ("query_text", 'pos_docno', "pos_codes", 'neg_docno', "neg_codes")],
     )
     ds.set_format(type="torch")#, columns=["query_text", "pos_codes", "neg_codes"])
-    logger.info(f"[DATA] Final dataset prepared")
+    logger.info("[DATA] Final dataset prepared")
     return ds
 
 def add_jpq_negs_applier(

@@ -3,7 +3,7 @@ import pyterrier as pt
 import pyterrier_dr
 import torch
 
-from pyterrier.measures import *
+from pyterrier.measures import RR, Recall, nDCG
 
 
 class TestJPQ(unittest.TestCase):

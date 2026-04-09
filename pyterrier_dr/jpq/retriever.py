@@ -2,7 +2,8 @@ from abc import abstractmethod
 import math
 import pandas as pd
 import numpy as np
-import pyterrier as pt, pyterrier_alpha as pta
+import pyterrier as pt
+import pyterrier_alpha as pta
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.jpq.pq import ProductQuantizer
 import torch
@@ -19,7 +20,7 @@ def build_from_flex(existing_index : FlexIndex, pq : ProductQuantizer, biencoder
         def _gen():
             running_se = 0.
             with torch.no_grad():
-                for i in tqdm(range(0, len(existing_index), bs), desc=f"build flat", leave=False):
+                for i in tqdm(range(0, len(existing_index), bs), desc="build flat", leave=False):
                     codes_batch = pq.encode(original_vec[i:i+bs])
                     embs = pm(torch.Tensor(codes_batch).int()).detach().cpu().numpy().astype('float32')
                     #embs = (embs / (embs.norm(dim=1, keepdim=True) + 1e-12)).detach().cpu().numpy().astype('float32')
@@ -219,11 +220,11 @@ class JPQRetrieverFaissBase(JPQRetriever):
         Q, qids = self._validate_queries(topics)
         self._ensure()
         k = min(self.topk, len(self.docnos))
-        D, I = self._index.search(Q, k) # type: ignore
+        D, doc_ids = self._index.search(Q, k) # type: ignore
 
         rows = []
         for i, qid in enumerate(qids):
-            dids = I[i].astype(int)
+            dids = doc_ids[i].astype(int)
             scores = D[i].astype(float)
 
             # stable, deterministic ordering: by score desc, then by doc index asc
@@ -336,8 +337,8 @@ class JPQRetrieverPrune(JPQRetriever):
             for qoffset in range(num_q):
                 centroid_scores = np.einsum("mbd,md->mb", self.sub_embeddings, Q[qoffset,:,:])  # [M, Ks]
                 assert centroid_scores.shape == (self.M, self.Ks), centroid_scores.shape
-                I, D = self.scorer(centroid_scores.reshape(-1))
-                for r, (did, s) in enumerate(zip(I, D)):
+                doc_ids, D = self.scorer(centroid_scores.reshape(-1))
+                for r, (did, s) in enumerate(zip(doc_ids, D)):
                     rows.append((qids[qoffset], int(did), self.docnos[int(did)], float(s), r))
         return pd.DataFrame(rows, columns=['qid', 'docid', 'docno', 'score', 'rank'])
 

@@ -1,4 +1,6 @@
-import pyterrier_dr, torch, pyterrier as pt
+import pyterrier_dr
+import torch
+import pyterrier as pt
 
 if torch.backends.mps.is_available():
     device = torch.device("mps")

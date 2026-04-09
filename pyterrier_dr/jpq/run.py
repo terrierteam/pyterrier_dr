@@ -1,6 +1,6 @@
 import argparse
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 from ir_measures import RR, Recall, nDCG
 
