@@ -6,6 +6,8 @@
 
 This is the fork of PyTerrier_DR that provides training and retrieval for JPQ. If the JPQ reproducibility paper is accepted, this will be submitted as Pull Request for PyTerrier DR.
 
+Want to try it out? See our Colab notebook: [https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing](https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing)
+
 ### Training
 
 jpq/run.py provides a useful script for training:
@@ -54,7 +56,13 @@ pt.Experiment(
 )
 ```
 
-A sample JPQ index for TCT is available from <GOOGLE_DRIVE_LINK>
+A sample JPQ index for TCT is available as a zip from [https://drive.google.com/file/d/1WYrz8ywIawerP7Dy8R_otQg--T01vT6M/view?usp=sharing](https://drive.google.com/file/d/1WYrz8ywIawerP7Dy8R_otQg--T01vT6M/view?usp=sharing). See the notebook below for usage.
+
+Our colab notebook to allow you to reproduce a TCT result from the paper is at [https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing](https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing)
+
+NB: Everything below this point is the standard pyterrier_dr readme.
+
+---
 
 ## Installation
 
