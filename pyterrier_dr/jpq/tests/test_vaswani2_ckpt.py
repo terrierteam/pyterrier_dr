@@ -2,7 +2,9 @@ import unittest
 
 from ir_measures import RR, Recall, nDCG
 from pyterrier_dr import FlexIndex
-import pyterrier_dr, torch, pyterrier as pt
+import pyterrier_dr
+import torch
+import pyterrier as pt
 
 
 class TestJPQ(unittest.TestCase):

@@ -339,7 +339,7 @@ class JPQCELossJPQNegsLambdaRank(nn.Module):
         rank_pos = batch["pos_ranks"].to(device).view(B, 1)
 
         # 3. Encode negatives (if present)
-        if not "neg_codes" in batch and "neg_ranks" in batch:
+        if "neg_codes" not in batch and "neg_ranks" in batch:
             raise ValueError("LambdaRank requires explicit negatives with known ranks.")
 
         if self.jpq_negs: # jpq_negs from the last epoch

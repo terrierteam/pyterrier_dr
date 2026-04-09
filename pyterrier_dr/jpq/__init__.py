@@ -1,5 +1,3 @@
-from .index import JPQIndex
-from .train import JPQTrainer
-
-from . import utils
+from .index import JPQIndex as JPQIndex
+from .train import JPQTrainer as JPQTrainer
 

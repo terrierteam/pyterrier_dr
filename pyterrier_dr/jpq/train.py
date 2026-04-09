@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 from typing import Callable, Literal
 from ir_measures import RR, Recall, nDCG
@@ -25,9 +24,8 @@ from pyterrier_dr.jpq.data import (
 )
 from pyterrier_dr.jpq.losses import JPQCELoss, JPQCELossWithJPQNegs, JPQCELossInBatchNegs, JPQCELossJPQNegsLambdaRank
 from pyterrier_dr.jpq.model import JPQBiencoder, OPQQueryEncoder, PassageEncoder, QueryEncoder
-from pyterrier_dr.jpq.utils import code_type_from_Ks, timer, autodevice
+from pyterrier_dr.jpq.utils import timer, autodevice
 from pyterrier_dr.jpq.index import JPQIndex
-from typing import Callable
 
 from .pq import ProductQuantizer, ProductQuantizerFAISS, ProductQuantizerFAISSIndexPQ, ProductQuantizerSKLearn,ProductQuantizerFAISSIndexPQOPQ
 
@@ -140,7 +138,8 @@ class JPQTrainer:
             from .data import add_jpq_negs_applier
             batch_decorator = add_jpq_negs_applier(retr, 100, codes) #why 100?
         else:
-            batch_decorator = lambda x: x
+            def batch_decorator(x):
+                return x
         return retr, cleanup, batch_decorator
 
     def _training_loop(
@@ -210,7 +209,8 @@ class JPQTrainer:
                 [
                     {'params' : model.passage.parameters(), 'lr': lr},
                 ], weight_decay=0.0)
-            for p in model.query.parameters(recurse=True): p.requires_grad = False
+            for p in model.query.parameters(recurse=True):
+                p.requires_grad = False
         
         # set both models to train
         _query_encoder_train()
@@ -435,7 +435,7 @@ class JPQTrainer:
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
         self.pq = pq
         if hasattr(self.pq, "opq"):
-            logger.info(f"[JPQTrainer] using OPQ rotation matrix")
+            logger.info("[JPQTrainer] using OPQ rotation matrix")
             # TODO: consider if R should be trainable 
             R = torch.Tensor(self.pq.opq).to(self.device) # type: ignore
             query_encoder = OPQQueryEncoder(self.query_encoder, R)

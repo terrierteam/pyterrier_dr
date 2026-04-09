@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import hashlib
 import logging
 import numpy as np
 import torch
@@ -11,8 +12,6 @@ from pyterrier_dr.jpq.utils import code_type_from_Ks
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
-
-import hashlib
 
 def fingerprint_tensor_bits_torch(t: torch.Tensor) -> str:
     t_cpu = t.detach().cpu().contiguous()
