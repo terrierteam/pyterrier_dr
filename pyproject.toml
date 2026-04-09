@@ -38,6 +38,11 @@ lion = [
 lightning-ir = [
   "lightning-ir",
 ]
+jpq = [
+  "pyterrier-caching>=0.5.4",
+  "datasets",
+  "more-itertools"
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
