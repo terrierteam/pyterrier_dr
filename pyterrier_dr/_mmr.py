@@ -5,6 +5,7 @@ import pyterrier_alpha as pta
 
 
 class MmrScorer(pt.Transformer):
+    schematic = {'label': 'MMR'}
     """An MMR (Maximal Marginal Relevance) scorer (i.e., re-ranker).
 
     The MMR scorer re-orders documents by balancing relevance (from the initial scores) and diversity (based on the
@@ -30,6 +31,9 @@ class MmrScorer(pt.Transformer):
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.result_frame(inp, extra_columns=['doc_vec'])
         out = []
+
+        if len(inp) == 0:
+            return inp.assign(score=[], rank=[])
 
         it = inp.groupby('qid')
         if self.verbose:

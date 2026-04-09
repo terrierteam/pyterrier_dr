@@ -1,10 +1,10 @@
-Encoding
+Dense Encoding
 ==================================================================
 
 Sentence Transformers
 ------------------------------------------------------------------
 
-With pyterrier_dr, its easy to support Sentence Transformer (formerly called SentenceBERT)
+With pyterrier_dr, it's easy to support Sentence Transformer (formerly called SentenceBERT)
 models, e.g. from HuggingFace, for dense retrieval.
 
 The base class is ``SBertBiEncoder('huggingface/path')``.

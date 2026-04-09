@@ -1,4 +1,4 @@
-__version__ = '0.6.2'
+__version__ = '0.7.0'
 
 from pyterrier_dr.util import SimFn, infer_device
 from pyterrier_dr.indexes import DocnoFile, NilIndex, NumpyIndex, RankedLists, FaissFlat, FaissHnsw, MemIndex, TorchIndex
@@ -12,6 +12,7 @@ from pyterrier_dr.star import STAR
 from pyterrier_dr.repllama import RepLLama
 from pyterrier_dr.dragon import Dragon
 from pyterrier_dr.lion import LionLlamaDense
+from pyterrier_dr.lightning_ir_mono import LightningIRMonoScorer
 from pyterrier_dr.bge_m3 import BGEM3, BGEM3QueryEncoder, BGEM3DocEncoder
 from pyterrier_dr.cde import CDE, CDECache
 from pyterrier_dr.prf import AveragePrf, VectorPrf

@@ -35,6 +35,9 @@ lion = [
   "ujson",
   "peft==0.14.0"
 ]
+lightning-ir = [
+  "lightning-ir",
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]

@@ -20,7 +20,7 @@ class VectorPrf(pt.Transformer):
 
     Example::
     
-            prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.vector_prf() >> index 
+            prf_pipe = model >> index >> index.vec_loader() >> pyterrier_dr.VectorPrf() >> index 
 
     .. cite.dblp:: journals/tois/0009MZKZ23
     """
@@ -43,6 +43,8 @@ class VectorPrf(pt.Transformer):
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
+        if len(inp) == 0:
+            return pd.DataFrame([], columns=query_cols + ['query_vec'])
 
         # get the docvectors for the top k docs
         doc_vecs = np.stack([ row.doc_vec for row in inp.head(self.k).itertuples() ])
@@ -69,7 +71,7 @@ class AveragePrf(pt.Transformer):
 
     Example::
     
-            prf_pipe = model >> index >> index.vec_loader() >> pyterier_dr.average_prf() >> index 
+            prf_pipe = model >> index >> index.vec_loader() >> pyterrier_dr.AveragePrf() >> index 
 
     .. cite.dblp:: journals/tois/0009MZKZ23
     """
@@ -88,6 +90,9 @@ class AveragePrf(pt.Transformer):
         pta.validate.result_frame(inp, extra_columns=['query_vec', 'doc_vec'])
 
         query_cols = [col for col in inp.columns if col.startswith('q') and col != 'query_vec']
+
+        if len(inp) == 0:
+            return pd.DataFrame([], columns=query_cols + ['query_vec'])
 
         # get the docvectors for the top k docs and the query_vec
         all_vecs = np.stack([inp['query_vec'].iloc[0]] + [row.doc_vec for row in inp.head(self.k).itertuples()])

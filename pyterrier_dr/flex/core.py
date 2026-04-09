@@ -173,7 +173,7 @@ class FlexIndex(pta.Artifact, pt.Indexer):
             v.columns(includes=['docid'], mode='docid')
             v.columns(includes=['docno'], mode='docno')
         if v.mode == 'docid':
-            return inp['docid'].values
+            return inp['docid'].astype('int').values
         docnos, config = self.payload(return_dvecs=False)
         return docnos.inv[inp['docno'].values] # look up docids from docnos
 
@@ -194,6 +194,10 @@ class FlexIndex(pta.Artifact, pt.Indexer):
         docnos, meta = self.payload(return_dvecs=False)
         return docnos
 
+    @staticmethod
+    def example() -> 'FlexIndex':
+        return FlexIndex.from_hf('pyterrier/sample.flex')
+
     @property
     def ILS(self) -> ir_measures.Measure:
         """Return an ILS (Intra-List Similarity) measure for this index. See :func:`pyterrier_dr.ILS` for more details."""
@@ -211,8 +215,8 @@ class FlexIndexer(pt.Indexer):
     def __repr__(self):
         return f'{self._index}.indexer(mode={self.mode!r})'
 
-    def transform(self, inp):
-        raise RuntimeError("FlexIndexer cannot be used as a transformer, use .index() instead")
+    def index_inputs(self):
+        return [["docno", "doc_vec"]]
 
     def index(self, inp):
         if isinstance(inp, pd.DataFrame):
