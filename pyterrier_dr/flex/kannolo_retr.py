@@ -35,12 +35,19 @@ def _kannolo_retr_hsnw(self, ef_construction: int = 32, num_results: int = 1000)
         num_results (int): the number of results to return per query
 
     .. note::
-        This transformer requires the ``kannolo`` package to be installed. Instructions are available
+        This transformer requires the ``kannolo`` package to be installed. Installation instructions are available
         in the `kannolo repository <https://github.com/TusKANNy/kannolo>`__.
+        By using this method, you agree to cite the kANNolo paper (ECIR 2025) in any kind of material you produce 
+        where it was used to conduct a search or experimentation, whether be it a research paper, dissertation, 
+        article, poster, presentation, or documentation. For more on the kANNolo Citation License and the BibTex 
+        see https://github.com/TusKANNy/kannolo?tab=readme-ov-file#citation-license
+
+    .. cite.dblp conf/ecir/DelfinoEMNRV25
 
     """
     #TODO: expose ef_construction and ef_search and any other relevant parameters
     assert_kannolo()
+    _citation_license()
     from kannolo import DensePlainHNSW
     
     assert len(self) < num_results, "Number of results must be less than the number of documents in the index"
@@ -53,3 +60,14 @@ def _kannolo_retr_hsnw(self, ef_construction: int = 32, num_results: int = 1000)
     return KannoloRetriever(kindex, docnos, num_results=num_results)
 
 FlexIndex.kannolo_hnsw_retriever = _kannolo_retr_hsnw
+
+def _citation_license():
+    print(
+        """
+This uses the TusKANNy kannolo library from Pisa, Tuscany, Italy — ISTI-CNR · University of Pisa. 
+
+By using this method, you agree to cite the kANNolo paper (ECIR 2025) in any kind of material you produce 
+where it was used to conduct a search or experimentation, whether be it a research paper, dissertation, 
+article, poster, presentation, or documentation. For more on the kANNolo Citation License and the BibTex see
+https://github.com/TusKANNy/kannolo?tab=readme-ov-file#citation-license
+""")
