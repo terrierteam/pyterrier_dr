@@ -2,35 +2,55 @@
 
 import pyterrier as pt
 import pandas as pd
+import pyterrier_alpha as pta
 from pyterrier_dr.flex.core import FlexIndex
 from pyterrier_dr.util import assert_kannolo
 import numpy as np
 import os
 
 class KannoloRetriever(pt.Transformer):
-    def __init__(self, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, **kwargs):
+    def __init__(self, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, drop_query_vec: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         self.kindex = kindex
         self.num_results = num_results
         self.docnos = docnos
         self.early_exit_threshold = early_exit_threshold
         self.ef_search = ef_search
+        self.drop_query_vec = drop_query_vec
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        pt.validate.query_frame(df, extra_columns=['query_vec'])
+        pta.validate.query_frame(df, extra_columns=['query_vec'])
+        df = df.reset_index(drop=True)
+        result = pta.DataFrameBuilder(['docno', 'score', 'rank'])
         if len(df) == 0:
-            return pd.DataFrame(columns= df.columns.to_list() + ['docno', 'score', 'rank'])
+            return result.to_df(df)
 
         qvecs = np.vstack(df['query_vec'].values).flatten()
-        all_scores, all_docids = self.kindex.search(qvecs, k=self.num_results, ef_search=self.ef_search, early_exit_threshold=self.early_exit_threshold)
-        out = []
-        for position, (score, docid) in enumerate(zip(all_scores, all_docids)):
-            qid_offset = position // self.num_results
-            out.append((df.iloc[qid_offset]['qid'], df.iloc[qid_offset]['query'], self.docnos[docid], score))
+        k = min(self.num_results, len(self.docnos))
+        all_scores, all_docids = self.kindex.search(qvecs, k=k, ef_search=self.ef_search, early_exit_threshold=self.early_exit_threshold)
+        all_scores = np.asarray(all_scores)
+        all_docids = np.asarray(all_docids)
+        if all_scores.ndim == 1:
+            all_scores = all_scores.reshape(len(df), -1)
+            all_docids = all_docids.reshape(len(df), -1)
 
-        return pt.model.add_ranks( pd.DataFrame(out, columns=['qid', 'query', 'docno', 'score']) )
+        for scores, docids in zip(all_scores, all_docids):
+            scores = np.asarray(scores).reshape(-1)
+            docids = np.asarray(docids).reshape(-1)
+            mask = docids != -1
+            docids = docids[mask]
+            scores = scores[mask]
+            result.extend({
+                'docno': [self.docnos[docid] for docid in docids],
+                'score': scores,
+                'rank': np.arange(docids.shape[0]),
+            })
 
-def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search: int = 100, num_results: int = 1000, early_exit_threshold : float = None) -> pt.Transformer:
+        if self.drop_query_vec:
+            df = df.drop(columns='query_vec')
+        return result.to_df(df)
+
+def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search: int = 100, num_results: int = 1000, early_exit_threshold : float = None, drop_query_vec: bool = False) -> pt.Transformer:
     """Returns a retriever that searchers over a `kannolo` <https://github.com/TusKANNy/kannolo/>_ 
     HSWN index.
 
@@ -42,6 +62,7 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
         early_exit_threshold (float, optional): if set, the search will stop early 
             if the score of the last retrieved document is below this threshold. This 
             can be used to speed up search at the cost of potentially missing relevant documents.
+        drop_query_vec (bool, optional): whether to drop the query vector from the output
 
     .. note::
         This transformer requires the ``kannolo`` package to be installed. Installation instructions are available
@@ -58,7 +79,6 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
     _citation_license()
     from kannolo import DensePlainHNSW
     
-    assert len(self) < num_results, "Number of results must be less than the number of documents in the index"
     docnos, dvecs, meta = self.payload(return_docnos=True, return_dvecs=True)
     key = ('kannolo_hnsw', m, ef_construction)
     index_name = f'kannolo_hnsw-{m}_ef-{ef_construction}'
@@ -71,11 +91,11 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
             kindex.save(self.index_path/index_name)
         else:
             kindex = DensePlainHNSW.load(self.index_path/index_name, metric="dotproduct")
-        self._cache[key].storage = kindex
+        self._cache[key] = kindex
     else:
-        kindex = self._cache[key].storage
+        kindex = self._cache[key]
 
-    return KannoloRetriever(kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold)
+    return KannoloRetriever(kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold, drop_query_vec=drop_query_vec)
 
 FlexIndex.kannolo_hnsw_retriever = _kannolo_retr_hsnw
 
