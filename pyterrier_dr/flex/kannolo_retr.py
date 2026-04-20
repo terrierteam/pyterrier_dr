@@ -35,6 +35,8 @@ class KannoloRetriever(pt.Transformer):
             all_docids = all_docids.reshape(len(df), -1)
 
         for scores, docids in zip(all_scores, all_docids):
+            scores = scores.reshape(-1)
+            docids = docids.reshape(-1)
             mask = docids != -1
             docids = docids[mask]
             scores = scores[mask]
