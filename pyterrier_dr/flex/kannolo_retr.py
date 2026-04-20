@@ -53,7 +53,6 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
     .. cite.dblp conf/ecir/DelfinoEMNRV25
 
     """
-    #TODO: expose ef_construction and ef_search and any other relevant parameters
     assert_kannolo()
     _citation_license()
     from kannolo import DensePlainHNSW
