@@ -5,6 +5,7 @@ import pandas as pd
 from pyterrier_dr.flex.core import FlexIndex
 from pyterrier_dr.util import assert_kannolo
 import numpy as np
+import os
 
 class KannoloRetriever(pt.Transformer):
     def __init__(self, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, **kwargs):
@@ -59,10 +60,21 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
     
     assert len(self) < num_results, "Number of results must be less than the number of documents in the index"
     docnos, dvecs, meta = self.payload(return_docnos=True, return_dvecs=True)
-    # we need to provide 1D array to kannolo, so we flatten the 2D array of document vectors into a 1D array.
-    # this doesnt result in the index being loaded into memory.
-    dvecs = dvecs.view(np.ndarray).reshape(-1)
-    kindex = DensePlainHNSW.build_from_array(dvecs, m=m, ef_construction=ef_construction, dim=meta['vec_size'], metric="dotproduct")
+    key = ('kannolo_hnsw', m, ef_construction)
+    index_name = f'kannolo_hnsw-{m}_ef-{ef_construction}'
+    if key not in self._cache:
+        if not os.path.exists(self.index_path/index_name):
+            # we need to provide 1D array to kannolo, so we flatten the 2D array of document vectors into a 1D array.
+            # this doesnt result in the index being loaded into memory.
+            dvecs = dvecs.view(np.ndarray).reshape(-1)
+            kindex = DensePlainHNSW.build_from_array(dvecs, m=m, ef_construction=ef_construction, dim=meta['vec_size'], metric="dotproduct")
+            kindex.save(self.index_path/index_name)
+        else:
+            kindex = DensePlainHNSW.load(self.index_path/index_name, metric="dotproduct")
+        self._cache[key].storage = kindex
+    else:
+        kindex = self._cache[key].storage
+
     return KannoloRetriever(kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold)
 
 FlexIndex.kannolo_hnsw_retriever = _kannolo_retr_hsnw
