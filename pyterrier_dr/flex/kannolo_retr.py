@@ -81,15 +81,16 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
     
     docnos, dvecs, meta = self.payload(return_docnos=True, return_dvecs=True)
     index_name = f'kannolo_hnsw-{m}_ef-{ef_construction}'
+    index_path = os.path.join(str(self.index_path), index_name)
     if index_name not in self._cache:
-        if not os.path.exists(self.index_path/index_name):
+        if not os.path.exists(index_path):
             # we need to provide 1D array to kannolo, so we flatten the 2D array of document vectors into a 1D array.
             # this doesnt result in the index being loaded into memory.
             dvecs = dvecs.view(np.ndarray).reshape(-1)
             kindex = DensePlainHNSW.build_from_array(dvecs, m=m, ef_construction=ef_construction, dim=meta['vec_size'], metric="dotproduct")
-            kindex.save(str(self.index_path/index_name))
+            kindex.save(index_path)
         else:
-            kindex = DensePlainHNSW.load(str(self.index_path/index_name), metric="dotproduct")
+            kindex = DensePlainHNSW.load(index_path, metric="dotproduct")
         self._cache[index_name] = kindex
     else:
         kindex = self._cache[index_name]
