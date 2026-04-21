@@ -13,6 +13,9 @@ import pyterrier as pt
 import torch 
 torch.set_float32_matmul_precision('high')
 
+# This script is to make it easy to run JPQ training and evaluation with different models
+# The DEFAULT_INIT_BY_NAME dict maps a model name to a python expression that instantiates the model.
+# It make require updating with new models, or for the star/adore_star models 
 
 DEFAULT_INIT_BY_NAME: dict[str, str] = {
     "tct_colbert": "pyterrier_dr.TctColBert.hnp()",
