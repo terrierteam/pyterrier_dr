@@ -55,8 +55,11 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
 
     Args:
         m (int): the number of nearest neighbors to consider during construction
-        ef_construction (int): the size of the dynamic list used during construction
-        ef_search (int): the size of the dynamic list used during search
+        ef_construction (int): the size of the dynamic list used during construction. 
+            This determines how many nearest neighbors are evaluated when adding a new 
+            vector to the graph, directly controlling the trade-off between indexing speed 
+            and recall.
+        ef_search (int): the size of the dynamic list used during search.
         num_results (int): the number of results to return per query
         early_exit_threshold (float, optional): if set, the search will stop early 
             if the score of the last retrieved document is below this threshold. This 
