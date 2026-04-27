@@ -27,7 +27,7 @@ class KannoloRetriever(pt.Transformer):
 
         qvecs = np.vstack(df['query_vec'].values).flatten()
         k = min(self.num_results, len(self.docnos))
-        num_q = qvecs.shape[0]
+        num_q = len(df)
         all_scores, all_docids = self.kindex.search(qvecs, k=k, ef_search=self.ef_search, early_exit_threshold=self.early_exit_threshold)
         assert all_scores.shape[0] == num_q * k, f"Expected {num_q}*{k}={num_q * k} scores, but got {all_scores.shape[0]}"
         all_scores = all_scores.reshape(num_q, k)
