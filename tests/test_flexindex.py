@@ -56,7 +56,7 @@ class TestFlexIndex(unittest.TestCase):
             graph = index.faiss_hnsw_graph(16)
             self.assertEqual(graph.neighbours(4).shape, (16,))
 
-    def _test_retr(self, Retr, exact=True, test_smaller=True):
+    def _test_retr(self, Retr, exact=True, test_smaller=True, post_test_fn=None):
         with self.subTest('basic'):
             with tempfile.TemporaryDirectory() as destdir:
                 index = FlexIndex(destdir+'/index')
@@ -79,6 +79,8 @@ class TestFlexIndex(unittest.TestCase):
                     self.assertTrue(len(res) <= 2000)
                     self.assertTrue(len(res[res.qid=='0']) <= 1000)
                     self.assertTrue(len(res[res.qid=='1']) <= 1000)
+                if post_test_fn is not None:
+                    post_test_fn(index)
 
         with self.subTest('drop_query_vec=True'):
             with tempfile.TemporaryDirectory() as destdir:
@@ -129,6 +131,16 @@ class TestFlexIndex(unittest.TestCase):
     @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_ivf_retriever(self):
         self._test_retr(FlexIndex.faiss_ivf_retriever, exact=False)
+
+    @unittest.skipIf(not pyterrier_dr.util.kannolo_available(), "kannolo not available")
+    def test_kannolo_hnsw_retriever(self):
+        def _check_cache_fn(index):
+            m=32
+            ef_construction=200
+            self.assertIn(f'kannolo_hnsw-{m}_ef-{ef_construction}', index._cache)
+            retr2 = index.kannolo_hnsw_retriever()
+
+        self._test_retr(FlexIndex.kannolo_hnsw_retriever, exact=False, post_test_fn=_check_cache_fn)
 
     @unittest.skipIf(not pyterrier_dr.util.scann_available(), "scann not available")
     def test_scann_retriever(self):
