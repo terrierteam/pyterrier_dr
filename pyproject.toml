@@ -34,7 +34,7 @@ lightning-ir = [
   "lightning-ir",
 ]
 kannolo = [
-  "kannolo",
+  "kannolo>=0.4.6",
 ]
 
 [tool.setuptools.packages.find]

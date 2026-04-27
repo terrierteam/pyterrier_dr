@@ -27,16 +27,15 @@ class KannoloRetriever(pt.Transformer):
 
         qvecs = np.vstack(df['query_vec'].values).flatten()
         k = min(self.num_results, len(self.docnos))
+        num_q = qvecs.shape[0]
         all_scores, all_docids = self.kindex.search(qvecs, k=k, ef_search=self.ef_search, early_exit_threshold=self.early_exit_threshold)
-        all_scores = np.asarray(all_scores)
-        all_docids = np.asarray(all_docids)
-        if all_scores.ndim == 1:
-            all_scores = all_scores.reshape(len(df), -1)
-            all_docids = all_docids.reshape(len(df), -1)
+        assert all_scores.shape[0] == num_q * k
+        all_scores = all_scores.reshape(num_q, k)
+        all_docids = all_docids.reshape(num_q, k)
 
-        for scores, docids in zip(all_scores, all_docids):
-            scores = scores.reshape(-1)
-            docids = docids.reshape(-1)
+        for i in range(num_q):
+            scores = all_scores[i]
+            docids = all_docids[i]
             mask = docids != -1
             docids = docids[mask]
             scores = scores[mask]
