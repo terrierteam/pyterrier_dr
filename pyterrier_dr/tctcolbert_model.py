@@ -20,7 +20,7 @@ class TctColBert(BiEncoder, metaclass=Variants):
     def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
         super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
         self.model_name = model_name or next(iter(self.VARIANTS.values()))
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=False)
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
