@@ -8,4 +8,4 @@ faiss-cpu
 kannolo>=0.4.6
 ruff
 numpy<2.0.0 # needed for some operations with faiss
-tiktoken
+sentencepiece
