@@ -140,18 +140,21 @@ class ProductQuantizer:
         codes = np.empty((N, self._M), dtype=code_type_from_Ks(self._Ks)) # [N, M]
         total_error = 0.0
         encode_method = self.encode
+        encode_args = {}
         gpu_msg = "cpu"
         if gpu is not None:
             logger.info("Centroid fingerprint " + str( fingerprint_tensor_bits_np(self.centroids)))
             self.centroids_t = torch.from_numpy(self.centroids).to(gpu)
             encode_method = self.encode_gpu
+            if gpu is not None:
+                encode_args['device'] = gpu
             gpu_msg = str(gpu)
 
         iter = range(0, N, bs)
         for start in tqdm(iter, desc=f"[PQ] Encoding PQ batches ({gpu_msg})", total = math.ceil(N / bs)) if verbose else iter:
             end = min(start + bs, N) 
             X_sel = X[selected[start:end]] # [B, D]
-            batch_codes = encode_method(X_sel) # [B, M]
+            batch_codes = encode_method(X_sel, **encode_args) # [B, M]
             codes[start:end] = batch_codes # [B, M]
             
             if error:
@@ -227,8 +230,8 @@ class ProductQuantizerFAISS(ProductQuantizer):
             codes[:, m] = idx
         return codes
     
-    def encode_gpu(self, X: np.ndarray) -> np.ndarray:
-        X_t = torch.from_numpy(X).cuda()  # [N, D]
+    def encode_gpu(self, X: np.ndarray, device: torch.device) -> np.ndarray:
+        X_t = torch.from_numpy(X).to(device)  # [N, D]
         N, D = X_t.shape
         X_view = X_t.view(N, self._M, self.dsub)              # [N, M, dsub]
         assert hasattr(self, "centroids_t") 
@@ -305,10 +308,10 @@ class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
         X = X @ self.opq
         return super().encode(X)
     
-    def encode_gpu(self, X: np.ndarray) -> np.ndarray:
+    def encode_gpu(self, X: np.ndarray, device: torch.device) -> np.ndarray:
         # rotate before PQ encoding
         X_rot = X @ self.opq
-        return super().encode_gpu(X_rot)
+        return super().encode_gpu(X_rot, device)
 
     def decode(self, codes: np.ndarray) -> np.ndarray:
         # decode with PQ, then apply inverse rotate
