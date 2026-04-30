@@ -78,7 +78,7 @@ class SBertBiEncoder(BiEncoder):
         return embs
 
     def encode_queries(self, texts, batch_size = None):
-        return self._sbert_encode(texts, batch_size=batch_size, tensor=False).astype(np.float32)
+        return _sbert_encode(self, texts, batch_size=batch_size, tensor=False).astype(np.float32)
 
 class _SBertBiEncoder(SBertBiEncoder, metaclass=Variants):
     VARIANTS: dict = None
