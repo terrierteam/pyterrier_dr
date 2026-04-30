@@ -37,7 +37,6 @@ class SBertBiEncoder(BiEncoder):
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
-    encode_queries = _sbert_encode
     encode_docs = _sbert_encode
 
     def __repr__(self):
@@ -79,7 +78,7 @@ class SBertBiEncoder(BiEncoder):
         return embs
 
     def encode_queries(self, texts, batch_size = None):
-        return super().encode_queries(texts, batch_size).astype(np.float32)
+        return self._sbert_encode(texts, batch_size=batch_size, tensor=False).astype(np.float32)
 
 class _SBertBiEncoder(SBertBiEncoder, metaclass=Variants):
     VARIANTS: dict = None
