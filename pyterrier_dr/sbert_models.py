@@ -37,8 +37,6 @@ class SBertBiEncoder(BiEncoder):
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
-    encode_docs = _sbert_encode
-
     def __repr__(self):
         return f'SBertBiEncoder({repr(self.model_name)})'
 
@@ -76,8 +74,11 @@ class SBertBiEncoder(BiEncoder):
             embs = torch.nn.functional.normalize(embs, p=2, dim=1)
 
         return embs
-
+    
     def encode_queries(self, texts, batch_size = None):
+        return _sbert_encode(self, texts, batch_size=batch_size, tensor=False).astype(np.float32)
+
+    def encode_docs(self, texts, batch_size = None):
         return _sbert_encode(self, texts, batch_size=batch_size, tensor=False).astype(np.float32)
 
 class _SBertBiEncoder(SBertBiEncoder, metaclass=Variants):
