@@ -1,7 +1,7 @@
 from more_itertools import chunked
 import numpy as np
 import torch
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, BertModel
 from pyterrier_dr.util import Variants
 from . import BiEncoder
 
@@ -24,7 +24,7 @@ class TctColBert(BiEncoder, metaclass=Variants):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(device)
-        self.model = AutoModel.from_pretrained(self.model_name).to(self.device).eval()
+        self.model = BertModel.from_pretrained(self.model_name).to(self.device).eval()
 
     def encode_queries(self, texts, batch_size=None):
         results = []
