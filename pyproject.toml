@@ -42,6 +42,8 @@ jpq = [
   "pyterrier-caching>=0.5.4",
   "datasets",
   "more-itertools"
+kannolo = [
+  "kannolo>=0.4.6",
 ]
 
 [tool.setuptools.packages.find]
