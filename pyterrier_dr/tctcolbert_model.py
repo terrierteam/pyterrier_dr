@@ -26,18 +26,17 @@ class TctColBert(BiEncoder, metaclass=Variants):
         self.device = torch.device(device)
         self.model = BertModel.from_pretrained(self.model_name).to(self.device).eval()
 
-    def encode_queries(self, texts, batch_size=None):
+    def encode_queries_torch(self, texts, batch_size=None):
         results = []
-        with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer([f'[CLS] [Q] {q} ' + ' '.join(['[MASK]'] * 32) for q in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=36)
-                inps = {k: v.to(self.device) for k, v in inps.items()}
-                res = self.model(**inps).last_hidden_state
-                res = res[:, 4:, :].mean(dim=1) # remove the first 4 tokens (representing [CLS] [ Q ]), and average
-                results.append(res.cpu().numpy())
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer([f'[CLS] [Q] {q} ' + ' '.join(['[MASK]'] * 32) for q in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=36)
+            inps = {k: v.to(self.device) for k, v in inps.items()}
+            res = self.model(**inps).last_hidden_state
+            res = res[:, 4:, :].mean(dim=1) # remove the first 4 tokens (representing [CLS] [ Q ]), and average
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.empty((0, 0))
+        return torch.cat(results, dim=0)
 
     def encode_docs(self, texts, batch_size=None):
         results = []

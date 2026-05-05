@@ -30,8 +30,18 @@ dependencies = {file = ["requirements.txt"]}
 bgem3 = [
   "FlagEmbedding",
 ]
+lion = [
+  "transformers==4.43.1",
+  "ujson",
+  "peft==0.14.0"
+]
 lightning-ir = [
   "lightning-ir",
+]
+jpq = [
+  "pyterrier-caching>=0.5.4",
+  "datasets",
+  "more-itertools"
 ]
 kannolo = [
   "kannolo>=0.4.6",
@@ -43,6 +53,12 @@ exclude = ["tests"]
 [project.urls]
 Repository = "https://github.com/terrierteam/pyterrier_dr"
 "Bug Tracker" = "https://github.com/terrierteam/pyterrier_dr/issues"
+
+[tool.ruff]
+exclude = [
+  "pyterrier_dr/_lion.py",
+  "pyterrier_dr/_star_tokenizer.py",
+]
 
 [project.entry-points."pyterrier.artifact"]
 "dense_index.flex" = "pyterrier_dr:FlexIndex"

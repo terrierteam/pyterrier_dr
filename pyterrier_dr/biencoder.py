@@ -6,7 +6,7 @@ import pandas as pd
 import pyterrier_alpha as pta
 import pyterrier_dr
 from . import SimFn
-
+import torch
 
 class BiEncoder(pt.Transformer):
     """Represents a single-vector dense bi-encoder.
@@ -84,12 +84,30 @@ class BiEncoder(pt.Transformer):
         if hasattr(self, 'config') and hasattr(self.config, 'sim_fn'):
             return SimFn(self.config.sim_fn)
         return SimFn.dot # default
-
+    
     @abstractmethod
-    def encode_queries(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
+    def encode_queries_torch(self, texts: List[str], batch_size: Optional[int] = None) -> 'torch.Tensor':
         """Abstract method to encode a list of query texts into dense vectors.
 
+        This function is used by the transformer returned by :meth:`encode_queries`.
+        It can be used for training, so should not detach gradients. :meth:`encode_queries` 
+        applies ``torch.no_grad()``.
+
+        Args:
+            texts: A list of query texts
+            batch_size: The batch size to use for encoding
+
+        Returns:
+            torch.Tensor: A tensor of shape (n_queries, n_dims)
+        """
+
+
+    def encode_queries(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
+        """Default method to encode a list of query texts into dense vectors and return as numpy array.
+
         This function is used by the transformer returned by :meth:`query_encoder`.
+
+        The default implementation of this method called :meth:`encode_queries_torch`.
 
         Args:
             texts: A list of query texts
@@ -98,7 +116,8 @@ class BiEncoder(pt.Transformer):
         Returns:
             np.array: A numpy array of shape (n_queries, n_dims)
         """
-        raise NotImplementedError()
+        with torch.no_grad():
+            return self.encode_queries_torch(texts, batch_size=batch_size).cpu().numpy()
 
     @abstractmethod
     def encode_docs(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
