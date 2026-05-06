@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pyterrier as pt
 from pyterrier_dr import FlexIndex
+import transformers
+from packaging.version import Version
 
 LIGHTNING_IR_AVAILIBLE = False
 try:
@@ -214,6 +216,8 @@ class TestModels(unittest.TestCase):
         self._test_bgem3_multi(bgem3.doc_multi_encoder(), test_doc_multivec_encoder=True)
 
     def test_jina_embedder(self):
+        if Version(transformers.__version__) >= Version("5.0.0"):
+            self.skipTest("transformers<=5 is required for jina")
         from pyterrier_dr import JinaEmbedder
 
         self._base_test(JinaEmbedder(), test_doc_encoder=False, test_scorer=False, test_indexer=False, test_retriever=False)
