@@ -238,3 +238,5 @@ Contributors to this repository:
 
  - Sean MacAvaney, University of Glasgow
  - Xiao Wang, University of Glasgow
+ - Andreas Chari, University of Glasgow
+ - Sean MacAvaney, University of Glasgow
