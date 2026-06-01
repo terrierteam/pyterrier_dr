@@ -18,6 +18,7 @@ from pyterrier_dr.cde import CDE, CDECache
 from pyterrier_dr.prf import AveragePrf, VectorPrf
 from pyterrier_dr._ils import ILS, ils
 from pyterrier_dr._mmr import MmrScorer
+from pyterrier_dr.jina import JinaEmbedder
 
 __all__ = ["FlexIndex", "DocnoFile", "NilIndex", "NumpyIndex", "RankedLists", "FaissFlat", "FaissHnsw", "MemIndex", "TorchIndex",
            "BiEncoder", "BiQueryEncoder", "BiDocEncoder", "BiScorer", "HgfBiEncoder", "TasB", "RetroMAE", "SBertBiEncoder", "Ance",
@@ -27,3 +28,4 @@ __all__ = ["FlexIndex", "DocnoFile", "NilIndex", "NumpyIndex", "RankedLists", "F
            "Dragon",
            "RepLLama",
            "SimFn", "infer_device", "AveragePrf", "VectorPrf", "ILS", "ils", "MmrScorer"]
+           "SimFn", "infer_device", "AveragePrf", "VectorPrf", "ILS", "ils", "MmrScorer", "JinaEmbedder"]
