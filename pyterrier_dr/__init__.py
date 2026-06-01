@@ -27,5 +27,4 @@ __all__ = ["FlexIndex", "DocnoFile", "NilIndex", "NumpyIndex", "RankedLists", "F
            "LionLlamaDense",
            "Dragon",
            "RepLLama",
-           "SimFn", "infer_device", "AveragePrf", "VectorPrf", "ILS", "ils", "MmrScorer"]
            "SimFn", "infer_device", "AveragePrf", "VectorPrf", "ILS", "ils", "MmrScorer", "JinaEmbedder"]
