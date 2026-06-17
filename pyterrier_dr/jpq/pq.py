@@ -20,62 +20,6 @@ def fingerprint_tensor_bits_torch(t: torch.Tensor) -> str:
 def fingerprint_tensor_bits_np(t: np.ndarray) -> str:
     return hashlib.sha256(t.tobytes()).hexdigest()
 
-# def _unpack_pq_codes_batch(packed: np.ndarray, M: int, nbits: int) -> np.ndarray:
-#     """Unpack FAISS PQ codes to shape (B, M) uint8.
-
-#     FAISS packs product-quantiser codes into bytes when `nbits != 8`. This
-#     function restores the (B, M) table of subquantiser indices in [0, 2^nbits).
-
-#     Args:
-#         packed: np.ndarray of shape (B, code_size_bytes) and dtype uint8,
-#                 as returned by `pq.compute_codes(...)`.
-#         M:      Number of subquantisers per vector (PQ's `M`).
-#         nbits:  Bits per subquantiser code (e.g., 4, 5, 6, 7, or 8).
-
-#     Returns:
-#         np.ndarray of shape (B, M) and dtype uint8 with the unpacked codes.
-
-#     Notes:
-#         - For `nbits == 8`, FAISS already returns (B, M) uint8; we just return a view/copy.
-#         - For `nbits < 8`, FAISS bit-packs the M codes into `ceil(M * nbits / 8)` bytes.
-#         - We use little-endian bit order (FAISS packs least-significant bit first).
-#     """
-#     if packed.dtype != np.uint8:
-#         packed = packed.astype(np.uint8, copy=False)
-
-#     B = packed.shape[0]
-#     if nbits == 8:
-#         # Fast path: already (B, M) uint8 in most FAISS builds
-#         if packed.shape[1] != M:
-#             raise ValueError(f"Expected packed shape (B, {M}) for nbits=8, got {packed.shape}.")
-#         return packed
-
-#     if not (1 <= nbits < 8):
-#         raise ValueError(f"nbits must be in [1,7] when packed; got {nbits}.")
-
-#     # Total bits per vector and bytes actually provided
-#     total_bits = M * nbits
-#     code_size_bytes = packed.shape[1]
-#     provided_bits = code_size_bytes * 8
-#     if provided_bits < total_bits:
-#         raise ValueError(
-#             f"Packed buffer too small: need >= {total_bits} bits, have {provided_bits} bits."
-#         )
-
-#     # Unpack all bits (little-endian) → shape (B, code_size_bytes*8)
-#     bits = np.unpackbits(packed, axis=1, bitorder="little")  # uint8 {0,1}
-
-#     # Take exactly the bits we need per row
-#     bits = bits[:, :total_bits]  # (B, M*nbits)
-
-#     # Reshape into (B, M, nbits), then compute little-endian integer per subquantiser
-#     bits_3d = bits.reshape(B, M, nbits)  # last axis: [b0, b1, ..., b(nbits-1)]
-#     # weights for little-endian: [1, 2, 4, ...]
-#     weights = (1 << np.arange(nbits, dtype=np.uint16)).astype(np.uint16)  # safe up to nbits<=16
-#     codes = (bits_3d * weights).sum(axis=2).astype(np.uint8)  # (B, M)
-
-#     return codes
-
 
 class ProductQuantizer:
     def __init__(self, M: int=8, Ks: int=256):
