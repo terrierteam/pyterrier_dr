@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional
 import numpy as np
 import torch
 import pyterrier_alpha as pta
