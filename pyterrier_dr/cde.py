@@ -69,9 +69,6 @@ class CDE(BiEncoder):
         texts = list(texts)
         if len(texts) == 0:
             return np.empty(shape=(0, 0))
-        
-        # print("texts", texts, type(texts))
-        # print("self.cache.context()", self.cache.context(), type(self.cache.context()))
         result = self.model.encode(
             ["search_documents: " + t for t in texts],
             dataset_embeddings=self.cache.context(),

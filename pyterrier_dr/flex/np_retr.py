@@ -20,6 +20,8 @@ class NumpyRetriever(pt.Transformer):
         self.flex_index = flex_index
         self.num_results = num_results
         self.batch_size = batch_size or 4096
+        if mask is not None and not np.isin(mask, [0, 1]).all():
+            raise ValueError("mask must contain only 0 or 1 values")
         self.mask = mask
         self.drop_query_vec = drop_query_vec
 
@@ -173,6 +175,8 @@ def _np_retriever(self, *, num_results: int = 1000, batch_size: Optional[int] = 
         num_results: The number of results to return per query.
         batch_size: The number of documents to score in each batch.
         drop_query_vec: Whether to drop the query vector from the output.
+        mask: Optional binary array (0 or 1) of length equal to the number of documents.
+            Documents with mask value 0 have their scores zeroed out during retrieval.
 
     Returns:
         :class:`~pyterrier.Transformer`: A retriever that uses numpy to perform a brute force search.
@@ -222,10 +226,8 @@ def _np_scorer(self, *, num_results: Optional[int] = None) -> pt.Transformer:
 
     Args:
         num_results: The number of results to return per query. If not provided, all resuls from the original fram are returned.
-        mask: Optional sequence of per-document weights.
-            If provided, scores for each document are multiplied by the corresponding
-            mask value. This can be used to filter or downweight documents during
-            retrieval.
+        mask: Optional binary array (0 or 1) of length equal to the number of documents.
+            Documents with mask value 0 have their scores zeroed out during retrieval.
 
 
     Returns:

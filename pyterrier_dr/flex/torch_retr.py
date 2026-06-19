@@ -80,6 +80,7 @@ class TorchRetriever(pt.Transformer):
             np.stack(inp['query_vec'])
         ).to(self.torch_vecs)
 
+        # Transposed document vectors (filtered to index_select subset if provided)
         tv = (
             self.torch_vecs[self.index_select].T
             if self.index_select is not None
@@ -127,45 +128,29 @@ class TorchRetriever(pt.Transformer):
 
 
 
-def _torch_vecs(
-    self,
-    *,
-    device: Optional[str] = None,
-    fp16: bool = False
-) -> torch.Tensor:
+def _torch_vecs(self, *, device: Optional[str] = None, fp16: bool = False) -> torch.Tensor:
     """Return the indexed vectors as a pytorch tensor.
 
     .. caution::
-        This method loads the entire index into memory on the provided device.
-        If the index is too large to fit in memory, consider using :meth:`np_vecs`
-        or :meth:`get_corpus_iter`.
+        This method loads the entire index into memory on the provided device. If the index is too large to fit in memory,
+        consider using a different method that does not fully load the index into memory, like :meth:`np_vecs` or
+        :meth:`get_corpus_iter`.
 
     Args:
-        device: The device to use for the tensor. If not provided, the default
-            device is used (cuda if available, otherwise cpu).
-        fp16: Whether to use half precision (fp16).
+        device: The device to use for the tensor. If not provided, the default device is used (cuda if available, otherwise cpu).
+        fp16: Whether to use half precision (fp16) for the tensor.
 
     Returns:
-        :class:`torch.Tensor`: The indexed vectors.
+        :class:`torch.Tensor`: The indexed vectors as a torch tensor.
     """
     device = infer_device(device)
     key = ('torch_vecs', device, fp16)
-
     if key not in self._cache:
-        # Load numpy-backed vectors (memory-mapped)
         dvecs, _ = self.payload(return_docnos=False)
-
-        # Important: frombuffer avoids an extra copy
-        data = torch.frombuffer(
-            dvecs,
-            dtype=torch.float32
-        ).reshape(*dvecs.shape)
-
+        data = torch.frombuffer(dvecs, dtype=torch.float32).reshape(*dvecs.shape)
         if fp16:
             data = data.half()
-
         self._cache[key] = data.to(device)
-
     return self._cache[key]
 FlexIndex.torch_vecs = _torch_vecs
 
@@ -198,7 +183,7 @@ def _torch_retriever(self,
     device: Optional[str] = None,
     fp16: bool = False,
     qbatch: int = 64,
-    drop_query_vec: bool = False
+    drop_query_vec: bool = False,
     index_select: Optional[np.ndarray] = None,
 ):
     """Return a retriever that uses pytorch to perform brute-force retrieval results using the indexed vectors.
