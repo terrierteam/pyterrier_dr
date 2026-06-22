@@ -22,6 +22,12 @@ if you want to use the BGE-M3 encoder with `pyterrier_dr`, you can install the p
 pip install pyterrier-dr[bgem3]
 ```
 
+If you want to use [lightning-ir](https://github.com/webis-de/lightning-ir/tree/main/lightning_ir) models with `pyterrier_dr`, you can install the package with the `lightning-ir` dependency:
+
+```bash
+pip install pyterrier-dr[lightning-ir]
+```
+
 ---
 You'll also need to install FAISS.
 
@@ -128,8 +134,8 @@ idx_pipeline([
 ## FLEX Index
 
 A FLexible EXecution (FLEX) Index is a dense index format that allows for a variety of retrieval implementations (NumPy,
-FAISS, etc.) and algorithms (exhaustive, HNSW, etc.) to be tested. In many cases, the same vector storage can be used across
-implementations and algorithms, saving considerably on disk space.
+FAISS, [kANNolo](https://github.com/tuskanny/kannolo) etc.) and algorithms (exhaustive, HNSW, etc.) to be tested. 
+In many cases, the same vector storage can be used across implementations and algorithms, saving considerably on disk space.
 
 You can use it as part of an indexing pipeline that includes a model to encode documents:
 
@@ -232,3 +238,5 @@ Contributors to this repository:
 
  - Sean MacAvaney, University of Glasgow
  - Xiao Wang, University of Glasgow
+ - Andreas Chari, University of Glasgow
+ - Sean MacAvaney, University of Glasgow

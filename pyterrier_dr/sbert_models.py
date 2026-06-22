@@ -21,7 +21,7 @@ def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embedding
                              batch_size=batch_size or self.batch_size, 
                              show_progress_bar=show_progress,
                              normalize_embeddings=normalize_embeddings
-                             )
+                             ).astype(np.float32)
 
 
 class SBertBiEncoder(BiEncoder):

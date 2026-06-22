@@ -4,6 +4,7 @@ import numpy as np
 import pyterrier as pt
 import pandas as pd
 import pyterrier_alpha as pta
+import pyterrier_dr
 from . import SimFn
 
 
@@ -37,6 +38,9 @@ class BiEncoder(pt.Transformer):
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         with pta.validate.any(inp) as v:
+            v.query_frame(extra_columns=['query'], mode='query_encoder')
+            v.document_frame(extra_columns=[self.text_field], mode='doc_encoder')
+            v.result_frame(extra_columns=["query", self.text_field], mode='scorer')
             v.columns(includes=['query', self.text_field], mode='scorer')
             v.columns(includes=['query_vec', self.text_field], mode='scorer')
             v.columns(includes=['query', 'doc_vec'], mode='scorer')
@@ -111,6 +115,10 @@ class BiEncoder(pt.Transformer):
         """
         raise NotImplementedError()
 
+    @staticmethod
+    def example() -> 'BiEncoder':
+        return pyterrier_dr.SBertBiEncoder('sentence-transformers/paraphrase-albert-small-v2')
+
 
 class BiQueryEncoder(pt.Transformer):
     def __init__(self, bi_encoder_model: BiEncoder, verbose=None, batch_size=None):
@@ -122,7 +130,9 @@ class BiQueryEncoder(pt.Transformer):
         return self.bi_encoder_model.encode_queries(texts, batch_size=batch_size or self.batch_size)
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.columns(inp, includes=['query'])
+        with pt.validate.any(inp) as v:
+            v.query_frame(extra_columns=['query'])
+            v.columns(includes=['query'])
         it = inp['query'].values
         it, inv = np.unique(it, return_inverse=True)
         if self.verbose:
@@ -132,6 +142,9 @@ class BiQueryEncoder(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.query_encoder()'
+
+    def subtransformers(self):
+        return {} # don't treat self.bi_encoder_model as a subtransformer.
 
 
 class BiDocEncoder(pt.Transformer):
@@ -148,7 +161,9 @@ class BiDocEncoder(pt.Transformer):
         return pt.RankCutoff(k) >> self
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        pta.validate.columns(inp, includes=[self.text_field])
+        with pt.validate.any(inp) as v:
+            v.document_frame(extra_columns=[self.text_field])
+            v.columns(includes=[self.text_field])
         it = inp[self.text_field]
         if self.verbose:
             it = pt.tqdm(it, desc='Encoding Docs', unit='doc')
@@ -156,6 +171,9 @@ class BiDocEncoder(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.doc_encoder()'
+
+    def subtransformers(self):
+        return {} # don't treat self.bi_encoder_model as a subtransformer.
 
 
 class BiScorer(pt.Transformer):
@@ -189,3 +207,6 @@ class BiScorer(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.scorer()'
+
+    def subtransformers(self):
+        return {} # don't treat self.bi_encoder_model as a subtransformer.

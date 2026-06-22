@@ -30,6 +30,12 @@ dependencies = {file = ["requirements.txt"]}
 bgem3 = [
   "FlagEmbedding",
 ]
+lightning-ir = [
+  "lightning-ir",
+]
+kannolo = [
+  "kannolo>=0.4.6",
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]

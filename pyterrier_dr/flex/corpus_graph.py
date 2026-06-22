@@ -37,9 +37,9 @@ def _corpus_graph(self, k: int = 16, *, batch_size: int = 8192):
                 self._cache[key] = CorpusGraph.load(candidates[0][1].parent).to_limit_k(k)
             else:
                 _build_corpus_graph(self, k, path, batch_size)
-                self._cache[key] = CorpusGraph.load(path)
+                self._cache[key] = pt.Artifact.load(path)
         else:
-            self._cache[key] = CorpusGraph.load(path)
+            self._cache[key] = pt.Artifact.load(path)
     return self._cache[key]
 
 
