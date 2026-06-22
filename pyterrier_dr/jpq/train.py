@@ -39,8 +39,42 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-
 class JPQTrainer:
+    """Trainer for Joint Product Quantization.
+
+    JPQTrainer expects an existing :class:`FlexIndex` and a :class:`BiEncoder`.
+    It first learns PQ centroids for document vectors in the provided index,
+    then jointly fine-tunes the learned centroids and the provided query encoder.
+
+    Call :meth:`fit` to train JPQ. Then call :meth:`jpq_index` to save the resulting :class:`JPQIndex`.
+
+    Args:
+        backbone_model (BiEncoder): The query encoder to be trained.
+        index (FlexIndex): The document index for training PQ centroids.
+        device (str): Device. If None, an available device is selected automatically.
+        pq_impl (Literal['faiss','sklearn','faiss2', 'faiss2opq'], optional):
+            PQ implementation. Defaults to 'sklearn'.
+        M (int, optional): Number of splits. 
+            The original embedding dimension must be divisible by this value. Defaults to 8.
+        nbits (int, optional): Number of bits per split.
+            The corresponding number of centroids per split is `2**nbits`.
+            Expect a value between 4 and 16 inclusive. Defaults to 8.
+        train_query_encoder (bool, optional): Whether to fine-tune the query encoder.
+            If False, only the PQ centroids will be fine-tuned. Defaults to True.
+    
+    Attributes:
+        fitted (bool): Whether :meth:`fit` is called.
+        query_encoder (BiEncoder): The query encoder.
+        index (FlexIndex): The document index for training PQ centroids.
+        M (int): Number of splits. 
+        d (int): Original embedding dimension.
+        nbits (int, optional): Number of bits per split.
+        Ks (int): The corresponding number of centroids per split, i.e. `2**nbits`.
+        device (str): Device.
+        train_query_encoder (bool): Whether to fine-tune the query encoder.
+            If False, only the PQ centroids will be fine-tuned.
+            
+    """
 
     def __init__(
         self,
@@ -414,7 +448,7 @@ class JPQTrainer:
 
 
     def fit(self,
-        training_docpairs,
+        training_docpairs: list[dict[str, str]],
         pq_sample_size: int = 10_000, # how many doc vectors to use to train PQ centroids
         docid_subset: list[int] | list[str] | int | None = None, # how many doc vectors to use to train the sub-id embeddings 
         batch_size: int = 32,
@@ -429,7 +463,51 @@ class JPQTrainer:
         lambda_rank : bool = False,
         checkpoint_dir : str|None = None,
         pq_only: bool = False,
-    ):
+    ) -> None:
+        """Train JPQ.
+
+        This first trains PQ centroids over document vectors from :attr:`index`, 
+        then jointly optimizes the learned centroids and the query encoder on the provided training data. 
+        After fitting, call :meth:`jpq_index` to build a searchable :class:`JPQIndex`.
+
+        Args:
+            training_docpairs (list[dict[str, str]]): Training data. Each item
+                must contain ``query`` text, ``doc_id_a`` for the positive
+                document docno, and ``doc_id_b`` for the negative document docno.
+                When ``docid_subset`` is used, pairs whose positive or negative
+                document is outside the subset are filtered out.
+            pq_sample_size (int, optional): Number of document vectors for training
+                PQ centroids. If ``docid_subset`` is also provided, will sample from the subset.
+                Otherwise they are sampled from the full set of document vectors.
+                Defaults to 10,000.
+            docid_subset (list[int] | list[str] | int | None, optional): A sequence of
+                ``docid`` or ``docno`` to be included for training. ``training_docpairs`` 
+                with documents outside this subset will be filtered out. If an integer is provided,
+                a subset of the given size will be randomly sampled.
+                If None, all documents are used.  Defaults to None.
+            batch_size (int, optional): Training batch size. Defaults to 32.
+            total_steps (int, optional): Maximum number of training steps.
+                Defaults to 1,000,000,000.
+            patience (int, optional): Number of validations without improvement
+                before early stopping. Defaults to 5.
+            lr (float, optional): Learning rate. Defaults to 2e-5.
+            eval_queries (pd.DataFrame | None, optional): Validation queries. Must be
+                provided with eval_qrels to run validation. Defaults to None.
+            eval_qrels (pd.DataFrame | None, optional): Validation qrels. Must be
+                provided with eval_queries to run validation. Defaults to None.
+            valid_every (int, optional): Run validation every this many training
+                steps. Defaults to 25.
+            in_batch (bool, optional): Whether to use in-batch negatives during training.
+                Defaults to False.
+            jpq_negs (int, optional): Number of JPQ negatives to sample per query.
+                Defaults to 0.
+            lambda_rank (bool, optional): Whether to use LambdaRank for training loss.
+                Defaults to False.
+            checkpoint_dir (str): Directory for saving checkpoints. Defaults to None.
+            pq_only (bool, optional): Train PQ centroids only. No further joint optimization 
+                of PQ centroids and the query encoder. Defaults to False.
+
+        """
         start_time = time.time()
         selected_docnos, selected_docids, docno2pos, needs_filtered = get_pq_training_dataset(self.index, docid_subset)
         codes, centroids, pq = self._compute_PQ(pq_sample_size, selected_docids, self.index.payload()[1])
