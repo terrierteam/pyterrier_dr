@@ -68,6 +68,13 @@ def assert_voyager():
 def flatnav_available():
     return package_available('flatnav')
 
-
 def assert_flatnav():
     assert flatnav_available(), "flatnav required; install with instructions here: https://github.com/BlaiseMuhirwa/flatnav"
+
+
+def kannolo_available():
+    return package_available('kannolo')
+
+def assert_kannolo():
+    assert kannolo_available(), "kannolo required; install with `pip install kannolo`"  
+

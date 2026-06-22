@@ -33,6 +33,9 @@ bgem3 = [
 lightning-ir = [
   "lightning-ir",
 ]
+kannolo = [
+  "kannolo>=0.4.6",
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
