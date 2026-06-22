@@ -97,6 +97,15 @@ Diversity
 .. autofunction:: pyterrier_dr.ILS
 .. autofunction:: pyterrier_dr.ils
 
+Joint Product Quantization
+=====================================================
+
+.. autoclass:: pyterrier_dr.jpq.JPQTrainer
+    :members: fit, jpq_index
+
+.. autoclass:: pyterrier_dr.jpq.JPQIndex
+    :members: docnos, codes, dvecs, opq, retriever_pq, retriever_flat, retriever_prune, build_zero_shot_index
+
 Deprecated
 ====================================================
 

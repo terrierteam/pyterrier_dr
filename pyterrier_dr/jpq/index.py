@@ -36,8 +36,19 @@ class Metadata:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(asdict(self), f)
 
-            
+
 class JPQIndex(pt.Artifact):
+    """Joint Product Quantization index.
+
+    Use :meth:`retriever_pq` to get a PQ retriever.
+
+    Args:
+        path (str | Path): Index path.
+    
+    Attributes:
+        index_path (Path): Index path.
+
+    """
 
     ARTIFACT_TYPE = 'dense_index'
     ARTIFACT_FORMAT = 'jpq'
@@ -61,18 +72,21 @@ class JPQIndex(pt.Artifact):
 
     @property
     def meta(self) -> Metadata:
+        """Meta data for this JPQ index."""
         if self._meta is None:
             self._meta = Metadata.load(self.index_path / JPQIndex._META_FN)
         return self._meta # type: ignore
 
     @property
     def docnos(self) -> Lookup:
+        """Docno lookup."""
         if self._docnos is None:
             self._docnos = Lookup(self.index_path / JPQIndex._DOCNOS_FN)
         return self._docnos
 
     @property
     def codes(self) -> np.ndarray:
+        """PQ code book."""
         if self._codes is None:
             shape = (self.meta.doc_count, self.meta.M)
             dtype = code_type_from_Ks(self.meta.Ks)
@@ -81,6 +95,13 @@ class JPQIndex(pt.Artifact):
 
     @property
     def dvecs(self) -> np.ndarray:
+        """PQ centroids with shape [M, Ks, dsub].
+        
+        Note:
+            M -> numer of splits
+            Ks -> number of centroids per split
+            dsub -> dimension of subvector
+        """
         if self._dvecs is None:
             shape = (self.meta.M, self.meta.Ks, self.meta.dsub)
             self._dvecs = np.memmap(self.index_path / JPQIndex._SUBVECS_FN, mode="r", dtype=np.float32, shape=shape)
@@ -88,6 +109,7 @@ class JPQIndex(pt.Artifact):
     
     @property
     def opq(self) -> np.ndarray | None:
+        """Optional OPQ rotation matrix. None if OPQ is disabled."""
         if not self.meta.opq:
             return None
         if self._opq is None:
@@ -167,19 +189,19 @@ class JPQIndex(pt.Artifact):
         source_index: "JPQIndex",
         target_index: FlexIndex,
         path: str,
-        batch_size: int = 2**16,
+        batch_size: int = 8192,
         mode: IndexingMode = IndexingMode.create,
     ) -> "JPQIndex":
-        """Build a new JPQ index which quantizes vectors from `target_index` using learned parameters of `source_index`.
+        """Return a :class:`JPQIndex` that quantizes `target_index` using learned centroids in `source_index`.
 
         Args:
-            source_index (JPQIndex): A learned JPQ index.
+            source_index (JPQIndex): An existing :class:`JPQIndex`.
             target_index (FlexIndex): Target index with document vectors to be quantized.
-            path (str): Path to save the resulting JPQ index.
-            batch_size (int, optional): Batch size to iterate over the corpus of `target_index`. Defaults to 2**16.
+            path (str): Path to save the resulting :class:`JPQIndex`.
+            batch_size (int, optional): Batch size to iterate over the corpus of ``target_index``. Defaults to 8192.
+            mode (IndexingMode, optional): How to handle an existing index path.
+                Use :attr:`IndexingMode.overwrite` to allow overwriting. Defaults to :attr:`IndexingMode.create`.
 
-        Returns:
-            JPQIndex: The resulting zero-shot JPQ index.
         """
         opq = source_index.opq
         centroids = source_index.dvecs
@@ -224,10 +246,34 @@ class JPQIndex(pt.Artifact):
             yield docdict
 
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
+        """Return a PQ retriever.
+
+        Args:
+            topk (int, optional): Number of documents to return per query. Defaults to 1000.
+
+        """
         return JPQRetrieverPQ(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-PQ", opq = self.opq)
 
     def retriever_flat(self, topk: int = 1000, gpu : bool =False) -> "JPQRetrieverFlat":
+        """Return a flat inner-product retriever (:class:`JPQRetrieverFlat`) over reconstructed vectors.
+
+        Args:
+            topk (int, optional): Number of documents to return per query. Defaults to 1000.
+            gpu (bool, optional): Whether to load the flat index into GPU.
+
+        """
         return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq, gpu=gpu)
 
     def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
+        """Return a dynamically pruned retriever.
+
+        Args:
+            topk (int, optional): Number of documents to return per query. Defaults to 1000.
+            ub_inflation (float, optional): Multiplier applied to pruning upper bounds; 
+                larger values prune less aggressively. Defaults to 1.0.
+
+        See Also:
+            https://arxiv.org/pdf/2505.00560
+        
+        """
         return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self.opq)
