@@ -63,3 +63,4 @@ exclude = [
 [project.entry-points."pyterrier.artifact"]
 "dense_index.flex" = "pyterrier_dr:FlexIndex"
 "cde_cache.np_pickle" = "pyterrier_dr:CDECache"
+"dense_index.jpq" = "pyterrier_dr.JPQIndex"
