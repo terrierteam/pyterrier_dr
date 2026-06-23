@@ -10,7 +10,7 @@ Training
 
 JPQ training requires:
 
-- A :class:`~pyterrier_dr.BiEncoder`
+- A :class:`~pyterrier_dr.BiEncoder` model
 - A :class:`~pyterrier_dr.FlexIndex` containing document embeddings produced by the :class:`~pyterrier_dr.BiEncoder`
 - A list of training examples, where each item is a ``dict`` containing
     - ``query`` (str): the input query text
