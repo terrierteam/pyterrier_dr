@@ -2,9 +2,11 @@ import unittest
 from pyterrier_dr import FlexIndex
 import pyterrier_dr, torch, pyterrier as pt
 from pyterrier.measures import *
-
+import torch
 
 class TestJPQ(unittest.TestCase):
+
+    @unittest.skipIf(not torch.cuda.is_available(), "No CUDA")
     def test_jpq(self):
         if torch.backends.mps.is_available():
             device = torch.device("mps")
