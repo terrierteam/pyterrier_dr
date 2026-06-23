@@ -188,6 +188,65 @@ retr_pipeline = model >> index.faiss_hnsw_retriever()
 # ...
 ```
 
+## Joint Product Quantisation
+
+PyTerrier_DR provides training and retrieval code for Joint Product Quantisation. 
+
+Want to try it out? See our Colab notebook: [https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing](https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing)
+
+### Training
+
+jpq/run.py provides a useful script for training:
+
+```bash
+INDEX=/root/nfs/jpq/indices/tct-hnp
+DEST=/root/nfs/jpq/runs/default
+python pyterrier_dr/jpq/run.py  --base-index $INDEX --target-dir $DEST --M 96 --pq-sample-size 159744 --in-batch-negs
+```
+
+Alternatively, pyterrier_dr.jpq.JPQTrainer can be used from Python:
+
+```python
+tct = pyterrier_dr.TctColBert.hnp()
+index = pyterrier_dr.FlexIndex("./msmarco-passage.tct-hnp.flex")
+train_dataset = ir_datasets.load("msmarco-passage/train")
+trainer = JPQTrainer(tct, index, pq_impl='faiss2opq', M=96, nbits=7)
+trainer.fit(
+      merge_queries_into_docpairs(train_dataset.queries_iter(), train_dataset.docpairs_iter()[:2_000_000]), 
+      pq_sample_size=50_000,
+      eval_queries = pt.get_dataset('msmarco_passage').get_topics('test-2019'),
+      eval_qrels = pt.get_dataset('msmarco_passage').get_qrels('test-2019'),
+  )
+jpqindex = trainer.jpq_index()
+```
+
+### Retrieval
+
+JPQIndex is similar to FlexIndex: 
+
+```python
+import pyterrier_dr, pyterrier_dr.jpq
+from pyterrier.measures import *
+jpqindex = pyterrier_dr.jpq.JPQIndex("/path/to/index")
+model = pyterrier_dr.TctColBert.hnp()
+model.model.from_pretrained("/path/to/index")
+jpq_pipe = model >> jpqindex.retriever_pq()
+
+jpq_pipe.search("what are chemical reactions?")
+pt.Experiment(
+  [tct >> index, jpq_pipe],
+  pt.get_dataset('msmarco_passage').get_topics('test-2019'),
+  pt.get_dataset('msmarco_passage').get_qrels('test-2019'),
+  [nDCG@10],
+  names=["Flat", "JPQ"]
+)
+```
+
+A sample JPQ index for TCT is available as a zip from [https://drive.google.com/file/d/1WYrz8ywIawerP7Dy8R_otQg--T01vT6M/view?usp=sharing](https://drive.google.com/file/d/1WYrz8ywIawerP7Dy8R_otQg--T01vT6M/view?usp=sharing). See the notebook below for usage.
+
+Our colab notebook to allow you to reproduce a TCT result from the paper is at [https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing](https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing)
+
+
 ## BGE-M3 Encoder
 
 `pyterrier_dr` also supports using BGE-M3 for indexing and retrieval with the following encoders:
@@ -231,6 +290,7 @@ indexing_pipeline.index(pt.get_dataset(f"irds:mmarco/v2/fr").get_corpus_iter())
  - PyTerrier: PyTerrier: Declarative Experimentation in Python from BM25 to Dense Retrieval (Macdonald et al, CIKM 2021)
  - FAISS: Billion-Scale Similarity Search with GPUs (Johnson et al., 2017)
  - TCT-ColBERT: In-Batch Negatives for Knowledge Distillation with Tightly-Coupled Teachers for Dense Retrieval (Lin et al., RepL4NLP 2021)
+ - A Replicability Study of Joint Product Quantisation for Effective Space-Efficient Dense Retrieval (Macdonald, Tonellotto & Shen. SIGIR 2026).
 
 ## Credits
 
@@ -238,5 +298,7 @@ Contributors to this repository:
 
  - Sean MacAvaney, University of Glasgow
  - Xiao Wang, University of Glasgow
+ - Nicola Tonellotto, University of Pisa
+ - Zhili Shen, University of Glasgow
  - Andreas Chari, University of Glasgow
  - Sean MacAvaney, University of Glasgow

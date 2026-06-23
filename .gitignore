@@ -131,3 +131,11 @@ dmypy.json
 .pyre/
 
 .DS_Store
+
+flex/
+*.flex
+
+checkpoints_jpq
+tmp
+
+*ipynb

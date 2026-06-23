@@ -1,3 +1,4 @@
+from typing import Optional, Any
 import numpy as np
 import torch
 import pyterrier as pt
@@ -7,7 +8,7 @@ from .biencoder import BiEncoder, BiQueryEncoder
 from .util import Variants
 from tqdm import tqdm
 
-def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embeddings=False):
+def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embeddings=False, tensor=False):
     show_progress = False
     if isinstance(texts, tqdm):
         texts.disable = True
@@ -20,8 +21,9 @@ def _sbert_encode(self, texts, batch_size=None, prompt=None, normalize_embedding
     return self.model.encode(texts, 
                              batch_size=batch_size or self.batch_size, 
                              show_progress_bar=show_progress,
-                             normalize_embeddings=normalize_embeddings
-                             ).astype(np.float32)
+                             normalize_embeddings=normalize_embeddings,
+                             convert_to_tensor=tensor
+                             )
 
 
 class SBertBiEncoder(BiEncoder):
@@ -35,12 +37,49 @@ class SBertBiEncoder(BiEncoder):
         self.model = SentenceTransformer(model_name).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name)
 
-    encode_queries = _sbert_encode
-    encode_docs = _sbert_encode
-
     def __repr__(self):
         return f'SBertBiEncoder({repr(self.model_name)})'
 
+    def encode_queries_torch(
+        self,
+        texts: list[str],
+        batch_size: Optional[int] = None,
+        prompt: Optional[str] = None,
+        normalize_embeddings: bool = False,
+        **kwargs: Any, 
+    ) -> torch.Tensor:
+        """Encode queries while enabling gradients (for training)."""
+        if not texts:
+            return torch.empty((0, 0), device=self.model.device)
+
+        if prompt:
+            texts = [prompt + text for text in texts]
+        
+        batch_size = batch_size or self.batch_size
+        embs = []
+        for start_idx in range(0, len(texts), batch_size):
+            texts_batch = texts[start_idx: start_idx + batch_size]
+            inputs = self.model.tokenizer(
+                texts_batch,
+                return_tensors="pt",
+                truncation=True,
+                padding=True,
+            ).to(self.model.device)
+
+            embs.append(self.model.forward(inputs)["sentence_embedding"])
+        
+        embs = torch.cat(embs, dim=0)
+
+        if normalize_embeddings:
+            embs = torch.nn.functional.normalize(embs, p=2, dim=1)
+
+        return embs
+    
+    def encode_queries(self, texts, batch_size = None):
+        return _sbert_encode(self, texts, batch_size=batch_size, tensor=False).astype(np.float32)
+
+    def encode_docs(self, texts, batch_size = None):
+        return _sbert_encode(self, texts, batch_size=batch_size, tensor=False).astype(np.float32)
 
 class _SBertBiEncoder(SBertBiEncoder, metaclass=Variants):
     VARIANTS: dict = None
@@ -81,12 +120,14 @@ class E5(_SBertBiEncoder):
 
     encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
+    encode_queries_torch = partialmethod(SBertBiEncoder.encode_queries_torch, prompt='query: ', normalize_embeddings=True)  # E5 has a normalization module
 
     VARIANTS = {
         'base' : 'intfloat/e5-base-v2',
         'small': 'intfloat/e5-small-v2', 
         'large': 'intfloat/e5-large-v2',
     }
+
 
 class GTR(_SBertBiEncoder):
     """Dense encoder for GTR (Generalizable T5-based dense Retrievers)
