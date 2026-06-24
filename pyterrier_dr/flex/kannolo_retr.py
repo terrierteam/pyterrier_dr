@@ -9,7 +9,7 @@ import numpy as np
 import os
 
 class KannoloRetriever(pt.Transformer):
-    def __init__(self, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, drop_query_vec: bool = False, **kwargs):
+    def __init__(self, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, drop_query_vec: bool = False, num_threads: int = 0, **kwargs):
         super().__init__(*args, **kwargs)
         self.kindex = kindex
         self.num_results = num_results
@@ -17,6 +17,7 @@ class KannoloRetriever(pt.Transformer):
         self.early_exit_threshold = early_exit_threshold
         self.ef_search = ef_search
         self.drop_query_vec = drop_query_vec
+        self.num_threads = num_threads
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(df, extra_columns=['query_vec'])
@@ -28,7 +29,7 @@ class KannoloRetriever(pt.Transformer):
         qvecs = np.vstack(df['query_vec'].values).flatten()
         k = min(self.num_results, len(self.docnos))
         num_q = len(df)
-        all_scores, all_docids = self.kindex.search(qvecs, k=k, ef_search=self.ef_search, early_exit_threshold=self.early_exit_threshold)
+        all_scores, all_docids = self.kindex.batch_search(qvecs, k=k, ef_search=self.ef_search, early_exit_threshold=self.early_exit_threshold, num_threads=self.num_threads)
         assert all_scores.shape[0] == num_q * k, f"Expected {num_q}*{k}={num_q * k} scores, but got {all_scores.shape[0]}"
         all_scores = all_scores.reshape(num_q, k)
         all_docids = all_docids.reshape(num_q, k)
@@ -40,7 +41,7 @@ class KannoloRetriever(pt.Transformer):
             docids = docids[mask]
             scores = scores[mask]
             result.extend({
-                'docno': [self.docnos[docid] for docid in docids],
+                'docno': self.docnos[docids],
                 'score': scores,
                 'rank': np.arange(docids.shape[0]),
             })
@@ -49,7 +50,7 @@ class KannoloRetriever(pt.Transformer):
             df = df.drop(columns='query_vec')
         return result.to_df(df)
 
-def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search: int = 100, num_results: int = 1000, early_exit_threshold : float = None, drop_query_vec: bool = False) -> pt.Transformer:
+def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search: int = 100, num_results: int = 1000, early_exit_threshold: float = None, drop_query_vec: bool = False, num_threads: int = 0) -> pt.Transformer:
     """Returns a retriever that searchers over a `kannolo` <https://github.com/TusKANNy/kannolo/>_ 
     HSWN index.
 
@@ -61,10 +62,13 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
             and recall.
         ef_search (int): the size of the dynamic list used during search.
         num_results (int): the number of results to return per query
-        early_exit_threshold (float, optional): if set, the search will stop early 
-            if the score of the last retrieved document is below this threshold. This 
+        early_exit_threshold (float, optional): if set, the search will stop early
+            if the score of the last retrieved document is below this threshold. This
             can be used to speed up search at the cost of potentially missing relevant documents.
         drop_query_vec (bool, optional): whether to drop the query vector from the output
+        num_threads (int): number of threads for batch search. 0 (default) uses all available
+            cores via rayon's default thread pool; 1 runs serially; n builds a temporary pool
+            with n threads.
 
     .. note::
         This transformer requires the ``kannolo`` package to be installed. Installation instructions are available
@@ -97,7 +101,7 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
     else:
         kindex = self._cache[index_name]
 
-    return KannoloRetriever(kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold, drop_query_vec=drop_query_vec)
+    return KannoloRetriever(kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold, drop_query_vec=drop_query_vec, num_threads=num_threads)
 
 FlexIndex.kannolo_hnsw_retriever = _kannolo_retr_hsnw
 
