@@ -93,6 +93,14 @@ class NumpyVectorLoader(pt.Transformer):
     def fuse_rank_cutoff(self, k):
         return pt.RankCutoff(k) >> self
 
+    def __eq__(self, other):
+        if not isinstance(other, NumpyVectorLoader):
+            return NotImplemented
+        return self.flex_index.index_path == other.flex_index.index_path
+
+    def __hash__(self):
+        return hash((NumpyVectorLoader, self.flex_index.index_path))
+
 class NumpyScorer(pt.Transformer):
     def __init__(self, flex_index: FlexIndex, *, num_results: Optional[int] = None):
         self.flex_index = flex_index

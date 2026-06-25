@@ -86,5 +86,46 @@ class TestFlexIndex(unittest.TestCase):
 
             self.assertEqual(retr1, retr2)
             self.assertNotEqual(retr1, retr3)
-            
+
+    def _assert_flex_transformer_equality(self, factory, same_kwargs=None, diff_kwargs=None):
+        same_kwargs = same_kwargs or {}
+        diff_kwargs = diff_kwargs or {}
+        with tempfile.TemporaryDirectory() as destdir:
+            index_path = destdir + '/index'
+            index_a = FlexIndex(index_path)
+            index_b = FlexIndex(index_path)
+            index_a.index(self._generate_data(count=10, dim=8))
+
+            tr1 = factory(index_a, **same_kwargs)
+            tr2 = factory(index_b, **same_kwargs)
+            tr3 = factory(index_b, **(same_kwargs | diff_kwargs))
+
+            self.assertEqual(tr1, tr2)
+            self.assertNotEqual(tr1, tr3)
+
+    def test_vec_loader_transformer_equality(self):
+        self._assert_flex_transformer_equality(lambda index, **kwargs: index.vec_loader())
+
+    def test_torch_retriever_transformer_equality(self):
+        self._assert_flex_transformer_equality(
+            lambda index, **kwargs: index.torch_retriever(**kwargs),
+            same_kwargs={'num_results': 5, 'qbatch': 4, 'drop_query_vec': False},
+            diff_kwargs={'num_results': 3},
+        )
+
+    @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
+    def test_faiss_retriever_transformer_equality(self):
+        self._assert_flex_transformer_equality(
+            lambda index, **kwargs: index.faiss_hnsw_retriever(**kwargs),
+            same_kwargs={'num_results': 5, 'ef_search': 8, 'drop_query_vec': False},
+            diff_kwargs={'neighbours': 8},
+        )
+
+    @unittest.skipIf(not pyterrier_dr.util.kannolo_available(), "kannolo not available")
+    def test_kannolo_retriever_transformer_equality(self):
+        self._assert_flex_transformer_equality(
+            lambda index, **kwargs: index.kannolo_hnsw_retriever(**kwargs),
+            same_kwargs={'num_results': 5, 'ef_search': 32, 'drop_query_vec': False},
+            diff_kwargs={'ef_search': 16},
+        )
             
