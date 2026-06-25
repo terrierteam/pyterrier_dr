@@ -103,8 +103,8 @@ class TorchRetriever(pt.Transformer):
             self.num_results == other.num_results and
             self.qbatch == other.qbatch and
             self.drop_query_vec == other.drop_query_vec and
-            self.torch_vecs.device == other.torch_vecs.device and
-            self.torch_vecs.dtype == other.torch_vecs.dtype
+            str(self.torch_vecs.device) == str(other.torch_vecs.device) and
+            str(self.torch_vecs.dtype) == str(other.torch_vecs.dtype)
         )
 
     def __hash__(self):
@@ -114,8 +114,8 @@ class TorchRetriever(pt.Transformer):
             self.num_results,
             self.qbatch,
             self.drop_query_vec,
-            self.torch_vecs.device,
-            self.torch_vecs.dtype,
+            str(self.torch_vecs.device),
+            str(self.torch_vecs.dtype),
         ))
 
 
