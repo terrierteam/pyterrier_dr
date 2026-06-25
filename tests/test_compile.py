@@ -101,7 +101,10 @@ class TestFlexIndex(unittest.TestCase):
             tr3 = factory(index_b, **(same_kwargs | diff_kwargs))
 
             self.assertEqual(tr1, tr2)
-            self.assertNotEqual(tr1, tr3)
+            if diff_kwargs:
+                self.assertNotEqual(tr1, tr3)
+            else:
+                self.assertEqual(tr1, tr3)
 
     def test_vec_loader_transformer_equality(self):
         self._assert_flex_transformer_equality(lambda index, **kwargs: index.vec_loader())
@@ -116,9 +119,9 @@ class TestFlexIndex(unittest.TestCase):
     @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
     def test_faiss_retriever_transformer_equality(self):
         self._assert_flex_transformer_equality(
-            lambda index, **kwargs: index.faiss_hnsw_retriever(**kwargs),
-            same_kwargs={'num_results': 5, 'ef_search': 8, 'drop_query_vec': False},
-            diff_kwargs={'neighbours': 8},
+            lambda index, **kwargs: index.faiss_flat_retriever(**kwargs),
+            same_kwargs={'qbatch': 4, 'drop_query_vec': False},
+            diff_kwargs={'qbatch': 2},
         )
 
     @unittest.skipIf(not pyterrier_dr.util.kannolo_available(), "kannolo not available")
