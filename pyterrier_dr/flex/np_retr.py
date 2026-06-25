@@ -31,6 +31,19 @@ class NumpyRetriever(pt.Transformer):
             if self.drop_query_vec:
                 inp = inp.drop(columns='query_vec')
             return result.to_df(inp)
+    
+    def __eq__(self, other):
+            if not isinstance(other, NumpyRetriever):
+                return NotImplemented
+            return (
+                self.flex_index.index_path == other.flex_index.index_path and
+                self.num_results == other.num_results and
+                self.batch_size == other.batch_size and
+                self.drop_query_vec == other.drop_query_vec
+            )
+
+    def __hash__(self):
+            return hash((NumpyRetriever, self.flex_index.index_path, self.num_results, self.batch_size, self.drop_query_vec))
         inp = inp.reset_index(drop=True)
         query_vecs = np.stack(inp['query_vec'])
         docnos, dvecs, config = self.flex_index.payload()

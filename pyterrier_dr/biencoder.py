@@ -161,6 +161,18 @@ class BiQueryEncoder(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.query_encoder()'
+    
+    def __eq__(self, other):
+        if not isinstance(other, BiQueryEncoder):
+            return NotImplemented
+        return (
+            repr(self.bi_encoder_model) == repr(other.bi_encoder_model) and
+            self.verbose == other.verbose and
+            self.batch_size == other.batch_size
+        )
+
+    def __hash__(self):
+        return hash((BiQueryEncoder, repr(self.bi_encoder_model), self.verbose, self.batch_size))
 
     def subtransformers(self):
         return {} # don't treat self.bi_encoder_model as a subtransformer.
@@ -190,6 +202,19 @@ class BiDocEncoder(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.doc_encoder()'
+    
+    def __eq__(self, other):
+        if not isinstance(other, BiDocEncoder):
+            return NotImplemented
+        return (
+            repr(self.bi_encoder_model) == repr(other.bi_encoder_model) and
+            self.verbose == other.verbose and
+            self.batch_size == other.batch_size and
+            self.text_field == other.text_field
+        )
+
+    def __hash__(self):
+        return hash((BiDocEncoder, repr(self.bi_encoder_model), self.verbose, self.batch_size, self.text_field))
 
     def subtransformers(self):
         return {} # don't treat self.bi_encoder_model as a subtransformer.
