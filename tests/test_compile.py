@@ -64,12 +64,14 @@ class TestFlexIndex(unittest.TestCase):
             pd.testing.assert_frame_equal(res2, res2_opt)
     
     def test_encoder_transformer_equality(self):
-        model = _DummyBiEncoder(batch_size=8, text_field='text')
+        model1 = _DummyBiEncoder(batch_size=8, text_field='text')
+        model2 = _DummyBiEncoder(batch_size=8, text_field='text')
+        model3 = _DummyBiEncoder(batch_size=16, text_field='text')
 
-        self.assertEqual(model.query_encoder(), model.query_encoder())
-        self.assertEqual(model.doc_encoder(), model.doc_encoder())
-        self.assertNotEqual(model.query_encoder(), model.query_encoder(batch_size=16))
-        self.assertNotEqual(model.doc_encoder(), model.doc_encoder(batch_size=16))
+        self.assertEqual(model1.query_encoder(), model2.query_encoder())
+        self.assertEqual(model1.doc_encoder(), model2.doc_encoder())
+        self.assertNotEqual(model1.query_encoder(), model3.query_encoder())
+        self.assertNotEqual(model1.doc_encoder(), model3.doc_encoder())
     
     def test_retriever_transformer_equality(self):
         with tempfile.TemporaryDirectory() as destdir:
