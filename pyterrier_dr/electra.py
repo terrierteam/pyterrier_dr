@@ -1,7 +1,9 @@
 import numpy as np
 import more_itertools
 import torch
+import pandas as pd
 import pyterrier as pt
+import pyterrier_alpha as pta
 from transformers import AutoTokenizer, ElectraForSequenceClassification
 
 class ElectraScorer(pt.Transformer):
@@ -16,7 +18,11 @@ class ElectraScorer(pt.Transformer):
         self.tokeniser = AutoTokenizer.from_pretrained('google/electra-base-discriminator')
         self.model = ElectraForSequenceClassification.from_pretrained(model_name).eval().to(self.device)
 
-    def transform(self, inp):
+    def transform(self, inp : pd.DataFrame) -> pd.DataFrame:
+        with pta.validate.any(inp) as v:
+            v.result_frame(extra_columns=['query', self.text_field], mode='query_encoder')
+        if not len(inp):
+            return pd.DataFrame(columns=inp.columns.tolist() + ['rank', 'score'])
         scores = []
         it = inp[['query', self.text_field]].itertuples(index=False)
         if self.verbose:
