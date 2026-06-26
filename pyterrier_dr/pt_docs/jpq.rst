@@ -17,15 +17,15 @@ JPQ training requires:
     - ``doc_id_a`` (str): document identifier for a relevant (positive) document
     - ``doc_id_b`` (str): document identifier for a non-relevant (negative) document
 
-
-:class:`pyterrier_dr.JPQTrainer` implements the training code.
-Call :meth:`~pyterrier_dr.JPQTrainer.fit` to train JPQ. After training, call :meth:`~pyterrier_dr.JPQTrainer.jpq_index` 
-to save the :class:`~pyterrier_dr.JPQIndex`. See example below:
+:class:`pyterrier_dr.jpq.JPQTrainer` implements the training code.
+Call :meth:`~pyterrier_dr.jpq.JPQTrainer.fit` to train JPQ. After training, call :meth:`~pyterrier_dr.jpq.JPQTrainer.jpq_index` 
+to save the :class:`~pyterrier_dr.jpq.JPQIndex`. See example below:
 
 .. code-block:: python
     :caption: Example for training JPQ with E5
 
-    from pyterrier_dr import FlexIndex, JPQTrainer, E5
+    from pyterrier_dr import FlexIndex, E5
+    from pyterrier_dr.jpq import JPQTrainer
 
     index = FlexIndex("path/to/e5_index")
     model = E5()
@@ -52,15 +52,16 @@ Retrieval
 JPQ retrieval requires:
 
 - The fine-tuned query encoder
-- The corresponding :class:`~pyterrier_dr.JPQIndex`
+- The corresponding :class:`~pyterrier_dr.jpq.JPQIndex`
 
-With a :class:`~pyterrier_dr.JPQIndex`, you can create a PQ retriever by calling
-:meth:`~pyterrier_dr.JPQIndex.retriever_pq`. An example is provided below:
+With a :class:`~pyterrier_dr.jpq.JPQIndex`, you can create a PQ retriever by calling
+:meth:`~pyterrier_dr.jpq.JPQIndex.retriever_pq`. An example is provided below:
 
 .. code-block:: python
     :caption: Example for retrieval using JPQ (E5)
 
-    from pyterrier_dr import JPQIndex, E5
+    from pyterrier_dr import E5
+    from pyterrier_dr.jpq import JPQIndex
     from sentence_transformers import SentenceTransformer
 
     path = "e5_jpq"
@@ -76,8 +77,8 @@ With a :class:`~pyterrier_dr.JPQIndex`, you can create a PQ retriever by calling
 API Reference
 -----------------------------------------------------
 
-.. autoclass:: pyterrier_dr.JPQTrainer
+.. autoclass:: pyterrier_dr.jpq.JPQTrainer
     :members: fit, jpq_index
 
-.. autoclass:: pyterrier_dr.JPQIndex
+.. autoclass:: pyterrier_dr.jpq.JPQIndex
     :members: docnos, codes, dvecs, opq, retriever_pq, retriever_flat, retriever_prune, build_zero_shot_index
