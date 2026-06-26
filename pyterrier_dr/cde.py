@@ -10,7 +10,6 @@ from .biencoder import BiEncoder
 from tqdm import tqdm
 import pyterrier_alpha as pta
 
-
 class CDE(BiEncoder):
     def __init__(self, model_name='jxm/cde-small-v1', cache: Optional['CDECache'] = None, batch_size=32, text_field='text', verbose=False, device=None):
         super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
@@ -22,20 +21,22 @@ class CDE(BiEncoder):
         self.model = SentenceTransformer(model_name, trust_remote_code=True).to(self.device).eval()
         self.config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
         self.cache = cache or CDECache(cde=self)
+        self.verbose = verbose
 
     def encode_context(self, texts: List[str], batch_size=None):
         show_progress = False
         if isinstance(texts, tqdm):
             texts.disable = True
             show_progress = True
+        elif self.verbose:
+            show_progress = True
         texts = list(texts)
         if len(texts) == 0:
             return np.empty(shape=(0, 0))
         return self.model.encode(
-            texts,
-            prompt_name="document",
+            ["search_document: " + t for t in texts],
             batch_size=batch_size or self.batch_size,
-            show_progress=show_progress,
+            show_progress_bar=show_progress,
         )
 
     def encode_queries(self, texts: List[str], batch_size=None):
@@ -43,14 +44,16 @@ class CDE(BiEncoder):
         if isinstance(texts, tqdm):
             texts.disable = True
             show_progress = True
+        elif self.verbose:
+            show_progress = True
         texts = list(texts)
         if len(texts) == 0:
             return np.empty(shape=(0, 0))
         result = self.model.encode(
-            texts,
-            prompt_name='query',
+            ["search_query: " + t for t in texts],
             dataset_embeddings=self.cache.context(),
-            show_progress=show_progress,
+            show_progress_bar=show_progress,
+            batch_size=batch_size or self.batch_size,
         )
         # sentence transformers doesn't norm?
         result = result / np.linalg.norm(result, ord=2, axis=1, keepdims=True)
@@ -61,14 +64,16 @@ class CDE(BiEncoder):
         if isinstance(texts, tqdm):
             texts.disable = True
             show_progress = True
+        elif self.verbose:
+            show_progress = True
         texts = list(texts)
         if len(texts) == 0:
             return np.empty(shape=(0, 0))
         result = self.model.encode(
-            texts,
-            prompt_name='document',
+            ["search_documents: " + t for t in texts],
             dataset_embeddings=self.cache.context(),
-            show_progress=show_progress,
+            show_progress_bar=show_progress,
+            batch_size=batch_size or self.batch_size,
         )
         # sentence transformers doesn't norm?
         result = result / np.linalg.norm(result, ord=2, axis=1, keepdims=True)
