@@ -8,6 +8,19 @@ import pyterrier_dr
 from . import SimFn
 import torch
 
+
+def _model_eq_key(model):
+    return (
+        model.__class__,
+        getattr(model, 'model_name', None),
+        getattr(model, 'batch_size', None),
+        getattr(model, 'text_field', None),
+        getattr(model, 'verbose', None),
+        getattr(model, 'max_length', None),
+        getattr(model, 'device', None),
+    )
+
+
 class BiEncoder(pt.Transformer):
     """Represents a single-vector dense bi-encoder.
 
@@ -161,6 +174,18 @@ class BiQueryEncoder(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.query_encoder()'
+    
+    def __eq__(self, other):
+        if not isinstance(other, BiQueryEncoder):
+            return NotImplemented
+        return (
+            _model_eq_key(self.bi_encoder_model) == _model_eq_key(other.bi_encoder_model) and
+            self.verbose == other.verbose and
+            self.batch_size == other.batch_size
+        )
+
+    def __hash__(self):
+        return hash((BiQueryEncoder, _model_eq_key(self.bi_encoder_model), self.verbose, self.batch_size))
 
     def subtransformers(self):
         return {} # don't treat self.bi_encoder_model as a subtransformer.
@@ -190,6 +215,19 @@ class BiDocEncoder(pt.Transformer):
 
     def __repr__(self):
         return f'{repr(self.bi_encoder_model)}.doc_encoder()'
+    
+    def __eq__(self, other):
+        if not isinstance(other, BiDocEncoder):
+            return NotImplemented
+        return (
+            _model_eq_key(self.bi_encoder_model) == _model_eq_key(other.bi_encoder_model) and
+            self.verbose == other.verbose and
+            self.batch_size == other.batch_size and
+            self.text_field == other.text_field
+        )
+
+    def __hash__(self):
+        return hash((BiDocEncoder, _model_eq_key(self.bi_encoder_model), self.verbose, self.batch_size, self.text_field))
 
     def subtransformers(self):
         return {} # don't treat self.bi_encoder_model as a subtransformer.

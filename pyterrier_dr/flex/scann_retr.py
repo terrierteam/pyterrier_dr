@@ -12,13 +12,14 @@ logger = ir_datasets.log.easy()
 
 
 class ScannRetriever(pt.Indexer):
-    def __init__(self, flex_index, scann_index, num_results=1000, leaves_to_search=None, qbatch=64, drop_query_vec=False):
+    def __init__(self, flex_index, scann_index, num_results=1000, leaves_to_search=None, qbatch=64, drop_query_vec=False, index_spec=None):
         self.flex_index = flex_index
         self.scann_index = scann_index
         self.leaves_to_search = leaves_to_search
         self.num_results = num_results
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
+        self.index_spec = index_spec
 
     def fuse_rank_cutoff(self, k):
         return None # disable fusion for ANN
@@ -51,6 +52,29 @@ class ScannRetriever(pt.Indexer):
         if self.drop_query_vec:
             inp = inp.drop(columns='query_vec')
         return result.to_df(inp)
+
+    def __eq__(self, other):
+        if not isinstance(other, ScannRetriever):
+            return NotImplemented
+        return (
+            self.flex_index.index_path == other.flex_index.index_path and
+            self.index_spec == other.index_spec and
+            self.leaves_to_search == other.leaves_to_search and
+            self.num_results == other.num_results and
+            self.qbatch == other.qbatch and
+            self.drop_query_vec == other.drop_query_vec
+        )
+
+    def __hash__(self):
+        return hash((
+            ScannRetriever,
+            self.flex_index.index_path,
+            self.index_spec,
+            self.leaves_to_search,
+            self.num_results,
+            self.qbatch,
+            self.drop_query_vec,
+        ))
 
 
 def _scann_retriever(self,
@@ -110,5 +134,5 @@ def _scann_retriever(self,
         else:
             with logger.duration('reading index'):
                 self._cache[key] = scann.scann_ops_pybind.load_searcher(dvecs, str(self.index_path/index_name))
-    return ScannRetriever(self, self._cache[key], num_results=num_results, leaves_to_search=leaves_to_search, drop_query_vec=drop_query_vec)
+    return ScannRetriever(self, self._cache[key], num_results=num_results, leaves_to_search=leaves_to_search, drop_query_vec=drop_query_vec, index_spec=key)
 FlexIndex.scann_retriever = _scann_retriever

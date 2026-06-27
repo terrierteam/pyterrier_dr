@@ -15,7 +15,7 @@ logger = ir_datasets.log.easy()
 
 
 class FaissRetriever(pt.Indexer):
-    def __init__(self, flex_index, faiss_index, n_probe=None, ef_search=None, search_bounded_queue=None, qbatch=64, drop_query_vec=False, num_results=1000):
+    def __init__(self, flex_index, faiss_index, n_probe=None, ef_search=None, search_bounded_queue=None, qbatch=64, drop_query_vec=False, num_results=1000, index_spec=None):
         self.flex_index = flex_index
         self.faiss_index = faiss_index
         self.n_probe = n_probe
@@ -24,6 +24,7 @@ class FaissRetriever(pt.Indexer):
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
         self.num_results = num_results
+        self.index_spec = index_spec
 
     def fuse_rank_cutoff(self, k):
         return None # disable fusion for ANN
@@ -68,6 +69,33 @@ class FaissRetriever(pt.Indexer):
             inp = inp.drop(columns='query_vec')
         return result.to_df(inp)
 
+    def __eq__(self, other):
+        if not isinstance(other, FaissRetriever):
+            return NotImplemented
+        return (
+            self.flex_index.index_path == other.flex_index.index_path and
+            self.index_spec == other.index_spec and
+            self.n_probe == other.n_probe and
+            self.ef_search == other.ef_search and
+            self.search_bounded_queue == other.search_bounded_queue and
+            self.qbatch == other.qbatch and
+            self.drop_query_vec == other.drop_query_vec and
+            self.num_results == other.num_results
+        )
+
+    def __hash__(self):
+        return hash((
+            FaissRetriever,
+            self.flex_index.index_path,
+            self.index_spec,
+            self.n_probe,
+            self.ef_search,
+            self.search_bounded_queue,
+            self.qbatch,
+            self.drop_query_vec,
+            self.num_results,
+        ))
+
 
 def _faiss_flat_retriever(self, *, gpu=False, qbatch=64, drop_query_vec=False):
     """Returns a retriever that uses FAISS to perform brute-force search over the indexed vectors.
@@ -104,8 +132,8 @@ def _faiss_flat_retriever(self, *, gpu=False, qbatch=64, drop_query_vec=False):
             co = faiss.GpuMultipleClonerOptions()
             co.shard = True
             self._cache['faiss_flat_gpu'] = faiss.index_cpu_to_all_gpus(self._faiss_flat, co=co)
-        return FaissRetriever(self, self._cache['faiss_flat_gpu'], drop_query_vec=drop_query_vec)
-    return FaissRetriever(self, self._cache['faiss_flat'], qbatch=qbatch, drop_query_vec=drop_query_vec)
+        return FaissRetriever(self, self._cache['faiss_flat_gpu'], drop_query_vec=drop_query_vec, index_spec=('faiss_flat', True))
+    return FaissRetriever(self, self._cache['faiss_flat'], qbatch=qbatch, drop_query_vec=drop_query_vec, index_spec=('faiss_flat', False))
 FlexIndex.faiss_flat_retriever = _faiss_flat_retriever
 
 
@@ -165,7 +193,7 @@ def _faiss_hnsw_retriever(
             with logger.duration('reading hnsw table'):
                 self._cache[key] = faiss.read_index(str(self.index_path/index_name))
         self._cache[key].storage = self.faiss_flat_retriever().faiss_index
-    return FaissRetriever(self, self._cache[key], num_results=num_results, ef_search=ef_search, search_bounded_queue=search_bounded_queue, qbatch=qbatch, drop_query_vec=drop_query_vec)
+    return FaissRetriever(self, self._cache[key], num_results=num_results, ef_search=ef_search, search_bounded_queue=search_bounded_queue, qbatch=qbatch, drop_query_vec=drop_query_vec, index_spec=key)
 FlexIndex.faiss_hnsw_retriever = _faiss_hnsw_retriever
 
 
@@ -301,5 +329,5 @@ def _faiss_ivf_retriever(self,
         else:
             with logger.duration('reading index'):
                 self._cache[key] = faiss.read_index(str(self.index_path/index_name))
-    return FaissRetriever(self, self._cache[key], num_results=num_results, n_probe=n_probe, drop_query_vec=drop_query_vec)
+    return FaissRetriever(self, self._cache[key], num_results=num_results, n_probe=n_probe, drop_query_vec=drop_query_vec, index_spec=key)
 FlexIndex.faiss_ivf_retriever = _faiss_ivf_retriever
