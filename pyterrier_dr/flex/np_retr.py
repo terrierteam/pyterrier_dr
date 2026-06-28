@@ -8,49 +8,76 @@ from . import FlexIndex
 import pyterrier_alpha as pta
 
 class NumpyRetriever(pt.Transformer):
-    def __init__(self,
+    def __init__(
+        self,
         flex_index: FlexIndex,
         *,
         num_results: int = 1000,
         batch_size: Optional[int] = None,
-        drop_query_vec: bool = False
+        mask: Optional[np.ndarray] = None,
+        drop_query_vec: bool = False,
     ):
         self.flex_index = flex_index
         self.num_results = num_results
         self.batch_size = batch_size or 4096
+        if mask is not None and not np.isin(mask, [0, 1]).all():
+            raise ValueError("mask must contain only 0 or 1 values")
+        self.mask = mask
         self.drop_query_vec = drop_query_vec
 
     def fuse_rank_cutoff(self, k):
         if k < self.num_results:
-            return NumpyRetriever(self.flex_index, num_results=k, batch_size=self.batch_size, drop_query_vec=self.drop_query_vec)
+            return NumpyRetriever(
+                self.flex_index,
+                num_results=k,
+                batch_size=self.batch_size,
+                mask=self.mask,
+                drop_query_vec=self.drop_query_vec,
+            )
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
+
         if not len(inp):
             result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
             if self.drop_query_vec:
                 inp = inp.drop(columns='query_vec')
             return result.to_df(inp)
+
         inp = inp.reset_index(drop=True)
         query_vecs = np.stack(inp['query_vec'])
+
         docnos, dvecs, config = self.flex_index.payload()
+
         if self.flex_index.sim_fn == SimFn.cos:
             query_vecs = query_vecs / np.linalg.norm(query_vecs, axis=1, keepdims=True)
-        elif self.flex_index.sim_fn == SimFn.dot:
-            pass # nothing to do
-        else:
+        elif self.flex_index.sim_fn != SimFn.dot:
             raise ValueError(f'{self.flex_index.sim_fn} not supported')
+
         num_q = query_vecs.shape[0]
         ranked_lists = RankedLists(self.num_results, num_q)
+
         batch_it = range(0, dvecs.shape[0], self.batch_size)
         if self.flex_index.verbose:
             batch_it = pt.tqdm(batch_it, desc='NumpyRetriever scoring', unit='docbatch')
+
         for idx_start in batch_it:
             doc_batch = dvecs[idx_start:idx_start+self.batch_size].T
+
             if self.flex_index.sim_fn == SimFn.cos:
                 doc_batch = doc_batch / np.linalg.norm(doc_batch, axis=0, keepdims=True)
+
             scores = query_vecs @ doc_batch
-            dids = np.arange(idx_start, idx_start+doc_batch.shape[1], dtype='i4').reshape(1, -1).repeat(num_q, axis=0)
+
+            if self.mask is not None:
+                scores *= self.mask[idx_start:idx_start+doc_batch.shape[1]].reshape(1, -1)
+
+            dids = np.arange(
+                idx_start,
+                idx_start + doc_batch.shape[1],
+                dtype='i4'
+            ).reshape(1, -1).repeat(num_q, axis=0)
+
             ranked_lists.update(scores, dids)
 
         result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
@@ -64,6 +91,7 @@ class NumpyRetriever(pt.Transformer):
 
         if self.drop_query_vec:
             inp = inp.drop(columns='query_vec')
+
         return result.to_df(inp)
     
     def __eq__(self, other):
@@ -157,7 +185,8 @@ def _np_vecs(self) -> np.ndarray:
     return dvecs
 FlexIndex.np_vecs = _np_vecs
 
-def _np_retriever(self, *, num_results: int = 1000, batch_size: Optional[int] = None, drop_query_vec: bool = False):
+
+def _np_retriever(self, *, num_results: int = 1000, batch_size: Optional[int] = None, drop_query_vec: bool = False, mask: Optional[np.ndarray] = None) -> pt.Transformer:
     """Return a retriever that uses numpy to perform a brute force search over the index.
 
     The returned transformer expects a DataFrame with columns ``qid`` and ``query_vec``. It outpus
@@ -167,11 +196,14 @@ def _np_retriever(self, *, num_results: int = 1000, batch_size: Optional[int] = 
         num_results: The number of results to return per query.
         batch_size: The number of documents to score in each batch.
         drop_query_vec: Whether to drop the query vector from the output.
+        mask: Optional binary array (0 or 1) of length equal to the number of documents.
+            Documents with mask value 0 have their scores zeroed out during retrieval.
 
     Returns:
         :class:`~pyterrier.Transformer`: A retriever that uses numpy to perform a brute force search.
     """
-    return NumpyRetriever(self, num_results=num_results, batch_size=batch_size, drop_query_vec=drop_query_vec)
+    return NumpyRetriever(self, num_results=num_results, batch_size=batch_size, drop_query_vec=drop_query_vec, mask=mask)
+
 FlexIndex.np_retriever = _np_retriever
 FlexIndex.retriever = _np_retriever # default retriever
 
@@ -215,6 +247,9 @@ def _np_scorer(self, *, num_results: Optional[int] = None) -> pt.Transformer:
 
     Args:
         num_results: The number of results to return per query. If not provided, all resuls from the original fram are returned.
+        mask: Optional binary array (0 or 1) of length equal to the number of documents.
+            Documents with mask value 0 have their scores zeroed out during retrieval.
+
 
     Returns:
         :class:`~pyterrier.Transformer`: A transformer that scores query vectors with numpy.
