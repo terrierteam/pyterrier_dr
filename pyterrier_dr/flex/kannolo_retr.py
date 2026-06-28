@@ -9,8 +9,9 @@ import numpy as np
 import os
 
 class KannoloRetriever(pt.Transformer):
-    def __init__(self, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, drop_query_vec: bool = False, num_threads: int = 0, **kwargs):
+    def __init__(self, flex_index, kindex, docnos, *args, num_results: int = 1000, early_exit_threshold=None, ef_search: int = 100, drop_query_vec: bool = False, num_threads: int = 0, index_spec=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.flex_index = flex_index
         self.kindex = kindex
         self.num_results = num_results
         self.docnos = docnos
@@ -18,6 +19,7 @@ class KannoloRetriever(pt.Transformer):
         self.ef_search = ef_search
         self.drop_query_vec = drop_query_vec
         self.num_threads = num_threads
+        self.index_spec = index_spec
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         pta.validate.query_frame(df, extra_columns=['query_vec'])
@@ -49,6 +51,31 @@ class KannoloRetriever(pt.Transformer):
         if self.drop_query_vec:
             df = df.drop(columns='query_vec')
         return result.to_df(df)
+
+    def __eq__(self, other):
+        if not isinstance(other, KannoloRetriever):
+            return NotImplemented
+        return (
+            self.flex_index.index_path == other.flex_index.index_path and
+            self.index_spec == other.index_spec and
+            self.num_results == other.num_results and
+            self.early_exit_threshold == other.early_exit_threshold and
+            self.ef_search == other.ef_search and
+            self.drop_query_vec == other.drop_query_vec and
+            self.num_threads == other.num_threads
+        )
+
+    def __hash__(self):
+        return hash((
+            KannoloRetriever,
+            self.flex_index.index_path,
+            self.index_spec,
+            self.num_results,
+            self.early_exit_threshold,
+            self.ef_search,
+            self.drop_query_vec,
+            self.num_threads,
+        ))
 
 def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search: int = 100, num_results: int = 1000, early_exit_threshold: float = None, drop_query_vec: bool = False, num_threads: int = 0) -> pt.Transformer:
     """Returns a retriever that searchers over a `kannolo` <https://github.com/TusKANNy/kannolo/>_ 
@@ -101,7 +128,7 @@ def _kannolo_retr_hsnw(self, m: int = 32, ef_construction: int = 200, ef_search:
     else:
         kindex = self._cache[index_name]
 
-    return KannoloRetriever(kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold, drop_query_vec=drop_query_vec, num_threads=num_threads)
+    return KannoloRetriever(self, kindex, docnos, num_results=num_results, ef_search=ef_search, early_exit_threshold=early_exit_threshold, drop_query_vec=drop_query_vec, num_threads=num_threads, index_spec=('kannolo_hnsw', m, ef_construction))
 
 FlexIndex.kannolo_hnsw_retriever = _kannolo_retr_hsnw
 

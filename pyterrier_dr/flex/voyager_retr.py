@@ -10,13 +10,14 @@ logger = ir_datasets.log.easy()
 
 
 class VoyagerRetriever(pt.Indexer):
-    def __init__(self, flex_index, voyager_index, query_ef=None, num_results=1000, qbatch=64, drop_query_vec=False):
+    def __init__(self, flex_index, voyager_index, query_ef=None, num_results=1000, qbatch=64, drop_query_vec=False, index_spec=None):
         self.flex_index = flex_index
         self.voyager_index = voyager_index
         self.query_ef = query_ef
         self.num_results = num_results
         self.qbatch = qbatch
         self.drop_query_vec = drop_query_vec
+        self.index_spec = index_spec
 
     def fuse_rank_cutoff(self, k):
         return None # disable fusion for ANN
@@ -59,6 +60,29 @@ class VoyagerRetriever(pt.Indexer):
         if self.drop_query_vec:
             inp = inp.drop(columns='query_vec')
         return result.to_df(inp)
+
+    def __eq__(self, other):
+        if not isinstance(other, VoyagerRetriever):
+            return NotImplemented
+        return (
+            self.flex_index.index_path == other.flex_index.index_path and
+            self.index_spec == other.index_spec and
+            self.query_ef == other.query_ef and
+            self.num_results == other.num_results and
+            self.qbatch == other.qbatch and
+            self.drop_query_vec == other.drop_query_vec
+        )
+
+    def __hash__(self):
+        return hash((
+            VoyagerRetriever,
+            self.flex_index.index_path,
+            self.index_spec,
+            self.query_ef,
+            self.num_results,
+            self.qbatch,
+            self.drop_query_vec,
+        ))
 
 
 def _voyager_retriever(self,
@@ -121,5 +145,5 @@ def _voyager_retriever(self,
         else:
             with logger.duration('reading index'):
                 self._cache[key] = voyager.Index.load(str(self.index_path/index_name))
-    return VoyagerRetriever(self, self._cache[key], query_ef=query_ef, drop_query_vec=drop_query_vec)
+    return VoyagerRetriever(self, self._cache[key], query_ef=query_ef, drop_query_vec=drop_query_vec, index_spec=key)
 FlexIndex.voyager_retriever = _voyager_retriever

@@ -1,10 +1,21 @@
 import unittest
 import tempfile
-import unittest
 import numpy as np
 import pandas as pd
 import pyterrier_dr
 from pyterrier_dr import FlexIndex
+
+
+class _DummyBiEncoder(pyterrier_dr.BiEncoder):
+    def __repr__(self):
+        return "_DummyBiEncoder()"
+
+    def encode_queries_torch(self, texts, batch_size=None):
+        raise NotImplementedError()
+
+    def encode_docs(self, texts, batch_size=None):
+        raise NotImplementedError()
+
 
 class TestFlexIndex(unittest.TestCase):
 
@@ -51,5 +62,73 @@ class TestFlexIndex(unittest.TestCase):
             res2_opt = pipe2_opt(queries)
             
             pd.testing.assert_frame_equal(res2, res2_opt)
-            
+    
+    def test_encoder_transformer_equality(self):
+        model1 = _DummyBiEncoder(batch_size=8, text_field='text')
+        model2 = _DummyBiEncoder(batch_size=8, text_field='text')
+        model3 = _DummyBiEncoder(batch_size=16, text_field='text')
+
+        self.assertEqual(model1.query_encoder(), model2.query_encoder())
+        self.assertEqual(model1.doc_encoder(), model2.doc_encoder())
+        self.assertNotEqual(model1.query_encoder(), model3.query_encoder())
+        self.assertNotEqual(model1.doc_encoder(), model3.doc_encoder())
+    
+    def test_retriever_transformer_equality(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index_path = destdir + '/index'
+            index_a = FlexIndex(index_path)
+            index_b = FlexIndex(index_path)
+            index_a.index(self._generate_data(count=10, dim=8))
+
+            retr1 = index_a.retriever(num_results=5, batch_size=4, drop_query_vec=False)
+            retr2 = index_b.retriever(num_results=5, batch_size=4, drop_query_vec=False)
+            retr3 = index_b.retriever(num_results=3, batch_size=4, drop_query_vec=False)
+
+            self.assertEqual(retr1, retr2)
+            self.assertNotEqual(retr1, retr3)
+
+    def _assert_flex_transformer_equality(self, factory, same_kwargs=None, diff_kwargs=None):
+        same_kwargs = same_kwargs or {}
+        diff_kwargs = diff_kwargs or {}
+        with tempfile.TemporaryDirectory() as destdir:
+            index_path = destdir + '/index'
+            index_a = FlexIndex(index_path)
+            index_b = FlexIndex(index_path)
+            index_a.index(self._generate_data(count=10, dim=8))
+
+            tr1 = factory(index_a, **same_kwargs)
+            tr2 = factory(index_b, **same_kwargs)
+            tr3 = factory(index_b, **(same_kwargs | diff_kwargs))
+
+            self.assertEqual(tr1, tr2)
+            if diff_kwargs:
+                self.assertNotEqual(tr1, tr3)
+            else:
+                self.assertEqual(tr1, tr3)
+
+    def test_vec_loader_transformer_equality(self):
+        self._assert_flex_transformer_equality(lambda index, **kwargs: index.vec_loader())
+
+    def test_torch_retriever_transformer_equality(self):
+        self._assert_flex_transformer_equality(
+            lambda index, **kwargs: index.torch_retriever(**kwargs),
+            same_kwargs={'num_results': 5, 'qbatch': 4, 'drop_query_vec': False},
+            diff_kwargs={'num_results': 3},
+        )
+
+    @unittest.skipIf(not pyterrier_dr.util.faiss_available(), "faiss not available")
+    def test_faiss_retriever_transformer_equality(self):
+        self._assert_flex_transformer_equality(
+            lambda index, **kwargs: index.faiss_flat_retriever(**kwargs),
+            same_kwargs={'qbatch': 4, 'drop_query_vec': False},
+            diff_kwargs={'qbatch': 2},
+        )
+
+    @unittest.skipIf(not pyterrier_dr.util.kannolo_available(), "kannolo not available")
+    def test_kannolo_retriever_transformer_equality(self):
+        self._assert_flex_transformer_equality(
+            lambda index, **kwargs: index.kannolo_hnsw_retriever(**kwargs),
+            same_kwargs={'num_results': 5, 'ef_search': 32, 'drop_query_vec': False},
+            diff_kwargs={'ef_search': 16},
+        )
             

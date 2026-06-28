@@ -95,6 +95,29 @@ class TorchRetriever(pt.Transformer):
             inp = inp.drop(columns='query_vec')
         return result.to_df(inp)
 
+    def __eq__(self, other):
+        if not isinstance(other, TorchRetriever):
+            return NotImplemented
+        return (
+            self.flex_index.index_path == other.flex_index.index_path and
+            self.num_results == other.num_results and
+            self.qbatch == other.qbatch and
+            self.drop_query_vec == other.drop_query_vec and
+            str(self.torch_vecs.device) == str(other.torch_vecs.device) and
+            str(self.torch_vecs.dtype) == str(other.torch_vecs.dtype)
+        )
+
+    def __hash__(self):
+        return hash((
+            TorchRetriever,
+            self.flex_index.index_path,
+            self.num_results,
+            self.qbatch,
+            self.drop_query_vec,
+            str(self.torch_vecs.device),
+            str(self.torch_vecs.dtype),
+        ))
+
 
 def _torch_vecs(self, *, device: Optional[str] = None, fp16: bool = False) -> torch.Tensor:
     """Return the indexed vectors as a pytorch tensor.

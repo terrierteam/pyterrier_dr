@@ -9,7 +9,7 @@ from . import FlexIndex
 
 
 class FlatNavRetriever(pt.Transformer):
-    def __init__(self, flex_index, flatnav_index, *, threads=16, ef_search=100, num_initializations=100, num_results=1000, qbatch=64, drop_query_vec=False, verbose=False):
+    def __init__(self, flex_index, flatnav_index, *, threads=16, ef_search=100, num_initializations=100, num_results=1000, qbatch=64, drop_query_vec=False, verbose=False, index_spec=None):
         self.flex_index = flex_index
         self.flatnav_index = flatnav_index
         self.threads = threads
@@ -19,6 +19,7 @@ class FlatNavRetriever(pt.Transformer):
         self.drop_query_vec = drop_query_vec
         self.num_initializations = num_initializations
         self.verbose = verbose
+        self.index_spec = index_spec
 
     def fuse_rank_cutoff(self, k):
         return None # disable fusion for ANN
@@ -65,6 +66,35 @@ class FlatNavRetriever(pt.Transformer):
         if self.drop_query_vec:
             inp = inp.drop(columns='query_vec')
         return result.to_df(inp)
+
+    def __eq__(self, other):
+        if not isinstance(other, FlatNavRetriever):
+            return NotImplemented
+        return (
+            self.flex_index.index_path == other.flex_index.index_path and
+            self.index_spec == other.index_spec and
+            self.threads == other.threads and
+            self.ef_search == other.ef_search and
+            self.num_initializations == other.num_initializations and
+            self.num_results == other.num_results and
+            self.qbatch == other.qbatch and
+            self.drop_query_vec == other.drop_query_vec and
+            self.verbose == other.verbose
+        )
+
+    def __hash__(self):
+        return hash((
+            FlatNavRetriever,
+            self.flex_index.index_path,
+            self.index_spec,
+            self.threads,
+            self.ef_search,
+            self.num_initializations,
+            self.num_results,
+            self.qbatch,
+            self.drop_query_vec,
+            self.verbose,
+        ))
 
 
 def _flatnav_retriever(self,
@@ -135,5 +165,5 @@ def _flatnav_retriever(self,
         else:
             self._cache[key] = flatnav.index.IndexIPFloat.load_index(str(self.index_path/index_name))
             self._cache[key].set_data_type(flatnav.data_type.DataType.float32)
-    return FlatNavRetriever(self, self._cache[key], threads=threads, ef_search=ef_search, num_initializations=num_initializations, num_results=num_results, qbatch=qbatch, drop_query_vec=drop_query_vec, verbose=verbose)
+    return FlatNavRetriever(self, self._cache[key], threads=threads, ef_search=ef_search, num_initializations=num_initializations, num_results=num_results, qbatch=qbatch, drop_query_vec=drop_query_vec, verbose=verbose, index_spec=key)
 FlexIndex.flatnav_retriever = _flatnav_retriever
