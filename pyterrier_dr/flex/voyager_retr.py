@@ -42,7 +42,7 @@ class VoyagerRetriever(pt.Indexer):
         QBATCH = self.qbatch
         it = range(0, num_q, QBATCH)
         if self.flex_index.verbose:
-            it = pt.tqdm(it, unit='qbatch')
+            it = pt.tqdm(it, unit='qbatch', desc='VoyagerRetriever')
         for qidx in it:
             qvec_batch = query_vecs[qidx:qidx+QBATCH]
             neighbor_ids, distances = self.voyager_index.query(qvec_batch, self.num_results, self.query_ef)

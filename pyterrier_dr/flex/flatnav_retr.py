@@ -40,7 +40,7 @@ class FlatNavRetriever(pt.Transformer):
         QBATCH = self.qbatch
         it = range(0, num_q, QBATCH)
         if self.flex_index.verbose:
-            it = pt.tqdm(it, unit='qbatch')
+            it = pt.tqdm(it, unit='qbatch', desc='FlatNavRetriever')
         self.flatnav_index.set_num_threads(self.threads)
 
         result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])

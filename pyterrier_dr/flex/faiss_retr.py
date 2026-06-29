@@ -54,7 +54,7 @@ class FaissRetriever(pt.Indexer):
             self.faiss_index.hnsw.search_bounded_queue = self.search_bounded_queue
         it = range(0, num_q, QBATCH)
         if self.flex_index.verbose:
-            it = pt.tqdm(it, unit='qbatch')
+            it = pt.tqdm(it, unit='qbatch', desc='FaissRetriever')
 
         for qidx in it:
             scores, dids = self.faiss_index.search(query_vecs[qidx:qidx+QBATCH], self.num_results)
