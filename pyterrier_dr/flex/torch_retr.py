@@ -63,6 +63,11 @@ class TorchRetriever(pt.Transformer):
     def transform(self, inp):
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
+        if inp.empty:
+            if self.drop_query_vec:
+                inp = inp.drop(columns='query_vec')
+            return result.to_df(inp)
         query_vecs = np.stack(inp['query_vec'])
         query_vecs = torch.from_numpy(query_vecs).to(self.torch_vecs)
 
