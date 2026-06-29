@@ -132,9 +132,6 @@ dmypy.json
 
 .DS_Store
 
-flex/
-*.flex
-
 checkpoints_jpq
 tmp
 
