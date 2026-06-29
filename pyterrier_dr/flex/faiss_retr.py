@@ -36,6 +36,11 @@ class FaissRetriever(pt.Indexer):
     def transform(self, inp):
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
+        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
+        if inp.empty:
+            if self.drop_query_vec:
+                inp = inp.drop(columns='query_vec')
+            return result.to_df(inp)
         docnos, config = self.flex_index.payload(return_dvecs=False)
         query_vecs = np.stack(inp['query_vec'])
         query_vecs = query_vecs.copy()
@@ -51,7 +56,6 @@ class FaissRetriever(pt.Indexer):
         if self.flex_index.verbose:
             it = pt.tqdm(it, unit='qbatch')
 
-        result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])
         for qidx in it:
             scores, dids = self.faiss_index.search(query_vecs[qidx:qidx+QBATCH], self.num_results)
             for s, d in zip(scores, dids):
