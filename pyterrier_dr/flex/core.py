@@ -1,4 +1,4 @@
-from typing import Union, Iterable, Dict
+from typing import Union, Iterable, Dict, Optional
 import shutil
 import itertools
 import json
@@ -257,3 +257,8 @@ class FlexIndexer(pt.Indexer):
 def _load_dvecs(flex_index, inp):
     dvecs, config = flex_index.payload(return_docnos=False)
     return dvecs[flex_index._load_docids(inp)]
+
+
+def _validate_mask(mask: Optional[np.ndarray]) -> None:
+    if mask is not None and not np.isin(mask, [0, 1]).all():
+        raise ValueError("mask must contain only 0 or 1 values")
