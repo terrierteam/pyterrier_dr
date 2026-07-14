@@ -120,7 +120,8 @@ def replace_with_xformers_attention():
     LlamaAttention.forward = llama_xformers_forward
 
 class _RepLLamaBiEncoderBase(BiEncoder):
-    def __init__(self, model: str, tokenizer, batch_size=32, text_field='text', verbose=False, device=None):
+    def __init__(self, model: str, tokenizer, batch_size=32, text_field='text', verbose=False, device=None,
+                 doc_max_length=256):
         super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -130,6 +131,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         tokenizer.pad_token = tokenizer.unk_token
         tokenizer.padding_side = "right"
         self.tokenizer = tokenizer
+        self.doc_max_length = doc_max_length
 
     # padding handling as per https://github.com/texttron/tevatron/blob/main/examples/repllama/repllama.py
 
@@ -155,7 +157,7 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         with torch.no_grad():
             for chunk in chunked(texts, batch_size or self.batch_size):
                 # NB: titles should be prepended in the indexing pipeline, if available
-                inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=256)
+                inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=self.doc_max_length)
                 inps = {k: v.to(self.device) for k, v in inps.items()}
                 p_hidden = self.model(**inps).last_hidden_state
                 attention_mask = inps['attention_mask']
@@ -186,10 +188,13 @@ class _RepLLamaBiEncoderBase(BiEncoder):
 
 class _RepLLamaBiEncoder(_RepLLamaBiEncoderBase, metaclass=Variants):
     VARIANTS: dict = None
+
     def __init__(self, model_name=None, batch_size=32, text_field='text', verbose=False, device=None):
         self.model_name = model_name or next(iter(self.VARIANTS.values()))
+        doc_max_length = 2048 if self.model_name.endswith('-doc') else 256
         tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
-        super().__init__(model_name, tokenizer, batch_size=batch_size, text_field=text_field, verbose=verbose, device=device)
+        super().__init__(self.model_name, tokenizer, batch_size=batch_size, text_field=text_field,
+                         verbose=verbose, device=device, doc_max_length=doc_max_length)
 
     def __repr__(self):
         inv_variants = {v: k for k, v in self.VARIANTS.items()}
@@ -205,10 +210,12 @@ class RepLLama(_RepLLamaBiEncoder):
      - peft
     
     .. automethod:: v1_7b()
+    .. automethod:: v1_7b_doc()
 
     https://arxiv.org/pdf/2310.08319
-    
+
     """
     VARIANTS = {
         'v1_7b': 'castorini/repllama-v1-7b-lora-passage',
+        'v1_7b_doc': 'castorini/repllama-v1-7b-lora-doc',
     }
