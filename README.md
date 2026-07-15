@@ -242,7 +242,7 @@ pt.Experiment(
 )
 ```
 
-A JPQ index and model checkpoint for TCT-ColBERT model is available as a PyTerrier Artifact from HuggingFace: https://huggingface.co/datasets/jpq-repro/msmarco-passage-train__tct_colbert__faiss2opq__M96_nbits8__ps159744__neg200__ibn__lr. See the notebook for a retrieval using this index.
+A JPQ index and model checkpoint for TCT-ColBERT model is available as a PyTerrier Artifact from HuggingFace: https://huggingface.co/datasets/jpq-repro/msmarco-passage-train__tct_colbert__faiss2opq__M96_nbits8__ps159744__neg200__ibn__lr__. See the notebook for a retrieval using this index.
 
 
 ## BGE-M3 Encoder
