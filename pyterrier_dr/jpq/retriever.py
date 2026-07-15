@@ -191,6 +191,8 @@ class JPQRetriever(pt.Transformer):
     def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
         pta.validate.query_frame(topics, extra_columns=["query_vec"])
         qvecs = topics["query_vec"].to_list()
+        if not len(topics):
+            return np.empty((0, self.d), dtype=np.float32), []
         Q = np.stack(qvecs).astype(np.float32, copy=False)
         Q = np.ascontiguousarray(Q)
         if self.opq is not None:
