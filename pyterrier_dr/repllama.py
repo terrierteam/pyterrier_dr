@@ -9,10 +9,10 @@ def _get_model(peft_model_name):
     #replace_with_xformers_attention()
     from peft import PeftModel, PeftConfig
     config = PeftConfig.from_pretrained(peft_model_name)
-    base_model = AutoModel.from_pretrained(config.base_model_name_or_path, device_map="auto", dtype=torch.float16)
+    base_model = AutoModel.from_pretrained(config.base_model_name_or_path, dtype=torch.float16)
     model = PeftModel.from_pretrained(base_model, peft_model_name)
     model = model.merge_and_unload()
-    model.eval().compile()
+    model.eval()
     return model
 
 def replace_with_xformers_attention():
