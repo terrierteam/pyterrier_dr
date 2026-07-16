@@ -190,9 +190,9 @@ retr_pipeline = model >> index.faiss_hnsw_retriever()
 
 ## Joint Product Quantisation
 
-PyTerrier_DR provides training and retrieval code for Joint Product Quantisation. 
+PyTerrier_DR provides training and retrieval code for Joint Product Quantisation. We published a reproducibility paper - see https://dl.acm.org/doi/10.1145/3805712.3808565.
 
-Want to try it out? See our Colab notebook: [https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing](https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing)
+Want to try it out? See our notebook for MSMARCO: [jpq-tct-replication.ipynb](examples/jpq-tct-replication.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/terrier-org/pyterrier/blob/master/examples/notebooks/indexing.ipynb)
 
 ### Training
 
@@ -242,9 +242,7 @@ pt.Experiment(
 )
 ```
 
-A sample JPQ index for TCT is available as a zip from [https://drive.google.com/file/d/1WYrz8ywIawerP7Dy8R_otQg--T01vT6M/view?usp=sharing](https://drive.google.com/file/d/1WYrz8ywIawerP7Dy8R_otQg--T01vT6M/view?usp=sharing). See the notebook below for usage.
-
-Our colab notebook to allow you to reproduce a TCT result from the paper is at [https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing](https://colab.research.google.com/drive/13c0KapmsdqMhSv1rDTKcBcyQvuT7CnZN?usp=sharing)
+A JPQ index and model checkpoint for TCT-ColBERT model is available as a PyTerrier Artifact from HuggingFace: https://huggingface.co/datasets/jpq-repro/msmarco-passage-train__tct_colbert__faiss2opq__M96_nbits8__ps159744__neg200__ibn__lr__. See the notebook for a retrieval using this index.
 
 
 ## BGE-M3 Encoder
