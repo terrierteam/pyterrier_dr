@@ -192,7 +192,10 @@ retr_pipeline = model >> index.faiss_hnsw_retriever()
 
 PyTerrier_DR provides training and retrieval code for Joint Product Quantisation. We published a reproducibility paper - see https://dl.acm.org/doi/10.1145/3805712.3808565.
 
-Want to try it out? See our notebook for MSMARCO: [jpq-tct-replication.ipynb](examples/jpq-tct-replication.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/terrier-org/pyterrier/blob/master/examples/notebooks/indexing.ipynb)
+Want to try it out? See our notebooks below. 
+- MSMARCO: [jpq-tct-replication.ipynb](examples/jpq-tct-replication.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/terrierteam/pyterrier_dr/blob/main/examples/jpq-tct-replication.ipynb)
+- NQ: [jpq-tct-nq.ipynb](examples/jpq-tct-nq.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/terrierteam/pyterrier_dr/blob/main/examples/jpq-tct-nq.ipynb)
+
 
 ### Training
 
