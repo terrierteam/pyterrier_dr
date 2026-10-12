@@ -13,7 +13,7 @@ from pyterrier_dr.jpq.pq import (
     ProductQuantizerFAISSIndexPQOPQ,
 )
 from pyterrier_dr.jpq.utils import code_type_from_Ks
-from .retriever import JPQRetrieverFlat, JPQRetrieverPrune, JPQRetrieverPQ
+from .retriever import JPQRetrieverFlat, JPQRetrieverPQ
 
 
 @dataclass(slots=True)
@@ -263,17 +263,3 @@ class JPQIndex(pt.Artifact):
 
         """
         return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq, gpu=gpu)
-
-    def retriever_prune(self, topk: int = 1000, ub_inflation: float =1.) -> "JPQRetrieverPrune":
-        """Return a dynamically pruned retriever.
-
-        Args:
-            topk (int, optional): Number of documents to return per query. Defaults to 1000.
-            ub_inflation (float, optional): Multiplier applied to pruning upper bounds; 
-                larger values prune less aggressively. Defaults to 1.0.
-
-        See Also:
-            https://arxiv.org/pdf/2505.00560
-        
-        """
-        return JPQRetrieverPrune(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Prune", ub_inflation=ub_inflation, opq = self.opq)
