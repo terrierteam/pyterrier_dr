@@ -6,5 +6,5 @@ voyager
 FlagEmbedding
 faiss-cpu
 kannolo>=0.6.0
-ruff
+ruff<0.16
 sentencepiece
