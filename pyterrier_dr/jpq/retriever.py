@@ -7,7 +7,6 @@ import pyterrier_alpha as pta
 from pyterrier_dr import FlexIndex
 from pyterrier_dr.jpq.pq import ProductQuantizer
 import torch
-from .utils import timer
 from pyterrier import tqdm
 
 import faiss
