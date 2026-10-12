@@ -61,7 +61,6 @@ def _pack_pq_codes(codes: np.ndarray, nbits: int) -> np.ndarray:
 
     return out.reshape(-1)  # flat vector as FAISS expects
 
-
 class JPQRetriever(pt.Transformer):
 
     def __init__(
