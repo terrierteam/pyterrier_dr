@@ -43,6 +43,15 @@ SAE_CHECKPOINT_VERSION = 1
 LATENT_CONCEPTS_FILENAME = 'latent_concepts.jsonl'
 LATENT_DESCRIPTIONS_FILENAME = 'latent_descriptions.jsonl'
 
+SAE_MESSAGE_DISPLAYED = False
+def _print_sae_message():
+    global SAE_MESSAGE_DISPLAYED
+    if not SAE_MESSAGE_DISPLAYED:
+        print("This functionality is built upon the following research: Decoding Dense Embeddings: "
+              "Sparse Autoencoders for Interpreting and Discretizing Dense Retrieval. Seongwan Park, "
+              "Taeklim Kim, Youngjoong Ko. In Proc EMNLP 2025. (https://arxiv.org/abs/2403.16058). "
+              "Please cite this paper if you use this functionality in your research.")
+        SAE_MESSAGE_DISPLAYED = True
 
 def _sae_device(device: Optional[Union[str, t.device]] = None) -> t.device:
     """Resolve a torch device, preferring CUDA, then Apple MPS, then CPU (unless a device is given)."""
@@ -188,6 +197,7 @@ def train_sae(vecs: np.ndarray, *, hidden_mult: int = 8, k: int = 32, batch_size
     nmse = (mse / bmse).item()
     if verbose:
         print(f"act_thresh={act_thresh:.4f}  NMSE={nmse:.4f}")
+    _print_sae_message()
     return model, act_thresh, nmse
 
 
@@ -354,6 +364,7 @@ class LatentDescriber(pt.Transformer):
         self.batch_size = batch_size
         self.vec_col = vec_col
         self.device = _sae_device(device)
+        _print_sae_message()
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
         with pt.validate.any(inp, context=self) as v:
