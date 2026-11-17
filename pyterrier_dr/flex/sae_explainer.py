@@ -9,6 +9,11 @@ are used to explain queries and documents (see :meth:`FlexIndex.train_sae
 <pyterrier_dr.FlexIndex.extract_latent_concepts>`, :meth:`FlexIndex.generate_latent_descriptions
 <pyterrier_dr.FlexIndex.generate_latent_descriptions>` and :meth:`FlexIndex.latent_describer
 <pyterrier_dr.FlexIndex.latent_describer>`).
+
+:meth:`FlexIndex.train_sae <pyterrier_dr.FlexIndex.train_sae>` serialises the training results
+to the index directory: ``sae.pt`` (the model checkpoint), the ``sae`` section of
+``pt_meta.json`` (the configuration, including the activation threshold) and
+``latent_concepts.jsonl`` (the latent concepts of all documents).
 """
 import heapq
 import json
@@ -28,6 +33,7 @@ from . import FlexIndex
 
 SAE_CHECKPOINT_FORMAT = 'flex_sae'
 SAE_CHECKPOINT_VERSION = 1
+LATENT_CONCEPTS_FILENAME = 'latent_concepts.jsonl'
 
 
 def _sae_device(device: Optional[Union[str, t.device]] = None) -> t.device:
@@ -147,7 +153,7 @@ def train_sae(vecs: np.ndarray, *, hidden_mult: int = 8, k: int = 32, batch_size
     optimizer = t.optim.AdamW(model.parameters(), lr=lr, eps=6e-10)
 
     model.train()
-    pbar = pt.tqdm(range(epochs), disable=not verbose)
+    pbar = pt.tqdm(range(epochs), disable=not verbose, desc='Training SAE')
     for _ in pbar:
         running, model.mean_of_min_act = 0.0, 0.0
         for (x,) in loader:
@@ -390,10 +396,11 @@ def _train_sae(self, *, hidden_mult: int = 8, k: int = 32, batch_size: int = 256
                device: Optional[Union[str, t.device]] = None, save: bool = True):
     """Train a Batch-TopK sparse autoencoder over the vectors in this index.
 
-    At the end of training, the model is automatically saved to this index via
-    :meth:`save_sae`: the checkpoint is written to ``sae.pt`` in the index directory, and
-    the configuration metadata (including the activation threshold and NMSE) is recorded
-    in the index's ``pt_meta.json``.
+    At the end of training, the model and the latent concepts of all documents are automatically
+    serialised to the index: the checkpoint is written to ``sae.pt`` in the index directory and
+    the configuration metadata (including the activation threshold and NMSE) is recorded in the
+    index's ``pt_meta.json`` (via :meth:`save_sae`), and the latent concepts are written to
+    ``latent_concepts.jsonl`` (via :meth:`extract_latent_concepts`).
 
     Args:
         hidden_mult: The number of latents per input dimension.
@@ -436,6 +443,8 @@ def _train_sae(self, *, hidden_mult: int = 8, k: int = 32, batch_size: int = 256
             'epochs': epochs,
             'nmse': nmse,
         })
+    # extract and serialise the latent concepts of all documents to the index
+    self.extract_latent_concepts(sae=model, threshold=act_thresh, device=device)
     return model, act_thresh, nmse
 
 
@@ -510,12 +519,27 @@ def _load_sae(self, *, path: Optional[str] = None, device: Optional[Union[str, t
     return model, act_thresh
 
 
+def _write_latent_concepts(results: List[Dict], save_path) -> None:
+    with open(save_path, 'w', encoding='utf-8') as fout:
+        for r in results:
+            fout.write(json.dumps(r, ensure_ascii=False) + '\n')
+
+
+def _load_latent_concepts(save_path) -> List[Dict]:
+    with open(save_path, 'rt', encoding='utf-8') as fin:
+        return [json.loads(line) for line in fin]
+
+
 def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold: Optional[float] = None, *,
                              batch_size: int = 4096, device: Optional[Union[str, t.device]] = None,
                              save_path: Optional[str] = None) -> List[Dict]:
     """Extract the latent concepts of each document in this index.
 
     For each document vector, the latents whose activation exceeds ``threshold`` are recorded.
+    The results are serialised to ``latent_concepts.jsonl`` in the index directory (or to
+    ``save_path`` if given). If no SAE or threshold is given, and previously serialised latent
+    concepts exist in the index directory, they are loaded from disk instead of being
+    recomputed.
 
     Args:
         sae: a trained SAE model (e.g. as returned by :meth:`train_sae`). If omitted, the SAE
@@ -523,7 +547,8 @@ def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold
         threshold: the activation threshold (defaults to the ``act_thresh`` saved by :meth:`train_sae`).
         batch_size: the number of vectors to encode at once.
         device: the device to encode on.
-        save_path: if given, the results are also written as JSONL (one line per document).
+        save_path: the path to serialise the results to (defaults to ``latent_concepts.jsonl``
+            in the index directory).
 
     Returns:
         A list with one entry per document: ``{'docid', 'docno', 'ids', 'weight'}``, where
@@ -531,6 +556,12 @@ def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold
         ``threshold`` and ``weight`` the corresponding activations.
     """
     self._assert_built()
+    default_save_path = self.index_path / LATENT_CONCEPTS_FILENAME
+    if sae is None and threshold is None and default_save_path.exists():
+        results = _load_latent_concepts(default_save_path)
+        if save_path is not None and Path(save_path) != default_save_path:
+            _write_latent_concepts(results, save_path)
+        return results
     if sae is None or threshold is None:
         loaded_sae, loaded_thresh = self.load_sae(device=device)
         if sae is None:
@@ -543,11 +574,9 @@ def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold
     result_docnos = docnos.fwd[np.arange(len(results))]
     for entry, docno in zip(results, result_docnos):
         entry['docno'] = docno
-    if save_path:
-        with open(save_path, 'w', encoding='utf-8') as fout:
-            for r in results:
-                fout.write(json.dumps(r, ensure_ascii=False) + '\n')
-        print(f'Latent concepts saved to {save_path}')
+    save_path = default_save_path if save_path is None else save_path
+    _write_latent_concepts(results, save_path)
+    print(f'Latent concepts saved to {save_path}')
     return results
 
 

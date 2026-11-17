@@ -86,12 +86,28 @@ class TestSaeExplainer(unittest.TestCase):
             self.assertAlmostEqual(meta['nmse'], nmse)
             self.assertEqual(meta['checkpoint'], 'sae.pt')
 
+    def test_train_sae_saves_latent_concepts(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index, _ = self._build_index(destdir)
+            self._train(index)
+            concepts_path = index.index_path / 'latent_concepts.jsonl'
+            self.assertTrue(concepts_path.exists())
+            with open(concepts_path, 'rt') as fin:
+                lines = [json.loads(line) for line in fin]
+            self.assertEqual(len(lines), 500)
+            self.assertIn('docid', lines[0])
+            self.assertIn('docno', lines[0])
+            self.assertIn('ids', lines[0])
+            self.assertIn('weight', lines[0])
+
     def test_train_sae_no_save(self):
         with tempfile.TemporaryDirectory() as destdir:
             index, _ = self._build_index(destdir)
             sae, act_thresh, nmse = self._train(index, save=False)
             self.assertFalse((index.index_path / 'sae.pt').exists())
             self.assertIsNone(index.sae_config())
+            # the latent concepts are still extracted and serialised
+            self.assertTrue((index.index_path / 'latent_concepts.jsonl').exists())
             with self.assertRaises(RuntimeError):
                 index.load_sae()
             # an in-memory model can still be used
@@ -125,6 +141,18 @@ class TestSaeExplainer(unittest.TestCase):
                 self.assertTrue(all(0 <= i < 64 * 4 for i in r['ids']))
             # most documents should have at least one active latent
             self.assertGreater(sum(1 for r in results if r['ids']), 0.9 * len(results))
+
+    def test_extract_latent_concepts_loads_from_disk(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index, _ = self._build_index(destdir)
+            self._train(index)
+            # a fresh index object on the same directory loads the serialised concepts,
+            # without needing to load (or have) the SAE model
+            index2 = FlexIndex(destdir + '/index', verbose=False)
+            results = index2.extract_latent_concepts(device='cpu')
+            self.assertEqual(len(results), 500)
+            self.assertEqual(results[0]['docno'], '0')
+            self.assertEqual(results[0]['docid'], 0)
 
     def test_extract_latent_concepts_save_path(self):
         with tempfile.TemporaryDirectory() as destdir:
@@ -265,6 +293,10 @@ class TestSaeExplainerBright(unittest.TestCase):
         self.assertEqual(meta['k'], 16)
         self.assertAlmostEqual(meta['act_thresh'], self.act_thresh)
         self.assertEqual(meta['checkpoint'], 'sae.pt')
+        concepts_path = self.index.index_path / 'latent_concepts.jsonl'
+        self.assertTrue(concepts_path.exists())
+        with open(concepts_path, 'rt') as fin:
+            self.assertEqual(sum(1 for _ in fin), 60792)
 
     def test_load_sae(self):
         sae, act_thresh = self.index.load_sae(device='cpu')

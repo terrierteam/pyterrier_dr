@@ -196,17 +196,20 @@ A Batch-TopK sparse autoencoder is trained over the indexed document vectors, an
 LLM and used to explain queries and documents:
 
 ```python
-from pyterrier_dr import FlexIndex
+from pyterrier_dr import FlexIndex, SBertBiEncoder
 import pyterrier as pt
 
+model = SBertBiEncoder(
+    "sentence-transformers/all-MiniLM-L6-v2",
+    batch_size=32,
+    text_field="text"
+)
 index = FlexIndex.from_hf('pyterrier-tutorial/bright.sustainable.mini.dense')
 
 # train a sparse autoencoder over the indexed vectors
-# (the model is automatically saved to the index: sae.pt plus config in pt_meta.json)
-sae, act_thresh, nmse = index.train_sae(hidden_mult=8, k=32, epochs=100)
-
-# extract the latent concepts of each document
-latent_concepts = index.extract_latent_concepts()
+# (the model is automatically saved to the index: sae.pt plus config in pt_meta.json,
+# and the latent concepts of all documents are saved to latent_concepts.jsonl)
+index.train_sae(hidden_mult=8, k=32, epochs=100)
 
 # describe the latents with an LLM (requires the "openai" package)
 text_loader = pt.text.get_text(pt.get_dataset('irds:bright/sustainable-living'))
