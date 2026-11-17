@@ -35,6 +35,7 @@ from . import FlexIndex
 SAE_CHECKPOINT_FORMAT = 'flex_sae'
 SAE_CHECKPOINT_VERSION = 1
 LATENT_CONCEPTS_FILENAME = 'latent_concepts.jsonl'
+LATENT_DESCRIPTIONS_FILENAME = 'latent_descriptions.jsonl'
 
 
 def _sae_device(device: Optional[Union[str, t.device]] = None) -> t.device:
@@ -551,6 +552,17 @@ def _load_latent_concepts(save_path) -> List[Dict]:
         return [json.loads(line) for line in fin]
 
 
+def _write_latent_descriptions(descriptions: Dict[int, str], save_path) -> None:
+    with open(save_path, 'w', encoding='utf-8') as fout:
+        for lid, interp in descriptions.items():
+            fout.write(json.dumps({'id': lid, 'interp': interp}, ensure_ascii=False) + '\n')
+
+
+def _load_latent_descriptions(save_path) -> Dict[int, str]:
+    with open(save_path, 'rt', encoding='utf-8') as fin:
+        return {entry['id']: entry['interp'] for entry in map(json.loads, fin)}
+
+
 def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold: Optional[float] = None, *,
                              batch_size: int = 4096, device: Optional[Union[str, t.device]] = None,
                              save_path: Optional[str] = None) -> List[Dict]:
@@ -653,13 +665,26 @@ def _generate_latent_descriptions(self, text_loader: Optional[pt.Transformer] = 
             res[d] = text
         return res
 
-    return generate_descriptions(
+    descriptions = generate_descriptions(
         latent_concepts, get_texts,
         top_k=top_k, latent_ids=latent_ids, top_proportion=top_proportion,
         api_key=api_key, base_url=base_url, model=model,
-        max_chars=max_chars, max_length=max_length, batch_size=batch_size, save_path=save_path,
+        max_chars=max_chars, max_length=max_length, batch_size=batch_size,
         verbose=self.verbose,
     )
+    default_save_path = self.index_path / LATENT_DESCRIPTIONS_FILENAME
+    if save_path is None:
+        # serialise to the index, merging with any previously saved descriptions
+        if default_save_path.exists():
+            existing = _load_latent_descriptions(default_save_path)
+            existing.update(descriptions)
+            descriptions = existing
+        _write_latent_descriptions(descriptions, default_save_path)
+        print(f'Latent descriptions saved to {default_save_path}')
+    else:
+        _write_latent_descriptions(descriptions, save_path)
+        print(f'Latent descriptions saved to {save_path}')
+    return descriptions
 
 
 def _latent_describer(self, sae: Optional[SAE_bias_pre] = None, descriptions: Optional[Dict[int, str]] = None, *,
