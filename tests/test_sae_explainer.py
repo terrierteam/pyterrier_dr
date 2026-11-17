@@ -274,6 +274,45 @@ class TestSaeExplainer(unittest.TestCase):
                         index.generate_latent_descriptions(latent_concepts, text_loader,
                                                             top_proportion=bad)
 
+    def test_generate_latent_descriptions_max_length(self):
+        captured = []
+
+        def _recording_openai(api_key=None, base_url=None):
+            class _Completions:
+                def create(self, model, messages):
+                    captured.append(messages)
+                    n = len(messages) - 1
+                    content = '\n'.join(f'[interpretation {i}]: fake description {i}' for i in range(n))
+                    resp = types.SimpleNamespace()
+                    resp.choices = [types.SimpleNamespace(message=types.SimpleNamespace(content=content))]
+                    return resp
+
+            class _Chat:
+                completions = _Completions()
+
+            class _Client:
+                chat = _Chat()
+
+            return _Client()
+
+        with tempfile.TemporaryDirectory() as destdir:
+            index, dataset = self._build_index(destdir)
+            self._train(index)
+            latent_concepts = index.extract_latent_concepts(device='cpu')
+            text_loader = _FakeTextLoader({str(i): f'the text of document {i}' for i in range(len(dataset))})
+            fired = [i for i, _ in Counter(i for r in latent_concepts for i in r['ids']).most_common(4)]
+            with mock.patch('openai.OpenAI', _recording_openai):
+                index.generate_latent_descriptions(
+                    latent_concepts, text_loader,
+                    top_k=3, latent_ids=fired, max_length=60, batch_size=4,
+                )
+            user_messages = [m for m in captured[0][1:] if m['role'] == 'user']
+            self.assertEqual(len(user_messages), len(fired))
+            # every prompt is truncated to at most max_length characters
+            self.assertTrue(all(len(m['content']) <= 60 for m in user_messages))
+            # and at least one was actually truncated (the untruncated prompts are longer)
+            self.assertTrue(any(len(m['content']) == 60 for m in user_messages))
+
     def test_generate_latent_descriptions_requires_text_loader(self):
         with tempfile.TemporaryDirectory() as destdir:
             index, _ = self._build_index(destdir)

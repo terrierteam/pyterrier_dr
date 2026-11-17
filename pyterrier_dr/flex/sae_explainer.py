@@ -241,7 +241,7 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
                           top_k: int = 10, latent_ids: Optional[List[int]] = None,
                           top_proportion: Optional[float] = None,
                           api_key: Optional[str] = None, base_url: Optional[str] = None,
-                          model: str = "gpt-4.1-mini", max_chars: int = 1500,
+                          model: str = "gpt-4.1-mini", max_chars: int = 1500, max_length: Optional[int] = None,
                           batch_size: int = 8, save_path: Optional[str] = None,
                           verbose: bool = True) -> Dict[int, str]:
     """Label each latent with an LLM, using the documents in which it activates most strongly.
@@ -257,6 +257,7 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
         api_key, base_url, model: select the OpenAI-compatible LLM endpoint (if omitted, the
             ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` environment variables are used).
         max_chars: the maximum number of characters of each example text to show.
+        max_length: the maximum total length of each prompt (user message) in characters; longer prompts are truncated.
         batch_size: the number of latents to describe per API call (1 = one latent per call).
         save_path: if given, the interpretations are also written as JSONL.
         verbose: whether to display a progress bar.
@@ -303,6 +304,8 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
             content = f"### Pattern {n}\n" + "".join(
                 f"Example{i}: {texts[d][:max_chars]}\nActivation: {a}\n" for i, (d, a) in enumerate(docs)
             )
+            if max_length is not None:
+                content = content[:max_length]
             user_messages.append({"role": "user", "content": content})
         completion = client.chat.completions.create(
             model=model,
@@ -603,7 +606,7 @@ def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = 
                                   top_k: int = 10, latent_ids: Optional[List[int]] = None,
                                   top_proportion: Optional[float] = None,
                                   api_key: Optional[str] = None, base_url: Optional[str] = None,
-                                  model: str = 'gpt-4.1-mini', max_chars: int = 1500,
+                                  model: str = 'gpt-4.1-mini', max_chars: int = 1500, max_length: Optional[int] = None,
                                   batch_size: int = 8, save_path: Optional[str] = None) -> Dict[int, str]:
     """Describe the latents of this index with an LLM, using the documents in which they activate most strongly.
 
@@ -620,6 +623,7 @@ def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = 
         api_key, base_url, model: select the OpenAI-compatible LLM endpoint (if omitted, the
             ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` environment variables are used).
         max_chars: the maximum number of characters of each example text to show.
+        max_length: the maximum total length of each prompt (user message) in characters; longer prompts are truncated.
         batch_size: the number of latents to describe per API call.
         save_path: if given, the interpretations are also written as JSONL.
 
@@ -653,7 +657,7 @@ def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = 
         latent_concepts, get_texts,
         top_k=top_k, latent_ids=latent_ids, top_proportion=top_proportion,
         api_key=api_key, base_url=base_url, model=model,
-        max_chars=max_chars, batch_size=batch_size, save_path=save_path,
+        max_chars=max_chars, max_length=max_length, batch_size=batch_size, save_path=save_path,
         verbose=self.verbose,
     )
 
