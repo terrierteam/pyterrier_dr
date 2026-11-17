@@ -188,6 +188,39 @@ retr_pipeline = model >> index.faiss_hnsw_retriever()
 # ...
 ```
 
+## Explanations (Sparse Autoencoders)
+
+A `FlexIndex` can be extended with *explanations* of its dense vectors, following
+["Decoding Dense Embeddings: Sparse Autoencoders for Interpreting and Discretizing Dense Retrieval"](https://arxiv.org/abs/2403.16058).
+A Batch-TopK sparse autoencoder is trained over the indexed document vectors, and its latents can be described with an
+LLM and used to explain queries and documents:
+
+```python
+from pyterrier_dr import FlexIndex
+import pyterrier as pt
+
+index = FlexIndex.from_hf('pyterrier-tutorial/bright.sustainable.mini.dense')
+
+# train a sparse autoencoder over the indexed vectors
+# (the model is automatically saved to the index: sae.pt plus config in pt_meta.json)
+sae, act_thresh, nmse = index.train_sae(hidden_mult=8, k=32, epochs=100)
+
+# extract the latent concepts of each document
+latent_concepts = index.extract_latent_concepts()
+
+# describe the latents with an LLM (requires the "openai" package)
+text_loader = pt.text.get_text(pt.get_dataset('irds:bright/sustainable-living'))
+descriptions = index.generate_latent_descriptions(latent_concepts, text_loader, model='gpt-4.1-mini')
+
+# annotate queries (or documents) with their most active latent descriptions
+explainer = index.latent_describer(descriptions, threshold=act_thresh, num_latents=5)
+(model.query_encoder() >> explainer).search('renewable energy storage and grid stability')
+```
+
+`train_sae`, `extract_latent_concepts`, `generate_latent_descriptions` and `latent_describer` all load the SAE
+automatically (via `index.load_sae()`) when one has previously been saved to the index. See
+`tests/test_sae_explainer.py` for a runnable example against the BRIGHT sustainable living corpus.
+
 ## Joint Product Quantisation
 
 PyTerrier_DR provides training and retrieval code for Joint Product Quantisation. We published a reproducibility paper - see https://dl.acm.org/doi/10.1145/3805712.3808565.

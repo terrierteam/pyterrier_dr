@@ -9,6 +9,7 @@ from pyterrier_dr.flex import ladr
 from pyterrier_dr.flex import gar
 from pyterrier_dr.flex import voyager_retr
 from pyterrier_dr.flex import diversity
+from pyterrier_dr.flex import sae_explainer
 from pyterrier_dr.flex.kannolo_retr import _kannolo_retr_hsnw as kannolo_retr_hsnw
 
-__all__ = ["FlexIndex", "IndexingMode", "np_retr", "torch_retr", "corpus_graph", "faiss_retr", "flatnav_retr", "scann_retr", "ladr", "gar", "voyager_retr", "diversity", "kannolo_retr_hsnw"]
+__all__ = ["FlexIndex", "IndexingMode", "np_retr", "torch_retr", "corpus_graph", "faiss_retr", "flatnav_retr", "scann_retr", "ladr", "gar", "voyager_retr", "diversity", "sae_explainer", "kannolo_retr_hsnw"]
