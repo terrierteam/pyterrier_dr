@@ -215,6 +215,11 @@ class TestSaeExplainer(unittest.TestCase):
                 }))
                 self.assertEqual(out['latent_ids'].iloc[0], [])
 
+            with self.subTest('empty input'):
+                out = describer(pd.DataFrame({'qid': [], 'query_vec': []}))
+                self.assertEqual(len(out), 0)
+                self.assertEqual(list(out.columns), ['qid', 'query_vec', 'latent_ids', 'latent_weights', 'latent_descs'])
+
             with self.subTest('validation'):
                 with self.assertRaises(Exception):
                     describer(pd.DataFrame({'qid': ['1']}))
@@ -312,6 +317,62 @@ class TestSaeExplainer(unittest.TestCase):
             self.assertTrue(all(len(m['content']) <= 60 for m in user_messages))
             # and at least one was actually truncated (the untruncated prompts are longer)
             self.assertTrue(any(len(m['content']) == 60 for m in user_messages))
+
+    def test_generate_latent_descriptions_saves_to_index(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index, dataset = self._build_index(destdir)
+            self._train(index)
+            latent_concepts = index.extract_latent_concepts(device='cpu')
+            text_loader = _FakeTextLoader({str(i): f'the text of document {i}' for i in range(len(dataset))})
+            fired = [i for i, _ in Counter(i for r in latent_concepts for i in r['ids']).most_common(4)]
+            descs_path = index.index_path / 'latent_descriptions.jsonl'
+            with mock.patch('openai.OpenAI', _fake_openai):
+                with self.subTest('first batch'):
+                    descriptions = index.generate_latent_descriptions(
+                        text_loader, latent_concepts,
+                        top_k=3, latent_ids=fired[:2], batch_size=2,
+                    )
+                self.assertEqual(set(descriptions), set(fired[:2]))
+                self.assertTrue(descs_path.exists())
+                with self.subTest('second batch merges'):
+                    descriptions = index.generate_latent_descriptions(
+                        text_loader, latent_concepts,
+                        top_k=3, latent_ids=fired[2:], batch_size=2,
+                    )
+                self.assertEqual(set(descriptions), set(fired))
+                with open(descs_path, 'rt') as fin:
+                    saved = {json.loads(line)['id']: json.loads(line)['interp'] for line in fin}
+                self.assertEqual(saved, descriptions)
+
+    def test_latent_describer_loads_descriptions_from_index(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index, dataset = self._build_index(destdir)
+            self._train(index)
+            latent_concepts = index.extract_latent_concepts(device='cpu')
+            text_loader = _FakeTextLoader({str(i): f'the text of document {i}' for i in range(len(dataset))})
+            fired = [i for i, _ in Counter(i for r in latent_concepts for i in r['ids']).most_common(2)]
+            with mock.patch('openai.OpenAI', _fake_openai):
+                descriptions = index.generate_latent_descriptions(
+                    text_loader, latent_concepts,
+                    top_k=3, latent_ids=fired, batch_size=2,
+                )
+            # previously generated descriptions are loaded automatically
+            describer = index.latent_describer(threshold=0.0)
+            out = describer(pd.DataFrame({
+                'qid': [str(i) for i in range(5)],
+                'query_vec': [dataset[i]['doc_vec'] for i in range(5)],
+            }))
+            annotated = [ids for ids in out['latent_ids'] if ids]
+            self.assertTrue(annotated)
+            for i in range(len(out)):
+                self.assertTrue(set(out['latent_ids'].iloc[i]) <= set(descriptions))
+                self.assertTrue(all(d in descriptions.values() for d in out['latent_descs'].iloc[i]))
+            # without any saved descriptions, an explicit dict is still required
+            index2 = FlexIndex(destdir + '/index2', verbose=False)
+            index2.index(self._generate_data())
+            self._train(index2)
+            with self.assertRaises(ValueError):
+                index2.latent_describer()
 
     def test_generate_latent_descriptions_requires_text_loader(self):
         with tempfile.TemporaryDirectory() as destdir:

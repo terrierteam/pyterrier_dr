@@ -14,6 +14,11 @@ are used to explain queries and documents (see :meth:`FlexIndex.train_sae
 to the index directory: ``sae.pt`` (the model checkpoint), the ``sae`` section of
 ``pt_meta.json`` (the configuration, including the activation threshold) and
 ``latent_concepts.jsonl`` (the latent concepts of all documents).
+:meth:`FlexIndex.generate_latent_descriptions <pyterrier_dr.FlexIndex.generate_latent_descriptions>`
+likewise serialises its results to ``latent_descriptions.jsonl``, and both
+:meth:`FlexIndex.extract_latent_concepts <pyterrier_dr.FlexIndex.extract_latent_concepts>` and
+:meth:`FlexIndex.latent_describer <pyterrier_dr.FlexIndex.latent_describer>` load these files
+automatically when they are present.
 """
 import heapq
 import json
@@ -26,6 +31,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import pyterrier as pt
+import pyterrier_alpha as pta
 import torch as t
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -357,6 +363,8 @@ class LatentDescriber(pt.Transformer):
                 v.columns(includes=["query_vec"], mode="query_vec")
                 v.columns(includes=["doc_vec"], mode="doc_vec")
         col = v.mode
+        if not len(inp):
+            return pta.DataFrameBuilder(['latent_ids', 'latent_weights', 'latent_descs']).to_df(inp)
         vecs_in = np.stack(inp[col].values).astype(np.float32)
 
         mask = None
@@ -637,10 +645,13 @@ def _generate_latent_descriptions(self, text_loader: Optional[pt.Transformer] = 
         max_chars: the maximum number of characters of each example text to show.
         max_length: the maximum total length of each prompt (user message) in characters; longer prompts are truncated.
         batch_size: the number of latents to describe per API call.
-        save_path: if given, the interpretations are also written as JSONL.
+        save_path: the path to serialise the interpretations to (defaults to
+            ``latent_descriptions.jsonl`` in the index directory, where they are merged with any
+            previously saved descriptions).
 
     Returns:
-        A dict of ``{latent_id: interpretation}``.
+        A dict of ``{latent_id: interpretation}`` (including any previously saved descriptions,
+        when the results are serialised to the index).
 
     Requires the ``openai`` package.
     """
@@ -701,7 +712,9 @@ def _latent_describer(self, sae: Optional[SAE_bias_pre] = None, descriptions: Op
         sae: a trained SAE model (e.g. as returned by :meth:`train_sae`). If omitted, the SAE
             previously saved to this index is loaded automatically (see :meth:`load_sae`).
         descriptions: a dict of ``{latent_id: description}`` (e.g. as returned by
-            :meth:`generate_latent_descriptions`).
+            :meth:`generate_latent_descriptions`). If omitted, the descriptions previously
+            serialised to this index by :meth:`generate_latent_descriptions` are loaded
+            automatically.
         threshold: the activation threshold; latents whose activation does not exceed it are
             ignored. Defaults to the ``act_thresh`` saved by :meth:`train_sae`.
         num_latents: the maximum number of latents to annotate per row.
@@ -715,7 +728,11 @@ def _latent_describer(self, sae: Optional[SAE_bias_pre] = None, descriptions: Op
     """
     self._assert_built()
     if descriptions is None:
-        raise ValueError('descriptions is required: a dict of latent_id -> description, e.g. from FlexIndex.generate_latent_descriptions()')
+        default = self.index_path / LATENT_DESCRIPTIONS_FILENAME
+        if default.exists():
+            descriptions = _load_latent_descriptions(default)
+        else:
+            raise ValueError('descriptions is required: a dict of latent_id -> description, e.g. from FlexIndex.generate_latent_descriptions()')
     if sae is None or threshold is None:
         loaded_sae, loaded_thresh = self.load_sae(device=device)
         if sae is None:
