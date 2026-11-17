@@ -38,6 +38,7 @@ you will need to install the FAISS package:
     Overview <overview>
     Encoding <encoding>
     Indexing & Retrieval <indexing-retrieval>
+    Explanations (Sparse Autoencoders) <explanations>
     Pseudo-Relevance Feedback <prf>
     Diversity <diversity>
     Joint Product Quantization <jpq>
