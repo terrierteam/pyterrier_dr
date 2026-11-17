@@ -214,7 +214,7 @@ index.train_sae(hidden_mult=8, k=32, epochs=100)
 # describe the latent concepts with an LLM (requires the "openai" package) based on the text of their associated documents
 text_loader = pt.text.get_text(pt.get_dataset('irds:bright/sustainable-living'))
 # this is the expensive stage - top_proportion=0.1 limits it to the 10% most frequently activated latents
-descriptions = index.generate_latent_descriptions(latent_concepts, text_loader, top_proportion=0.1, model='gpt-4.1-mini')
+descriptions = index.generate_latent_descriptions(text_loader, top_proportion=0.1, model='gpt-4.1-mini')
 
 # annotate queries (or documents) with their most active latent descriptions
 explainer = index.latent_describer(descriptions, threshold=act_thresh, num_latents=5)

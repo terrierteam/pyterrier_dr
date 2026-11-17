@@ -229,7 +229,7 @@ class TestSaeExplainer(unittest.TestCase):
             save_path = destdir + '/descriptions.jsonl'
             with mock.patch('openai.OpenAI', _fake_openai):
                 descriptions = index.generate_latent_descriptions(
-                    latent_concepts, text_loader,
+                    text_loader, latent_concepts,
                     top_k=3, latent_ids=latent_ids, batch_size=2, save_path=save_path,
                 )
             self.assertEqual(len(descriptions), len(latent_ids))
@@ -253,7 +253,7 @@ class TestSaeExplainer(unittest.TestCase):
             expected = {i for i, _ in counts.most_common(n)}
             with mock.patch('openai.OpenAI', _fake_openai):
                 descriptions = index.generate_latent_descriptions(
-                    latent_concepts, text_loader,
+                    text_loader, latent_concepts,
                     top_k=3, top_proportion=0.25, batch_size=2,
                 )
             self.assertEqual(set(descriptions), expected)
@@ -267,11 +267,11 @@ class TestSaeExplainer(unittest.TestCase):
             text_loader = _FakeTextLoader({str(i): f'the text of document {i}' for i in range(len(dataset))})
             with mock.patch('openai.OpenAI', _fake_openai):
                 with self.assertRaises(ValueError):
-                    index.generate_latent_descriptions(latent_concepts, text_loader,
+                    index.generate_latent_descriptions(text_loader, latent_concepts,
                                                        latent_ids=[0], top_proportion=0.5)
                 for bad in (0, -0.1, 1.1):
                     with self.assertRaises(ValueError):
-                        index.generate_latent_descriptions(latent_concepts, text_loader,
+                        index.generate_latent_descriptions(text_loader, latent_concepts,
                                                             top_proportion=bad)
 
     def test_generate_latent_descriptions_max_length(self):
@@ -303,7 +303,7 @@ class TestSaeExplainer(unittest.TestCase):
             fired = [i for i, _ in Counter(i for r in latent_concepts for i in r['ids']).most_common(4)]
             with mock.patch('openai.OpenAI', _recording_openai):
                 index.generate_latent_descriptions(
-                    latent_concepts, text_loader,
+                    text_loader, latent_concepts,
                     top_k=3, latent_ids=fired, max_length=60, batch_size=4,
                 )
             user_messages = [m for m in captured[0][1:] if m['role'] == 'user']
@@ -409,7 +409,7 @@ class TestSaeExplainerBright(unittest.TestCase):
         save_path = self._tmpdir.name + '/descriptions.jsonl'
         with mock.patch('openai.OpenAI', _fake_openai):
             descriptions = self.index.generate_latent_descriptions(
-                self.latent_concepts, text_loader,
+                text_loader, self.latent_concepts, 
                 top_k=3, latent_ids=latent_ids, batch_size=2, save_path=save_path,
             )
         self.assertEqual(len(descriptions), len(latent_ids))
@@ -423,7 +423,7 @@ class TestSaeExplainerBright(unittest.TestCase):
         expected = {i for i, _ in counts.most_common(n)}
         with mock.patch('openai.OpenAI', _fake_openai):
             descriptions = self.index.generate_latent_descriptions(
-                self.latent_concepts, text_loader,
+                text_loader, self.latent_concepts,
                 top_k=3, top_proportion=0.01, batch_size=8,
             )
         self.assertEqual(set(descriptions), expected)

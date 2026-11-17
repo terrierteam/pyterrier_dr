@@ -601,8 +601,8 @@ def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold
     return results
 
 
-def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = None,
-                                  text_loader: Optional[pt.Transformer] = None, *,
+def _generate_latent_descriptions(self, text_loader: Optional[pt.Transformer] = None, 
+                                  latent_concepts: Optional[List[Dict]] = None,*,
                                   top_k: int = 10, latent_ids: Optional[List[int]] = None,
                                   top_proportion: Optional[float] = None,
                                   api_key: Optional[str] = None, base_url: Optional[str] = None,
@@ -611,10 +611,10 @@ def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = 
     """Describe the latents of this index with an LLM, using the documents in which they activate most strongly.
 
     Args:
-        latent_concepts: the result of :meth:`extract_latent_concepts`. If omitted, the latent
-            concepts are extracted automatically from the SAE saved to this index.
         text_loader: a :class:`pyterrier.Transformer` that maps a frame of ``docno`` to a frame
             with a ``text`` column (e.g. ``pt.text.get_text(pt.get_dataset(...))``).
+        latent_concepts: the result of :meth:`extract_latent_concepts`. If omitted, the latent
+                    concepts are extracted automatically from the SAE saved to this index.
         top_k: the number of most strongly activating documents to show per latent.
         latent_ids: an optional subset of the latents to describe (defaults to all that ever activate).
         top_proportion: an alternative to ``latent_ids``: only describe the most frequently
