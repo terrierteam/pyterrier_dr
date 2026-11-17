@@ -211,9 +211,10 @@ index = FlexIndex.from_hf('pyterrier-tutorial/bright.sustainable.mini.dense')
 # and the latent concepts of all documents are saved to latent_concepts.jsonl)
 index.train_sae(hidden_mult=8, k=32, epochs=100)
 
-# describe the latents with an LLM (requires the "openai" package)
+# describe the latent concepts with an LLM (requires the "openai" package) based on the text of their associated documents
 text_loader = pt.text.get_text(pt.get_dataset('irds:bright/sustainable-living'))
-descriptions = index.generate_latent_descriptions(latent_concepts, text_loader, model='gpt-4.1-mini')
+# this is the expensive stage - top_proportion=0.1 limits it to the 10% most frequently activated latents
+descriptions = index.generate_latent_descriptions(latent_concepts, text_loader, top_proportion=0.1, model='gpt-4.1-mini')
 
 # annotate queries (or documents) with their most active latent descriptions
 explainer = index.latent_describer(descriptions, threshold=act_thresh, num_latents=5)

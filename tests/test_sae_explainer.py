@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -241,6 +242,38 @@ class TestSaeExplainer(unittest.TestCase):
             self.assertEqual(len(lines), len(descriptions))
             self.assertTrue(all('id' in line and 'interp' in line for line in lines))
 
+    def test_generate_latent_descriptions_top_proportion(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index, dataset = self._build_index(destdir)
+            self._train(index)
+            latent_concepts = index.extract_latent_concepts(device='cpu')
+            text_loader = _FakeTextLoader({str(i): f'the text of document {i}' for i in range(len(dataset))})
+            counts = Counter(i for r in latent_concepts for i in r['ids'])
+            n = max(1, math.ceil(0.25 * len(counts)))
+            expected = {i for i, _ in counts.most_common(n)}
+            with mock.patch('openai.OpenAI', _fake_openai):
+                descriptions = index.generate_latent_descriptions(
+                    latent_concepts, text_loader,
+                    top_k=3, top_proportion=0.25, batch_size=2,
+                )
+            self.assertEqual(set(descriptions), expected)
+            self.assertEqual(len(descriptions), n)
+
+    def test_generate_latent_descriptions_top_proportion_validation(self):
+        with tempfile.TemporaryDirectory() as destdir:
+            index, dataset = self._build_index(destdir)
+            self._train(index)
+            latent_concepts = index.extract_latent_concepts(device='cpu')
+            text_loader = _FakeTextLoader({str(i): f'the text of document {i}' for i in range(len(dataset))})
+            with mock.patch('openai.OpenAI', _fake_openai):
+                with self.assertRaises(ValueError):
+                    index.generate_latent_descriptions(latent_concepts, text_loader,
+                                                       latent_ids=[0], top_proportion=0.5)
+                for bad in (0, -0.1, 1.1):
+                    with self.assertRaises(ValueError):
+                        index.generate_latent_descriptions(latent_concepts, text_loader,
+                                                            top_proportion=bad)
+
     def test_generate_latent_descriptions_requires_text_loader(self):
         with tempfile.TemporaryDirectory() as destdir:
             index, _ = self._build_index(destdir)
@@ -343,6 +376,19 @@ class TestSaeExplainerBright(unittest.TestCase):
         self.assertEqual(len(descriptions), len(latent_ids))
         self.assertTrue(all(interp for interp in descriptions.values()))
         self.assertTrue(os.path.exists(save_path))
+
+    def test_generate_latent_descriptions_top_proportion(self):
+        text_loader = pt.text.get_text(pt.get_dataset('irds:bright/sustainable-living'))
+        counts = Counter(i for r in self.latent_concepts for i in r['ids'])
+        n = max(1, math.ceil(0.01 * len(counts)))
+        expected = {i for i, _ in counts.most_common(n)}
+        with mock.patch('openai.OpenAI', _fake_openai):
+            descriptions = self.index.generate_latent_descriptions(
+                self.latent_concepts, text_loader,
+                top_k=3, top_proportion=0.01, batch_size=8,
+            )
+        self.assertEqual(set(descriptions), expected)
+        self.assertEqual(len(descriptions), n)
 
 
 if __name__ == '__main__':

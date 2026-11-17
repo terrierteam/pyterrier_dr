@@ -17,6 +17,7 @@ to the index directory: ``sae.pt`` (the model checkpoint), the ``sae`` section o
 """
 import heapq
 import json
+import math
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -238,6 +239,7 @@ Instead of the single last line above, finish your response with exactly one lin
 
 def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List[int]], Dict[int, str]], *,
                           top_k: int = 10, latent_ids: Optional[List[int]] = None,
+                          top_proportion: Optional[float] = None,
                           api_key: Optional[str] = None, base_url: Optional[str] = None,
                           model: str = "gpt-4.1-mini", max_chars: int = 1500,
                           batch_size: int = 8, save_path: Optional[str] = None,
@@ -249,6 +251,9 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
         get_texts: a callable that takes a list of ``docid`` and returns ``{docid: text}``.
         top_k: the number of most strongly activating documents to show per latent.
         latent_ids: an optional subset of the latents to describe (defaults to all that ever activate).
+        top_proportion: an alternative to ``latent_ids``: only describe the most frequently
+            activated latents, up to this proportion of all activated latents (in ``(0, 1]``,
+            ranked by the number of documents in which each latent activates).
         api_key, base_url, model: select the OpenAI-compatible LLM endpoint (if omitted, the
             ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` environment variables are used).
         max_chars: the maximum number of characters of each example text to show.
@@ -266,12 +271,21 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
     except ImportError:
         raise ImportError('the "openai" package is required to generate latent descriptions; install it with `pip install openai`')
 
+    if latent_ids is not None and top_proportion is not None:
+        raise ValueError('latent_ids and top_proportion are mutually exclusive')
+    if top_proportion is not None and not 0 < top_proportion <= 1:
+        raise ValueError('top_proportion must be in (0, 1]')
+
     client = OpenAI(api_key=api_key, base_url=base_url)
 
     latent_docs = defaultdict(list)
     for entry in latent_concepts:
         for lid, w in zip(entry["ids"], entry["weight"]):
             latent_docs[lid].append((entry["docid"], w))
+    if top_proportion is not None:
+        # the most frequently activated latents, up to the requested proportion of all activated latents
+        n = max(1, math.ceil(top_proportion * len(latent_docs)))
+        latent_ids = [lid for lid, _ in sorted(latent_docs.items(), key=lambda x: len(x[1]), reverse=True)[:n]]
     if latent_ids is not None:
         latent_docs = {l: latent_docs[l] for l in latent_ids if l in latent_docs}
 
@@ -281,6 +295,7 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
 
     items = list(top.items())
     interps = {}
+    missing = 0
     for start in pt.tqdm(range(0, len(items), batch_size), desc='Describing latent batches', disable=not verbose):
         batch = items[start:start + batch_size]
         user_messages = []
@@ -299,6 +314,9 @@ def generate_descriptions(latent_concepts: List[Dict], get_texts: Callable[[List
                 interps[lid] = found[n]
             else:
                 print(f"warning: no interpretation returned for latent {lid}")
+                missing += 1
+    if missing > 0:
+        print(f"warning: {missing} latents out of {len(items)} ({missing/len(items)*100:.1f}%) were not interpreted by the LLM")
 
     if save_path:
         with open(save_path, "w", encoding="utf-8") as f:
@@ -583,6 +601,7 @@ def _extract_latent_concepts(self, sae: Optional[SAE_bias_pre] = None, threshold
 def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = None,
                                   text_loader: Optional[pt.Transformer] = None, *,
                                   top_k: int = 10, latent_ids: Optional[List[int]] = None,
+                                  top_proportion: Optional[float] = None,
                                   api_key: Optional[str] = None, base_url: Optional[str] = None,
                                   model: str = 'gpt-4.1-mini', max_chars: int = 1500,
                                   batch_size: int = 8, save_path: Optional[str] = None) -> Dict[int, str]:
@@ -595,6 +614,9 @@ def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = 
             with a ``text`` column (e.g. ``pt.text.get_text(pt.get_dataset(...))``).
         top_k: the number of most strongly activating documents to show per latent.
         latent_ids: an optional subset of the latents to describe (defaults to all that ever activate).
+        top_proportion: an alternative to ``latent_ids``: only describe the most frequently
+            activated latents, up to this proportion of all activated latents (in ``(0, 1]``,
+            ranked by the number of documents in which each latent activates).
         api_key, base_url, model: select the OpenAI-compatible LLM endpoint (if omitted, the
             ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` environment variables are used).
         max_chars: the maximum number of characters of each example text to show.
@@ -629,7 +651,7 @@ def _generate_latent_descriptions(self, latent_concepts: Optional[List[Dict]] = 
 
     return generate_descriptions(
         latent_concepts, get_texts,
-        top_k=top_k, latent_ids=latent_ids,
+        top_k=top_k, latent_ids=latent_ids, top_proportion=top_proportion,
         api_key=api_key, base_url=base_url, model=model,
         max_chars=max_chars, batch_size=batch_size, save_path=save_path,
         verbose=self.verbose,
