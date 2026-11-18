@@ -718,7 +718,7 @@ class RepCONCTrainer:
     # ----------------------------------------------------------------- export
 
     def repconc_index(self, dest: str, nlist: int = 1, nprobe: int = 10,
-                      corpus_text: Iterable[str] | None = None) -> RepCONCIndex:
+                      corpus_text: Iterable[str] | Iterable[dict] | None = None) -> RepCONCIndex:
         """Build a searchable :class:`RepCONCIndex` from the trained model.
 
         Args:
@@ -726,12 +726,22 @@ class RepCONCTrainer:
             nlist: number of IVF clusters (``1`` = flat PQ, the default —
                 matching the official evaluation's degenerate IVF).
             nprobe: IVF probes per query (stored in the index metadata).
-            corpus_text: document texts, in index docno order. If provided,
-                the corpus is re-encoded with the *trained* document encoder
-                before quantisation (the official evaluation's convention).
-                If None, the :class:`FlexIndex` vectors (produced by the
-                *pre-training* encoder) are used — a documented deviation,
-                since FlexIndex stores vectors rather than text.
+            corpus_text: document texts to re-encode with the *trained*
+                document encoder before quantisation (the official
+                evaluation's convention). Either:
+
+                * an iterable of texts, in index docno order (every index
+                  docno must be covered), or
+                * an iterable of ``{"docno": ..., "text": ...}`` dicts —
+                  the standard PyTerrier ``Indexer.index()`` input format —
+                  where each text is matched to its index position by docno,
+                  so the order does not matter.
+
+                Index docnos without a text fall back to the
+                :class:`FlexIndex` vectors (produced by the *pre-training*
+                encoder). If None, the FlexIndex vectors are used for all
+                documents — a documented deviation, since FlexIndex stores
+                vectors rather than text.
 
         Returns:
             The built :class:`RepCONCIndex`.
@@ -741,18 +751,59 @@ class RepCONCTrainer:
         docnos = self._docnos
         centroids = self.pq.centroids.detach().cpu().numpy()
         rotation = self.pq.rotation.detach().cpu().numpy()
+        N = len(docnos)
 
+        # resolve corpus_text into {index position: text}; positions without a
+        # text fall back to the pre-training FlexIndex vectors
+        texts_by_pos: dict[int, str] = {}
         if corpus_text is not None:
-            texts = [str(t) for t in corpus_text]
-            if len(texts) != len(docnos):
-                raise ValueError(f"corpus_text must have {len(docnos)} texts, got {len(texts)}")
-            chunks = []
-            for i in range(0, len(texts), encode_chunk := 256):
+            if isinstance(corpus_text, dict):
+                raise ValueError("corpus_text must be an iterable of texts or an iterable of "
+                                 "'docno'/'text' dicts, not a single dict")
+            n_strs = 0
+            n_dicts = 0
+            for rec in corpus_text:
+                if isinstance(rec, dict):
+                    if "docno" not in rec or "text" not in rec:
+                        raise ValueError(f"corpus_text dict items must have 'docno' and 'text' keys: {rec!r}")
+                    pos = self._docno2pos.get(str(rec["docno"]))
+                    if pos is None:
+                        logger.warning(f"[RepCONC] corpus docno {rec['docno']!r} not in the index; skipping")
+                        continue
+                    texts_by_pos[pos] = str(rec["text"])
+                    n_dicts += 1
+                elif isinstance(rec, str):
+                    if n_strs >= N:
+                        raise ValueError(f"corpus_text must have {N} texts, got {n_strs + 1}")
+                    texts_by_pos[n_strs] = rec
+                    n_strs += 1
+                else:
+                    raise ValueError(f"corpus_text items must be str or dicts with 'docno'/'text' "
+                                     f"keys, got {type(rec).__name__}: {rec!r}")
+            if n_strs and n_dicts:
+                raise ValueError("corpus_text must be either all texts (in index docno order) "
+                                 "or all {'docno', 'text'} dicts")
+            if n_strs and n_strs != N:
+                raise ValueError(f"corpus_text must have {N} texts, got {n_strs}")
+            if not texts_by_pos:
+                raise ValueError("corpus_text is empty: no texts to re-encode")
+            if n_dicts and len(texts_by_pos) < N:
+                logger.warning(f"[RepCONC] {N - len(texts_by_pos)} index docnos have no corpus text; "
+                               "their vectors fall back to the pre-training FlexIndex vectors")
+
+        if texts_by_pos:
+            # start from the pre-training vectors, replacing the re-encoded
+            # positions (in index order, chunked)
+            x_rot = np.empty((N, self.d), dtype=np.float32)
+            x_rot[:] = self._corpus_vecs
+            positions = sorted(texts_by_pos)
+            for i in range(0, len(positions), encode_chunk := 256):
+                sel = positions[i:i + encode_chunk]
                 with torch.no_grad():
-                    chunk = self.biencoder.encode_docs_torch(texts[i:i + encode_chunk],
-                                                             batch_size=encode_chunk)
-                chunks.append(chunk.detach().cpu().numpy().astype(np.float32))
-            x_rot = np.concatenate(chunks, axis=0) @ rotation
+                    chunk = self.biencoder.encode_docs_torch(
+                        [texts_by_pos[p] for p in sel], batch_size=encode_chunk)
+                x_rot[sel] = chunk.detach().cpu().numpy().astype(np.float32)
+            x_rot = x_rot @ rotation
         else:
             x_rot = self._corpus_vecs @ rotation
         x_rot = np.ascontiguousarray(x_rot, dtype=np.float32)

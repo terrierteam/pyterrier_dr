@@ -201,6 +201,34 @@ class TestRepCONCTrainer(unittest.TestCase):
         res2 = idx2.retriever_pq(topk=5)(topics)
         self.assertEqual(res_pq["docno"].astype(str).tolist(), res2["docno"].astype(str).tolist())
 
+    def test_repconc_index_corpus_text_iterdict(self):
+        """``corpus_text`` may be an iterable of ``{'docno', 'text'}`` dicts in
+        any order (the standard PyTerrier ``Indexer.index()`` input format);
+        it must produce the same index as the ordered-texts form. Unknown
+        docnos are skipped and index docnos without a text fall back to the
+        pre-training FlexIndex vectors."""
+        trainer = self._trainer()
+        trainer.train_stage1(_Corpus.triples(), total_steps=8, batch_size=8,
+                             lr_encoder=5e-3, lr_centroid=1e-2, lambda_mse=0.2)
+        idx_str = trainer.repconc_index(f"{self.tmp}/idx_str", corpus_text=_Corpus.doc_texts)
+        records = [{"docno": f"doc{i}", "text": t} for i, t in enumerate(_Corpus.doc_texts)]
+        idx_dict = trainer.repconc_index(f"{self.tmp}/idx_dict", corpus_text=records[::-1])
+        self.assertEqual(list(idx_str.docnos.fwd), list(idx_dict.docnos.fwd))
+        np.testing.assert_array_equal(np.asarray(idx_str.codes), np.asarray(idx_dict.codes))
+        np.testing.assert_array_equal(np.asarray(idx_str.subvecs), np.asarray(idx_dict.subvecs))
+
+        # an unknown docno is skipped; a missing docno falls back (no crash,
+        # the full index is still built)
+        partial = records[1:] + [{"docno": "doc9999", "text": "not in the index"}]
+        idx_part = trainer.repconc_index(f"{self.tmp}/idx_part", corpus_text=partial)
+        self.assertEqual(len(idx_part), NDOCS)
+
+        # malformed inputs are rejected
+        with self.assertRaises(ValueError):
+            trainer.repconc_index(f"{self.tmp}/idx_bad", corpus_text=[{"docno": "doc0"}])
+        with self.assertRaises(ValueError):
+            trainer.repconc_index(f"{self.tmp}/idx_bad2", corpus_text={"docno": "doc0", "text": "x"})
+
     # ------------------------------------------------------------------ fit()
 
     def test_fit(self):
