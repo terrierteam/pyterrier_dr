@@ -153,23 +153,26 @@ class _RepLLamaBiEncoderBase(BiEncoder):
         return torch.cat(results, dim=0).float()
 
     def encode_docs(self, texts, batch_size=None):
-        results = []
         with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                # NB: titles should be prepended in the indexing pipeline, if available
-                inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=self.doc_max_length)
-                inps = {k: v.to(self.device) for k, v in inps.items()}
-                p_hidden = self.model(**inps).last_hidden_state
-                attention_mask = inps['attention_mask']
-                # we want the last token representation that is not padding
-                sequence_lengths = attention_mask.sum(dim=1)
-                last_token_indices = sequence_lengths - 1
-                p_reps = p_hidden[torch.arange(p_hidden.size(0)), last_token_indices]
-                p_reps = torch.nn.functional.normalize(p_reps, p=2, dim=-1)
-                results.append(p_reps.cpu().numpy())
+            return self.encode_docs_torch(texts, batch_size=batch_size).cpu().numpy()
+
+    def encode_docs_torch(self, texts, batch_size=None):
+        results = []
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            # NB: titles should be prepended in the indexing pipeline, if available
+            inps = self.tokenizer([f'passage: {passage}</s>' for passage in chunk], return_tensors='pt', padding=True, truncation=True, max_length=self.doc_max_length)
+            inps = {k: v.to(self.device) for k, v in inps.items()}
+            p_hidden = self.model(**inps).last_hidden_state
+            attention_mask = inps['attention_mask']
+            # we want the last token representation that is not padding
+            sequence_lengths = attention_mask.sum(dim=1)
+            last_token_indices = sequence_lengths - 1
+            p_reps = p_hidden[torch.arange(p_hidden.size(0)), last_token_indices]
+            p_reps = torch.nn.functional.normalize(p_reps, p=2, dim=-1)
+            results.append(p_reps)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.empty((0, 0))
+        return torch.cat(results, dim=0).float()
 
     @classmethod
     def from_pretrained(cls, model_name, batch_size=32, text_field='text', verbose=False, device=None):

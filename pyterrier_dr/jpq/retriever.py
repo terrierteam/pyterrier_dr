@@ -142,6 +142,8 @@ class JPQRetrieverFaissBase(JPQRetriever):
         ...
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
+        from pyterrier_dr.util import ensure_faiss_omp_compat
+        ensure_faiss_omp_compat()
         Q, qids = self._validate_queries(topics)
         self._ensure()
         k = min(self.topk, len(self.docnos))

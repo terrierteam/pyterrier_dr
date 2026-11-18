@@ -27,16 +27,19 @@ class HgfBiEncoder(BiEncoder):
         return torch.cat(results, dim=0)
 
     def encode_docs(self, texts, batch_size=None):
-        results = []
         with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer(list(chunk), return_tensors='pt', padding=True, truncation=True)
-                inps = {k: v.to(self.device) for k, v in inps.items()}
-                res = self.model(**inps).last_hidden_state[:, 0]
-                results.append(res.cpu().numpy())
+            return self.encode_docs_torch(texts, batch_size=batch_size).cpu().numpy()
+
+    def encode_docs_torch(self, texts, batch_size=None):
+        results = []
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer(list(chunk), return_tensors='pt', padding=True, truncation=True)
+            inps = {k: v.to(self.device) for k, v in inps.items()}
+            res = self.model(**inps).last_hidden_state[:, 0]
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.empty((0, 0))
+        return torch.cat(results, dim=0)
 
     @classmethod
     def from_pretrained(cls, model_name, batch_size=32, text_field='text', verbose=False, device=None):

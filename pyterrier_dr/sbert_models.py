@@ -74,7 +74,42 @@ class SBertBiEncoder(BiEncoder):
             embs = torch.nn.functional.normalize(embs, p=2, dim=1)
 
         return embs
-    
+
+    def encode_docs_torch(
+        self,
+        texts: list[str],
+        batch_size: Optional[int] = None,
+        prompt: Optional[str] = None,
+        normalize_embeddings: bool = False,
+        **kwargs: Any,
+    ) -> torch.Tensor:
+        """Encode documents while enabling gradients (for training)."""
+        if not texts:
+            return torch.empty((0, 0), device=self.model.device)
+
+        if prompt:
+            texts = [prompt + text for text in texts]
+
+        batch_size = batch_size or self.batch_size
+        embs = []
+        for start_idx in range(0, len(texts), batch_size):
+            texts_batch = texts[start_idx: start_idx + batch_size]
+            inputs = self.model.tokenizer(
+                texts_batch,
+                return_tensors="pt",
+                truncation=True,
+                padding=True,
+            ).to(self.model.device)
+
+            embs.append(self.model.forward(inputs)["sentence_embedding"])
+
+        embs = torch.cat(embs, dim=0)
+
+        if normalize_embeddings:
+            embs = torch.nn.functional.normalize(embs, p=2, dim=1)
+
+        return embs
+
     def encode_queries(self, texts, batch_size = None):
         return _sbert_encode(self, texts, batch_size=batch_size, tensor=False).astype(np.float32)
 
@@ -121,6 +156,7 @@ class E5(_SBertBiEncoder):
     encode_queries = partialmethod(_sbert_encode, prompt='query: ', normalize_embeddings=True)
     encode_docs = partialmethod(_sbert_encode, prompt='passage: ', normalize_embeddings=True)
     encode_queries_torch = partialmethod(SBertBiEncoder.encode_queries_torch, prompt='query: ', normalize_embeddings=True)  # E5 has a normalization module
+    encode_docs_torch = partialmethod(SBertBiEncoder.encode_docs_torch, prompt='passage: ', normalize_embeddings=True)
 
     VARIANTS = {
         'base' : 'intfloat/e5-base-v2',

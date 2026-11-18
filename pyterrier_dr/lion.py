@@ -38,15 +38,18 @@ class LionLlamaDense(BiEncoder):
         return torch.cat(results, dim=0).float()
     
     def encode_docs(self, texts, batch_size=None):
-        results = []
         with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer(list(chunk), max_length=192, return_tensors='pt', padding='longest', truncation=True)
-                inps = inps.to(self.device)
-                res = self.model.doc_encode(**inps)
-                results.append(res.cpu().numpy())
+            return self.encode_docs_torch(texts, batch_size=batch_size).cpu().numpy()
+
+    def encode_docs_torch(self, texts, batch_size=None):
+        results = []
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer(list(chunk), max_length=192, return_tensors='pt', padding='longest', truncation=True)
+            inps = inps.to(self.device)
+            res = self.model.doc_encode(**inps)
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.zeros(shape=(0, 0))
+        return torch.cat(results, dim=0).float()
     
     

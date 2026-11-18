@@ -63,14 +63,17 @@ class Dragon(BiEncoder):
         return torch.cat(results, dim=0)
     
     def encode_docs(self, texts: List[str], batch_size: Optional[int] = None) -> np.array:
+        with torch.no_grad():
+            return self.encode_docs_torch(texts, batch_size=batch_size).cpu().numpy()
+
+    def encode_docs_torch(self, texts: List[str], batch_size: Optional[int] = None) -> torch.Tensor:
         results = []
         doc_encoder_model = self._doc_model()
-        with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer(list(chunk),  max_length=512, return_tensors='pt', padding="longest", truncation=True)
-                inps = inps.to(self.device)
-                res = doc_encoder_model(**inps).last_hidden_state[:, 0, :]
-                results.append(res.cpu().numpy())
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer(list(chunk),  max_length=512, return_tensors='pt', padding="longest", truncation=True)
+            inps = inps.to(self.device)
+            res = doc_encoder_model(**inps).last_hidden_state[:, 0, :]
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.zeros(shape=(0, 0))
+        return torch.cat(results, dim=0)

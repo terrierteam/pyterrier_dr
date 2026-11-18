@@ -34,6 +34,7 @@ class FaissRetriever(pt.Indexer):
                                 num_results=k, qbatch=self.qbatch, drop_query_vec=self.drop_query_vec)
 
     def transform(self, inp):
+        pyterrier_dr.util.ensure_faiss_omp_compat()
         pta.validate.query_frame(inp, extra_columns=['query_vec'])
         inp = inp.reset_index(drop=True)
         result = pta.DataFrameBuilder(['docno', 'docid', 'score', 'rank'])

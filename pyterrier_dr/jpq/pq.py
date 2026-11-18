@@ -155,6 +155,8 @@ class ProductQuantizerFAISS(ProductQuantizer):
 
     def fit(self, X: np.ndarray) -> None:
         """Train FAISS PQ on data X (n_samples, d)."""
+        from pyterrier_dr.util import ensure_faiss_omp_compat
+        ensure_faiss_omp_compat()
         _, self.d = X.shape
 
         self.pq = faiss.ProductQuantizer(self.d, self._M, int(np.log2(self._Ks)))#, faiss.METRIC_INNER_PRODUCT )
@@ -221,6 +223,8 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
 
     def fit(self, X: np.ndarray) -> None: # [N, D]
         """Train FAISS PQ on data X (n_samples, d)."""
+        from pyterrier_dr.util import ensure_faiss_omp_compat
+        ensure_faiss_omp_compat()
         _, self.d = X.shape
 
         pqi = faiss.IndexPQ(self.d, self._M, int(np.log2(self._Ks)), faiss.METRIC_INNER_PRODUCT)
@@ -233,6 +237,8 @@ class ProductQuantizerFAISSIndexPQ(ProductQuantizerFAISS):
     
 class ProductQuantizerFAISSIndexPQOPQ(ProductQuantizerFAISSIndexPQ):
     def fit(self, X):
+        from pyterrier_dr.util import ensure_faiss_omp_compat
+        ensure_faiss_omp_compat()
         _, self.d = X.shape
         logger.info("X fingerprint " + str(fingerprint_tensor_bits_np(X)))
 

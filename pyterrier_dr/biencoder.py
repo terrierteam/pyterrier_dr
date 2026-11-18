@@ -147,6 +147,30 @@ class BiEncoder(pt.Transformer):
         """
         raise NotImplementedError()
 
+    def encode_docs_torch(self, texts: List[str], batch_size: Optional[int] = None) -> 'torch.Tensor':
+        """Encode a list of document texts into dense vectors, retaining gradients.
+
+        This function is used by training procedures (e.g., RepCONC stage one) that
+        back-propagate through the document encoder. :meth:`encode_docs` applies
+        ``torch.no_grad()`` and returns a numpy array, so it cannot be used in that case.
+
+        Not all models have a torch-based document encoding path. Model subclasses
+        with such a path override this method to return the (differentiable) tensor
+        of shape (n_docs, n_dims).
+
+        Args:
+            texts: A list of document texts
+            batch_size: The batch size to use for encoding
+
+        Returns:
+            torch.Tensor: A tensor of shape (n_docs, n_dims) with gradients retained.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support differentiable document encoding "
+            f"(encode_docs_torch). Only models with a torch-based document encoding path "
+            f"can be used with training procedures that back-propagate through the document encoder."
+        )
+
     @staticmethod
     def example() -> 'BiEncoder':
         return pyterrier_dr.SBertBiEncoder('sentence-transformers/paraphrase-albert-small-v2')

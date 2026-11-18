@@ -39,21 +39,24 @@ class TctColBert(BiEncoder, metaclass=Variants):
         return torch.cat(results, dim=0)
 
     def encode_docs(self, texts, batch_size=None):
-        results = []
         with torch.no_grad():
-            for chunk in chunked(texts, batch_size or self.batch_size):
-                inps = self.tokenizer([f'[CLS] [D] {d}' for d in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=512)
-                inps = {k: v.to(self.device) for k, v in inps.items()}
-                res = self.model(**inps).last_hidden_state
-                res = res[:, 4:, :] # remove the first 4 tokens (representing [CLS] [ D ])
-                res = res * inps['attention_mask'][:, 4:].unsqueeze(2) # apply attention mask
-                lens = inps['attention_mask'][:, 4:].sum(dim=1).unsqueeze(1)
-                lens[lens == 0] = 1 # avoid edge case of div0 errors
-                res = res.sum(dim=1) / lens # average based on dim
-                results.append(res.cpu().numpy())
+            return self.encode_docs_torch(texts, batch_size=batch_size).cpu().numpy()
+
+    def encode_docs_torch(self, texts, batch_size=None):
+        results = []
+        for chunk in chunked(texts, batch_size or self.batch_size):
+            inps = self.tokenizer([f'[CLS] [D] {d}' for d in chunk], add_special_tokens=False, return_tensors='pt', padding=True, truncation=True, max_length=512)
+            inps = {k: v.to(self.device) for k, v in inps.items()}
+            res = self.model(**inps).last_hidden_state
+            res = res[:, 4:, :] # remove the first 4 tokens (representing [CLS] [ D ])
+            res = res * inps['attention_mask'][:, 4:].unsqueeze(2) # apply attention mask
+            lens = inps['attention_mask'][:, 4:].sum(dim=1).unsqueeze(1)
+            lens[lens == 0] = 1 # avoid edge case of div0 errors
+            res = res.sum(dim=1) / lens # average based on dim
+            results.append(res)
         if not results:
-            return np.empty(shape=(0, 0))
-        return np.concatenate(results, axis=0)
+            return torch.empty((0, 0))
+        return torch.cat(results, dim=0)
 
     def __repr__(self):
         return f'TctColBert({repr(self.model_name)})'
