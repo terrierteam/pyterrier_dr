@@ -33,6 +33,7 @@ Indexing and Retrieval
     .. automethod:: faiss_flat_retriever
     .. automethod:: faiss_hnsw_retriever
     .. automethod:: faiss_ivf_retriever
+    .. automethod:: faiss_factory_retriever
     .. automethod:: flatnav_retriever
     .. automethod:: scann_retriever
     .. automethod:: voyager_retriever
