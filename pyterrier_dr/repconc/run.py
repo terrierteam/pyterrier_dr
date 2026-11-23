@@ -112,6 +112,7 @@ class TrainingConfig:
     stage1_epochs: int
     stage1_steps: int | None
     stage1_batch_size: int
+    encode_batch_size: int
     lr_encoder: float
     lr_centroid: float
     lambda_mse: float | None
@@ -131,6 +132,9 @@ class TrainingConfig:
     # index
     nlist: int
     nprobe: int
+    reencode_corpus: bool
+    checkpoint_dir: str | None
+    resume: bool
 
 
 def add_data_args(parser: argparse.ArgumentParser):
@@ -139,8 +143,10 @@ def add_data_args(parser: argparse.ArgumentParser):
     p.add_argument("--target-dir", required=True)
     p.add_argument("--model-name", choices=list(DEFAULT_INIT_BY_NAME), default="tct_colbert")
     p.add_argument("--train-ds", default="msmarco-passage/train")
-    p.add_argument("--corpus", default="msmarco-passage/collection",
-                   help="ir_datasets corpus providing docid -> text (stage 1 trains on text)")
+    p.add_argument("--corpus", default="msmarco-passage",
+                   help="ir_datasets corpus providing docid -> text (stage 1 trains on text); "
+                        "for MS MARCO passage this is the base 'msmarco-passage' dataset "
+                        "(in older ir_datasets versions the collection was the 'msmarco-passage/collection' part)")
     p.add_argument("--eval-ds", default="irds:msmarco-passage/dev/small")
     p.add_argument("--eval-split", default=None)
     p.add_argument("--test-ds", default="msmarco_passage")
@@ -156,6 +162,13 @@ def add_training_args(parser: argparse.ArgumentParser):
     p.add_argument("--stage1-epochs", type=int, default=1)
     p.add_argument("--stage1-steps", type=int, default=None)
     p.add_argument("--stage1-batch-size", type=int, default=256)
+    p.add_argument("--encode-batch-size", type=int, default=64,
+                   help="chunk size for encoder forward passes during training. The training "
+                        "batch (stage1/stage2-batch-size) is unaffected; this only controls how "
+                        "many texts are run through the transformer at once. With gradients, "
+                        "activation memory scales ~quadratically in sequence length per chunk, "
+                        "so 64 is a safe default for a 24GB GPU (256 chunks OOM on DistilBERT "
+                        "at 512-token passages)")
     p.add_argument("--lr-encoder", type=float, default=5e-6,
                    help="stage 1 encoder LR (paper default; the official script uses 2e-5)")
     p.add_argument("--lr-centroid", type=float, default=2e-4,
@@ -178,6 +191,18 @@ def add_training_args(parser: argparse.ArgumentParser):
                    help="dynamic negatives per query in stage 2 (official uses 200)")
     p.add_argument("--nlist", type=int, default=1, help="IVF clusters for the final index (1 = flat PQ)")
     p.add_argument("--nprobe", type=int, default=10, help="IVF probes for the final index")
+    p.add_argument("--no-reencode", action="store_true", default=False,
+                   help="build the final index from the FlexIndex (pre-training) vectors instead of "
+                        "re-encoding the corpus with the trained document encoder (much faster; "
+                        "a documented deviation from the official evaluation convention)")
+    p.add_argument("--checkpoint-dir", default=None,
+                   help="persistent directory for the periodic training checkpoints "
+                        "(last.pt / best.pt); by default they go to a temporary directory "
+                        "that is removed when the run ends")
+    p.add_argument("--resume", action="store_true", default=False,
+                   help="with --checkpoint-dir: continue training from the last.pt "
+                        "checkpoint in that directory (restores model/optimizer state and "
+                        "the step counter, then runs a full further schedule)")
 
 
 def parse_args():
@@ -206,6 +231,7 @@ def parse_args():
         stage1_epochs=args.stage1_epochs,
         stage1_steps=args.stage1_steps,
         stage1_batch_size=args.stage1_batch_size,
+        encode_batch_size=args.encode_batch_size,
         lr_encoder=args.lr_encoder,
         lr_centroid=args.lr_centroid,
         lambda_mse=args.lambda_mse,
@@ -222,18 +248,29 @@ def parse_args():
         dynamic_negs=args.dynamic_negs,
         nlist=args.nlist,
         nprobe=args.nprobe,
+        reencode_corpus=not args.no_reencode,
+        checkpoint_dir=args.checkpoint_dir,
+        resume=args.resume,
     )
     return data, train
 
 
 def _load_corpus_texts(corpus_ds: str, docnos: list[str]) -> dict[str, str]:
     """docno -> text map for the documents in the base index."""
-    corpus = ir_datasets.load(corpus_ds)
+    try:
+        corpus = ir_datasets.load(corpus_ds)
+    except KeyError:
+        # Older/newer ir_datasets versions differ in how the collection is
+        # addressed (e.g. 'msmarco-passage/collection' vs the base 'msmarco-passage').
+        # Fall back to the top-level dataset name.
+        base = corpus_ds.split("/")[0]
+        print(f"WARNING: ir_datasets has no dataset {corpus_ds!r}; falling back to {base!r}")
+        corpus = ir_datasets.load(base)
     wanted = set(docnos)
     texts: dict[str, str] = {}
-    for doc_id, doc in corpus.docs_iter():
-        if doc_id in wanted:
-            texts[doc_id] = doc.text
+    for doc in corpus.docs_iter():
+        if doc.doc_id in wanted:
+            texts[doc.doc_id] = doc.text
     missing = len(wanted) - len(texts)
     if missing:
         print(f"WARNING: {missing} of {len(wanted)} index docnos not found in corpus {corpus_ds}")
@@ -243,8 +280,8 @@ def _load_corpus_texts(corpus_ds: str, docnos: list[str]) -> dict[str, str]:
 def _triples_iter(queries, docpairs, texts: dict[str, str], pairs_cap: int | None) -> Iterator[dict]:
     """Stage-1 text triples from docpairs + corpus texts."""
     qdict: dict[str, str] = {}
-    for query_id, doc in queries:
-        qdict[query_id] = doc.text
+    for query in queries:
+        qdict[query.query_id] = query.text
     count = 0
     for dp in docpairs:
         pos, neg = texts.get(dp.doc_id_a), texts.get(dp.doc_id_b)
@@ -263,8 +300,8 @@ def _triples_iter(queries, docpairs, texts: dict[str, str], pairs_cap: int | Non
 def _pairs_iter(queries, docpairs, pairs_cap: int | None) -> Iterator[dict]:
     """Stage-2 (query, docno) pairs from docpairs."""
     qdict: dict[str, str] = {}
-    for query_id, doc in queries:
-        qdict[query_id] = doc.text
+    for query in queries:
+        qdict[query.query_id] = query.text
     count = 0
     for dp in docpairs:
         query = qdict.get(dp.query_id)
@@ -324,6 +361,9 @@ if __name__ == "__main__":
         valid_every=train.valid_every,
         patience=train.patience,
         metric=train.metric,
+        encode_batch_size=train.encode_batch_size,
+        checkpoint_dir=train.checkpoint_dir,
+        resume=train.resume,
     )
     stage2_kwargs: dict[str, Any] = dict(
         batch_size=train.stage2_batch_size,
@@ -335,6 +375,9 @@ if __name__ == "__main__":
         valid_every=train.valid_every,
         patience=train.patience,
         metric=train.metric,
+        encode_batch_size=train.encode_batch_size,
+        checkpoint_dir=train.checkpoint_dir,
+        resume=train.resume,
     )
 
     if train.stage2:
@@ -353,16 +396,24 @@ if __name__ == "__main__":
         )
 
     os.makedirs(target, exist_ok=True)
-    t.save_checkpoint(target + "/checkpoint.pt")
 
-    # re-encode the corpus with the trained encoder (official convention)
-    missing = [d for d in docnos if d not in texts]
-    if missing:
-        raise ValueError(f"cannot build the RepCONC index with corpus_text: "
-                         f"{len(missing)} index docnos have no corpus text, e.g. {missing[:3]}")
-    corpus_texts = [texts[d] for d in docnos]
-    newindex = t.repconc_index(target, nlist=train.nlist, nprobe=train.nprobe,
+    # build the index in a subdirectory: RepCONCIndex.build(overwrite=True)
+    # removes the destination directory, so it must not be the run directory
+    # itself (or the checkpoint saved alongside it would be destroyed)
+    index_path = target + "/index"
+    if train.reencode_corpus:
+        # re-encode the corpus with the trained encoder (official convention)
+        missing = [d for d in docnos if d not in texts]
+        if missing:
+            raise ValueError(f"cannot build the RepCONC index with corpus_text: "
+                             f"{len(missing)} index docnos have no corpus text, e.g. {missing[:3]}")
+        corpus_texts = [texts[d] for d in docnos]
+    else:
+        print("WARNING: --no-reencode: using the FlexIndex (pre-training) vectors for the final index")
+        corpus_texts = None
+    newindex = t.repconc_index(index_path, nlist=train.nlist, nprobe=train.nprobe,
                                corpus_text=corpus_texts)
+    t.save_checkpoint(target + "/checkpoint.pt")
 
     oldmodel = instantiate_model(data.model_name)
 
