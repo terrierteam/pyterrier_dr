@@ -37,11 +37,7 @@ class GEM(BiEncoder):
             https://huggingface.co/gem-search/GEM-4B
 
         """
-        super().__init__(
-            batch_size=batch_size,
-            text_field=text_field,
-            verbose=verbose,
-        )
+        super().__init__(batch_size=batch_size, text_field=text_field, verbose=verbose)
 
         try:
             from transformers.utils.import_utils import is_flash_attn_2_available, is_accelerate_available
@@ -49,7 +45,7 @@ class GEM(BiEncoder):
             if is_flash_attn_2_available():
                 model_kwargs.setdefault("attn_implementation", "flash_attention_2")
 
-            if is_accelerate_available() and device is None:
+            if device is None and is_accelerate_available():
                 model_kwargs.setdefault("device_map", "auto")
 
         except ImportError:
