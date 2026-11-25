@@ -1,10 +1,53 @@
 import unittest
+import tempfile
+import numpy as np
+import pandas as pd
 from pyterrier_dr import FlexIndex
 import pyterrier_dr, torch, pyterrier as pt
 from pyterrier.measures import *
 import torch
 
 class TestJPQ(unittest.TestCase):
+
+    def test_vec_loader(self):
+        from pyterrier_dr.jpq import JPQIndex
+
+        centroids = np.array([
+            [[1, 2], [3, 4], [5, 6], [7, 8]],
+            [[10, 20], [30, 40], [50, 60], [70, 80]],
+        ], dtype=np.float32)
+        codes = np.array([[0, 3], [2, 1], [1, 0]], dtype=np.uint8)
+        rotation = np.array([
+            [0, -1, 0, 0], [1, 0, 0, 0],
+            [0, 0, 0, -1], [0, 0, 1, 0],
+        ], dtype=np.float32)
+        reconstructed = np.array([[1, 2, 70, 80], [5, 6, 30, 40], [3, 4, 10, 20]], dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as destdir:
+            for opq in (None, rotation):
+                with self.subTest(opq=opq is not None):
+                    path = destdir + ('/opq' if opq is not None else '/pq')
+                    index = JPQIndex.build(path, ['a', 'b', 'c'], codes, centroids, opq=opq)
+                    loader = index.vec_loader()
+                    expected = reconstructed if opq is None else reconstructed @ opq.T
+
+                    for column, values in [('docid', [2, 0, 2]), ('docno', ['c', 'a', 'c'])]:
+                        inp = pd.DataFrame({column: values, 'score': [0.1, 0.2, 0.3]}, index=[4, 1, 4])
+                        result = loader(inp)
+                        self.assertEqual(result.index.tolist(), [4, 1, 4])
+                        self.assertEqual(result['score'].tolist(), [0.1, 0.2, 0.3])
+                        np.testing.assert_array_equal(np.stack(result['codes']), codes[[2, 0, 2]])
+                        np.testing.assert_array_equal(np.stack(result['doc_vec']), expected[[2, 0, 2]])
+
+                    result = loader(pd.DataFrame({'docid': [1], 'docno': ['a']}))
+                    np.testing.assert_array_equal(result.iloc[0]['codes'], codes[1])
+                    empty = loader(pd.DataFrame({'docid': pd.Series(dtype=int)}))
+                    self.assertEqual(list(empty.columns), ['docid', 'doc_vec', 'codes'])
+                    self.assertTrue(empty.empty)
+                    with self.assertRaises(pt.validate.InputValidationError):
+                        loader(pd.DataFrame({'score': [1]}))
+                    self.assertEqual(loader, JPQIndex(path).vec_loader())
+                    self.assertEqual(hash(loader), hash(JPQIndex(path).vec_loader()))
 
     @unittest.skipIf(not torch.cuda.is_available(), "No CUDA")
     def test_jpq(self):
