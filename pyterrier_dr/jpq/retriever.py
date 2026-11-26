@@ -158,13 +158,13 @@ class JPQRetrieverFaissBase(JPQRetriever):
             scores = scores[order]
 
             for rank, (did, score) in enumerate(zip(dids, scores), start=1):
-                row = [qid, did, self.docnos[did], score, rank]
+                row = [qid, Q[i,:], did, self.docnos[did], score, rank]
                 if "query" in topics:
                     row.append(topics.iloc[i]["query"])
 
                 rows.append(row)
         
-        cols = ['qid', 'docid', 'docno', 'score', 'rank']
+        cols = ['qid', 'query_vec', 'docid', 'docno', 'score', 'rank']
         if "query" in topics:
             cols.append("query")
             
