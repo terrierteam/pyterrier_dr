@@ -217,18 +217,14 @@ class PQPrf(pt.Transformer, ABC):
                 )
             centroids = index.dvecs
 
-        self.centroids = np.asarray(centroids)
+        self.centroids = centroids
 
         if collection_code_freq is None and index is not None:
             collection_code_freq = _collection_code_freq(
                 index.codes, self.centroids.shape[1]
             )
-        self.collection_code_freq = (
-            None
-            if collection_code_freq is None
-            else np.asarray(collection_code_freq)
-        )
-
+        self.collection_code_freq = collection_code_freq
+        
         if n_docs is None and index is not None:
             n_docs = len(index)
         self.n_docs = n_docs
