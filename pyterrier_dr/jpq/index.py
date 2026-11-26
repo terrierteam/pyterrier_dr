@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import pyterrier as pt
 import numpy as np
+import pandas as pd
 import more_itertools
 import json
 from npids import Lookup
@@ -245,6 +246,17 @@ class JPQIndex(pt.Artifact):
             docdict = {'docno' : docnos.fwd[i], 'codes' : codes[i, :].tolist() }
             yield docdict
 
+    def vec_loader(self) -> pt.Transformer:
+        """Return a transformer that loads document vectors and PQ assignments.
+
+        The input must contain ``docid`` or ``docno``; ``docid`` takes precedence
+        when both are present. The output preserves the input columns and adds
+        ``doc_vec`` (the reconstructed vector in the original query space) and
+        ``codes`` (one centroid assignment per sub-quantizer), both as numpy arrays.
+        For OPQ indexes, the reconstructed vector is multiplied by ``opq.T``.
+        """
+        return JPQVectorLoader(self)
+
     def retriever_pq(self, topk: int = 1000) -> "JPQRetrieverPQ":
         """Return a PQ retriever.
 
@@ -263,3 +275,43 @@ class JPQIndex(pt.Artifact):
 
         """
         return JPQRetrieverFlat(self.docnos, self.codes, self.dvecs, topk=topk, name="JPQ-Flat", opq = self.opq, gpu=gpu)
+
+
+class JPQVectorLoader(pt.Transformer):
+    schematic = {'label': 'VecLoader'}
+
+    def __init__(self, jpq_index: JPQIndex):
+        self.jpq_index = jpq_index
+
+    def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
+        with pt.validate.any(inp) as v:
+            v.columns(includes=['docid'], mode='docid')
+            v.columns(includes=['docno'], mode='docno')
+        if inp.empty:
+            return inp.assign(
+                doc_vec=pd.Series(index=inp.index, dtype=object),
+                codes=pd.Series(index=inp.index, dtype=object),
+            )
+        if v.mode == 'docid':
+            docids = inp['docid'].astype('int').values
+        else:
+            docids = self.jpq_index.docnos.inv[inp['docno'].values]
+
+        codes = self.jpq_index.codes[docids]
+        meta = self.jpq_index.meta
+        vectors = self.jpq_index.dvecs[np.arange(meta.M), codes].reshape(len(inp), meta.M * meta.dsub)
+        opq = self.jpq_index.opq
+        if opq is not None:
+            vectors = vectors @ opq.T
+        return inp.assign(doc_vec=list(vectors), codes=list(codes))
+
+    def fuse_rank_cutoff(self, k):
+        return pt.RankCutoff(k) >> self
+
+    def __eq__(self, other):
+        if not isinstance(other, JPQVectorLoader):
+            return NotImplemented
+        return self.jpq_index.index_path == other.jpq_index.index_path
+
+    def __hash__(self):
+        return hash((JPQVectorLoader, self.jpq_index.index_path))

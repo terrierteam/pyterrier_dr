@@ -73,6 +73,18 @@ With a :class:`~pyterrier_dr.jpq.JPQIndex`, you can create a PQ retriever by cal
     pipeline = model.query_encoder() >> jpq_index.retriever_pq()
     results = pipeline.search("chemical reactions in water")
 
+Loading document vectors
+-----------------------------------------------------
+
+Call :meth:`~pyterrier_dr.jpq.JPQIndex.vec_loader` to add reconstructed
+``doc_vec`` vectors and their PQ ``codes`` to a frame containing ``docno``
+or internal ``docid`` values. For OPQ indexes, vectors are returned in the
+original query space, so they can be used directly with unrotated query vectors.
+
+.. code-block:: python
+
+    vectors = jpq_index.vec_loader()(results)
+
 
 API Reference
 -----------------------------------------------------
@@ -81,4 +93,4 @@ API Reference
     :members: fit, jpq_index
 
 .. autoclass:: pyterrier_dr.jpq.JPQIndex
-    :members: docnos, codes, dvecs, opq, retriever_pq, retriever_flat, retriever_prune, build_zero_shot_index
+    :members: docnos, codes, dvecs, opq, vec_loader, retriever_pq, retriever_flat, retriever_prune, build_zero_shot_index
