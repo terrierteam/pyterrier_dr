@@ -73,7 +73,7 @@ class JPQRetriever(pt.Transformer):
     ):
         super().__init__()
         
-        self.docnos = list(map(str, docnos))
+        self.docnos = docnos
         self.codes = np.ascontiguousarray(codes)
         self.sub_embeddings = np.ascontiguousarray(sub_embeddings)
         self.topk = int(topk)
