@@ -111,17 +111,17 @@ class JPQRetriever(pt.Transformer):
         self.d = M * dsub
         self.nbits = int(round(nbits_f))
 
-    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
+    def _validate_queries(self, topics: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, list[str]]:
         pta.validate.query_frame(topics, extra_columns=["query_vec"])
         qvecs = topics["query_vec"].to_list()
         if not len(topics):
             return np.empty((0, self.d), dtype=np.float32), []
         Q = np.stack(qvecs).astype(np.float32, copy=False)
         Q = np.ascontiguousarray(Q)
-        if self.opq is not None:
-            Q = Q @ self.opq
         qids = topics["qid"].astype(str).tolist()
-        return Q, qids
+        if self.opq is not None:
+            return Q @ self.opq, Q, qids
+        return Q, Q, qids
 
 
 class JPQRetrieverFaissBase(JPQRetriever):
@@ -142,10 +142,10 @@ class JPQRetrieverFaissBase(JPQRetriever):
         ...
 
     def transform(self, topics: pd.DataFrame) -> pd.DataFrame:
-        Q, qids = self._validate_queries(topics)
+        Q_rot, Q, qids = self._validate_queries(topics)
         self._ensure()
         k = min(self.topk, len(self.docnos))
-        D, doc_ids = self._index.search(Q, k) # type: ignore
+        D, doc_ids = self._index.search(Q_rot, k) # type: ignore
 
         rows = []
         for i, qid in enumerate(qids):
