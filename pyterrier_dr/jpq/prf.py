@@ -172,8 +172,9 @@ def _as_tensor(value, dtype: Optional[torch.dtype] = None) -> Tensor:
     array = np.asarray(value)
     # Read-only arrays (e.g. memmaps) trigger a PyTorch warning and cannot be
     # written to safely, so take a writable copy in that case.
-    if not array.flags.writeable:
-        array = array.copy()
+    # UPDATED: accept the warning
+    # if not array.flags.writeable:
+    #    array = array.copy()
     tensor = torch.as_tensor(array)
     if dtype is not None:
         tensor = tensor.to(dtype=dtype)
