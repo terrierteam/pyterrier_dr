@@ -1,6 +1,7 @@
 from typing import Optional
 import json
 import math
+import re
 import struct
 import os
 import pyterrier as pt
@@ -47,7 +48,21 @@ class FaissRetriever(pt.Indexer):
         num_q = query_vecs.shape[0]
         QBATCH = self.qbatch
         if self.n_probe is not None:
-            self.faiss_index.nprobe = self.n_probe
+            import faiss
+            faiss_idx = self.faiss_index
+            # the IVF index may be wrapped by another index (e.g. an IndexPreTransform for
+            # factory strings starting with OPQ) or exposed with a generic type; descend
+            # until the index that owns ``nprobe`` is found.
+            for _ in range(4):
+                if hasattr(faiss_idx, 'nprobe'):
+                    break
+                if hasattr(faiss_idx, 'index'):
+                    faiss_idx = faiss_idx.index
+                elif hasattr(faiss, 'downcast_index'):
+                    faiss_idx = faiss.downcast_index(faiss_idx)
+                else:
+                    break
+            faiss_idx.nprobe = self.n_probe
         if self.ef_search is not None:
             self.faiss_index.hnsw.efSearch = self.ef_search
         if self.search_bounded_queue is not None:
@@ -335,3 +350,72 @@ def _faiss_ivf_retriever(self,
                 self._cache[key] = faiss.read_index(str(self.index_path/index_name))
     return FaissRetriever(self, self._cache[key], num_results=num_results, n_probe=n_probe, drop_query_vec=drop_query_vec, index_spec=key)
 FlexIndex.faiss_ivf_retriever = _faiss_ivf_retriever
+
+
+def _faiss_factory_retriever(
+    self,
+    index_spec: str,
+    *,
+    num_results: int = 1000,
+    n_probe: Optional[int] = None,
+    train_sample: Optional[int] = None,
+    cache: bool = True,
+    drop_query_vec: bool = False,
+    qbatch: int = 64,
+):
+    """Returns a retriever that uses FAISS over an index built with the FAISS `index factory <https://github.com/facebookresearch/faiss/wiki/The-index-factory>`__.
+
+    The ``index_spec`` is a factory string (e.g. ``"IVF1024,PQ16"`` or ``"OPQ16_64,IVF262144,PQ16"``) that is passed to
+    ``faiss.index_factory`` to construct the appropriate index. If the index does not already exist, it is created and
+    (when ``cache=True`` (default)) cached to disk. Indexes that require training (e.g., IVF or PQ based) are trained on
+    a random sample of the indexed vectors.
+
+    Args:
+        index_spec: The FAISS factory string to use to build the index
+        num_results: The number of results to return per query
+        n_probe: The number of posting lists to probe during search (for IVF-based indexes). If not provided, the default used by the index (usually 1) is used.
+        train_sample: The number of training samples to use for training the index. If not provided, a default value is used (approximately ``39`` times the number of posting lists, when that can be inferred from ``index_spec``, otherwise 10,000). A value between 0 and 1 is interpreted as a fraction of the number of documents.
+        cache: Whether to cache the index to disk.
+        drop_query_vec: Whether to drop the query vector from the output.
+        qbatch: The batch size during search
+
+    Returns:
+        :class:`~pyterrier.Transformer`: A retriever that uses FAISS over an index built with the FAISS index factory
+
+    .. note::
+        This transformer requires the ``faiss`` package to be installed.
+
+    .. cite.dblp:: journals/corr/abs-2401-08281
+    """
+    pyterrier_dr.util.assert_faiss()
+    import faiss
+    meta, = self.payload(return_dvecs=False, return_docnos=False)
+
+    if train_sample is None:
+        m = re.search(r'IVF(\d+)', index_spec)
+        train_sample = max(10_000, int(m.group(1)) * 39) if m is not None else 10_000
+    elif 0 < train_sample < 1:
+        train_sample = math.ceil(train_sample * meta['doc_count'])
+
+    key = ('faiss_factory', index_spec, train_sample)
+    index_name = f'faiss_{index_spec}_train-{train_sample}.faiss'
+    if key not in self._cache:
+        dvecs, meta = self.payload(return_docnos=False)
+        if not os.path.exists(self.index_path/index_name):
+            idx = faiss.index_factory(meta['vec_size'], index_spec, faiss.METRIC_INNER_PRODUCT)
+            if not idx.is_trained:
+                with logger.duration(f'loading {train_sample} train samples'):
+                    train = _sample_train(self, train_sample)
+                with logger.duration('training index'):
+                    idx.train(train)
+            for start_idx in pt.tqdm(range(0, dvecs.shape[0], 4096), desc='indexing', unit='batch'):
+                idx.add(np.array(dvecs[start_idx:start_idx+4096]))
+            if cache:
+                with logger.duration('caching index'):
+                    faiss.write_index(idx, str(self.index_path/index_name))
+            self._cache[key] = idx
+        else:
+            with logger.duration('reading index'):
+                self._cache[key] = faiss.read_index(str(self.index_path/index_name))
+    return FaissRetriever(self, self._cache[key], num_results=num_results, n_probe=n_probe, qbatch=qbatch, drop_query_vec=drop_query_vec, index_spec=key)
+FlexIndex.faiss_factory_retriever = _faiss_factory_retriever
