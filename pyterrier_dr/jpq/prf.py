@@ -13,6 +13,9 @@ the top-ranked documents.  The expected input columns are::
 Only ``query_vec``, ``score`` and ``codes`` are used by the feedback methods;
 ``doc_vec`` is accepted (and preserved by the pipeline) but is not required by
 the PRF computation itself.
+
+The feedback functions accept and return NumPy arrays; computation runs on
+the CPU.
 """
 
 from __future__ import annotations
@@ -24,131 +27,113 @@ import numpy as np
 import pandas as pd
 import pyterrier as pt
 import pyterrier_alpha as pta
-import torch
-from torch import Tensor
 
 if TYPE_CHECKING:
     from pyterrier_dr.jpq.index import JPQIndex
 
 
 def _validate(
-    query: Tensor,
-    scores: Tensor,
-    codes: Tensor,
-    centroids: Tensor,
+    query: np.ndarray,
+    scores: np.ndarray,
+    codes: np.ndarray,
+    centroids: np.ndarray,
 ) -> tuple[int, int, int, int]:
     k, M = codes.shape
     M2, ks, dsub = centroids.shape
 
     assert M == M2
     assert scores.shape == (k,)
-    assert query.numel() == M * dsub
-    assert codes.dtype in (torch.int32, torch.int64)
+    assert query.size == M * dsub
+    assert np.issubdtype(codes.dtype, np.integer)
 
     return k, M, ks, dsub
 
 
-def _score_weights(scores: Tensor, temperature: float = 1.0) -> Tensor:
+def _score_weights(scores: np.ndarray, temperature: float = 1.0) -> np.ndarray:
     """
     Converts retrieval scores into non-negative PRF document weights.
     Softmax is usually preferable to using raw similarity scores directly.
     """
-    if not torch.is_floating_point(scores):
-        scores = scores.to(torch.get_default_dtype())
-    return torch.softmax(scores / temperature, dim=0)
+    if not np.issubdtype(scores.dtype, np.floating):
+        scores = scores.astype(np.float32)
+    if scores.size == 0:
+        return scores
+    scaled = scores / temperature
+    exp_scores = np.exp(scaled - np.max(scaled))
+    return exp_scores / exp_scores.sum()
 
 
 def _weighted_code_histogram(
-    scores: Tensor,
-    codes: Tensor,
+    scores: np.ndarray,
+    codes: np.ndarray,
     ks: int,
     temperature: float = 1.0,
-) -> Tensor:
+) -> np.ndarray:
     """
     Returns weighted pseudo-relevant code frequencies.
 
     Shape: (M, ks)
     Each row sums to 1.
     """
-    k, M = codes.shape
+    _, M = codes.shape
     doc_w = _score_weights(scores, temperature)
 
-    tf = torch.zeros(
-        M, ks,
-        device=doc_w.device,
-        dtype=doc_w.dtype,
-    )
-
-    # scatter_add_ requires a LongTensor index.  Convert once so that callers
-    # may pass either int32 or int64 codes.
-    codes = codes.to(device=doc_w.device, dtype=torch.long)
+    tf = np.zeros((M, ks), dtype=doc_w.dtype)
     for m in range(M):
-        tf[m].scatter_add_(0, codes[:, m], doc_w)
+        if np.any(codes[:, m] < 0) or np.any(codes[:, m] >= ks):
+            raise ValueError(f"codes contain a value outside [0, {ks}) for split {m}")
+        np.add.at(tf[m], codes[:, m].astype(np.intp, copy=False), doc_w)
 
     return tf
 
 
 def _weights_to_feedback_vector(
-    weights: Tensor,       # (M, ks)
-    centroids: Tensor,     # (M, ks, dsub)
+    weights: np.ndarray,       # (M, ks)
+    centroids: np.ndarray,     # (M, ks, dsub)
     eps: float = 1e-12,
-) -> Tensor:
+) -> np.ndarray:
     """
     Converts centroid weights into one dense feedback vector.
 
     We normalize independently inside each PQ split.
     """
-    weights = weights.clamp_min(0)
+    weights = np.maximum(weights, 0)
 
-    denom = weights.sum(dim=-1, keepdim=True).clamp_min(eps)
+    denom = np.maximum(weights.sum(axis=-1, keepdims=True), eps)
     weights = weights / denom
 
-    centroids = centroids.to(device=weights.device, dtype=weights.dtype)
+    centroids = centroids.astype(weights.dtype, copy=False)
 
     # (M, ks) x (M, ks, dsub) -> (M, dsub)
-    feedback = torch.einsum("mk,mkd->md", weights, centroids)
+    feedback = np.einsum("mk,mkd->md", weights, centroids)
 
     return feedback.flatten()
 
 
 def _interpolate(
-    query: Tensor,
-    feedback: Tensor,
+    query: np.ndarray,
+    feedback: np.ndarray,
     alpha: float = 0.7,
-) -> Tensor:
+) -> np.ndarray:
     """
     alpha = weight on original query.
     """
-    if not torch.is_floating_point(query):
-        query = query.to(torch.get_default_dtype())
-    feedback = feedback.to(device=query.device, dtype=query.dtype)
+    if not np.issubdtype(query.dtype, np.floating):
+        query = query.astype(np.float32)
+    feedback = feedback.astype(query.dtype, copy=False)
     return alpha * query + (1.0 - alpha) * feedback
 
 
-def _collection_code_freq(codes, ks: int) -> Tensor:
+def _collection_code_freq(codes, ks: int) -> np.ndarray:
     """Counts how often each PQ centroid is used in a collection.
 
     Args:
-        codes: PQ codes with shape ``(N, M)``.  May be a numpy array, a
-            ``torch.Tensor`` or anything else that can be converted to one.
+        codes: PQ codes with shape ``(N, M)``, as a NumPy array or sequence.
         ks: Number of centroids per split.
 
     Returns:
-        A ``(M, ks)`` long tensor of code frequencies.
+        A ``(M, ks)`` array of code frequencies.
     """
-    if isinstance(codes, torch.Tensor):
-        codes = codes.detach().to(dtype=torch.long)
-        M = codes.shape[1]
-        freq = torch.empty((M, ks), dtype=torch.long, device=codes.device)
-        for m in range(M):
-            counts = torch.bincount(codes[:, m], minlength=ks)
-            if counts.numel() != ks:
-                raise ValueError(
-                    f"codes contain a value outside [0, {ks}) for split {m}"
-                )
-            freq[m] = counts
-        return freq
-
     codes = np.asarray(codes)
     if codes.ndim != 2:
         raise ValueError(f"codes must have shape (N, M), got {codes.shape}")
@@ -162,23 +147,7 @@ def _collection_code_freq(codes, ks: int) -> Tensor:
                 f"codes contain a value outside [0, {ks}) for split {m}"
             )
         freq[m] = counts
-    return torch.from_numpy(freq)
-
-
-def _as_tensor(value, dtype: Optional[torch.dtype] = None) -> Tensor:
-    """Converts numpy arrays / sequences to tensors without unnecessary copies."""
-    if isinstance(value, torch.Tensor):
-        return value.to(dtype=dtype) if dtype is not None else value
-    array = np.asarray(value)
-    # Read-only arrays (e.g. memmaps) trigger a PyTorch warning and cannot be
-    # written to safely, so take a writable copy in that case.
-    # UPDATED: accept the warning
-    # if not array.flags.writeable:
-    #    array = array.copy()
-    tensor = torch.as_tensor(array)
-    if dtype is not None:
-        tensor = tensor.to(dtype=dtype)
-    return tensor
+    return freq
 
 
 class PQPrf(pt.Transformer, ABC):
@@ -226,8 +195,8 @@ class PQPrf(pt.Transformer, ABC):
         self,
         index: Optional["JPQIndex"] = None,
         *,
-        centroids: Optional[Tensor] = None,
-        collection_code_freq: Optional[Tensor] = None,
+        centroids: Optional[np.ndarray] = None,
+        collection_code_freq: Optional[np.ndarray] = None,
         n_docs: Optional[int] = None,
         alpha: float = 0.7,
         temperature: float = 1.0,
@@ -248,7 +217,7 @@ class PQPrf(pt.Transformer, ABC):
                 )
             centroids = index.dvecs
 
-        self.centroids = _as_tensor(centroids)
+        self.centroids = np.asarray(centroids)
 
         if collection_code_freq is None and index is not None:
             collection_code_freq = _collection_code_freq(
@@ -257,7 +226,7 @@ class PQPrf(pt.Transformer, ABC):
         self.collection_code_freq = (
             None
             if collection_code_freq is None
-            else _as_tensor(collection_code_freq)
+            else np.asarray(collection_code_freq)
         )
 
         if n_docs is None and index is not None:
@@ -288,16 +257,16 @@ class PQPrf(pt.Transformer, ABC):
     @abstractmethod
     def pq_prf(
         self,
-        query: Tensor,                    # float, (M*dsub,)
-        scores: Tensor,                   # float, (k,)
-        codes: Tensor,                    # long,  (k, M)
-        centroids: Tensor,                # float, (M, ks, dsub)
-        collection_code_freq: Tensor,     # int/float, (M, ks)
-        n_docs: int,
+        query: np.ndarray,                    # float, (M*dsub,)
+        scores: np.ndarray,                   # float, (k,)
+        codes: np.ndarray,                    # long,  (k, M)
+        centroids: np.ndarray,                # float, (M, ks, dsub)
+        collection_code_freq: Optional[np.ndarray],  # int/float, (M, ks)
+        n_docs: Optional[int],
         *,
         alpha: float = 0.7,
         temperature: float = 1.0,
-    ) -> Tensor:                          # float, (M*dsub,)
+    ) -> np.ndarray:                          # float, (M*dsub,)
         """Returns a new query vector for one query."""
         ...
 
@@ -327,39 +296,21 @@ class PQPrf(pt.Transformer, ABC):
         if self.k is not None:
             inp = inp.head(self.k)
 
-        query = _as_tensor(inp['query_vec'].iloc[0])
-        scores = torch.as_tensor(inp['score'].to_numpy())
-        codes = torch.as_tensor(
-            np.stack(inp['codes'].to_list()), dtype=torch.long
-        )
-
-        # Prefer a non-CPU device if the centroids have been placed there.
-        device = query.device
-        if self.centroids.device.type != 'cpu':
-            device = self.centroids.device
-
-        query = query.to(device)
-        scores = scores.to(device)
-        codes = codes.to(device)
-        centroids = self.centroids.to(device)
-        collection_code_freq = (
-            None
-            if self.collection_code_freq is None
-            else self.collection_code_freq.to(device)
-        )
+        query = np.asarray(inp['query_vec'].iloc[0])
+        scores = inp['score'].to_numpy()
+        codes = np.stack(inp['codes'].to_list())
 
         new_query = self.pq_prf(
             query,
             scores,
             codes,
-            centroids,
-            collection_code_freq,
+            self.centroids,
+            self.collection_code_freq,
             self.n_docs,
             alpha=self.alpha,
             temperature=self.temperature,
         )
 
-        new_query = new_query.detach().cpu().numpy()
         row = [inp[col].iloc[0] for col in query_cols] + [new_query]
         return pd.DataFrame([row], columns=query_cols + ['query_vec'])
 
@@ -371,14 +322,14 @@ class PQPrf(pt.Transformer, ABC):
 
 
 def pq_prf_tf(
-    query: Tensor,
-    scores: Tensor,
-    codes: Tensor,
-    centroids: Tensor,
+    query: np.ndarray,
+    scores: np.ndarray,
+    codes: np.ndarray,
+    centroids: np.ndarray,
     *,
     alpha: float = 0.7,
     temperature: float = 1.0,
-) -> Tensor:
+) -> np.ndarray:
     """
     PRF weight = score-weighted pseudo-relevant code frequency.
     """
@@ -394,16 +345,16 @@ def pq_prf_tf(
 
 
 def pq_prf_tfidf(
-    query: Tensor,
-    scores: Tensor,
-    codes: Tensor,
-    centroids: Tensor,
+    query: np.ndarray,
+    scores: np.ndarray,
+    codes: np.ndarray,
+    centroids: np.ndarray,
     *,
-    collection_code_freq: Tensor,
+    collection_code_freq: np.ndarray,
     n_docs: int,
     alpha: float = 0.7,
     temperature: float = 1.0,
-) -> Tensor:
+) -> np.ndarray:
     """
     Classical TF-IDF over PQ centroid IDs.
     """
@@ -415,9 +366,9 @@ def pq_prf_tfidf(
         scores, codes, ks, temperature
     )
 
-    df = collection_code_freq.to(device=tf.device, dtype=tf.dtype)
+    df = collection_code_freq.astype(tf.dtype, copy=False)
 
-    idf = torch.log(
+    idf = np.log(
         (float(n_docs) + 1.0) / (df + 1.0)
     )
 
@@ -429,16 +380,16 @@ def pq_prf_tfidf(
 
 
 def pq_prf_probabilistic_tfidf(
-    query: Tensor,
-    scores: Tensor,
-    codes: Tensor,
-    centroids: Tensor,
+    query: np.ndarray,
+    scores: np.ndarray,
+    codes: np.ndarray,
+    centroids: np.ndarray,
     *,
-    collection_code_freq: Tensor,
+    collection_code_freq: np.ndarray,
     n_docs: int,
     alpha: float = 0.7,
     temperature: float = 1.0,
-) -> Tensor:
+) -> np.ndarray:
     """
     TF x Robertson-style probabilistic IDF.
 
@@ -453,14 +404,14 @@ def pq_prf_probabilistic_tfidf(
         scores, codes, ks, temperature
     )
 
-    df = collection_code_freq.to(device=tf.device, dtype=tf.dtype)
+    df = collection_code_freq.astype(tf.dtype, copy=False)
 
-    idf = torch.log(
+    idf = np.log(
         (float(n_docs) - df + 0.5)
         / (df + 0.5)
     )
 
-    idf = idf.clamp_min(0)
+    idf = np.maximum(idf, 0)
 
     weights = tf * idf
 
@@ -470,17 +421,17 @@ def pq_prf_probabilistic_tfidf(
 
 
 def pq_prf_kl_tfidf(
-    query: Tensor,
-    scores: Tensor,
-    codes: Tensor,
-    centroids: Tensor,
+    query: np.ndarray,
+    scores: np.ndarray,
+    codes: np.ndarray,
+    centroids: np.ndarray,
     *,
-    collection_code_freq: Tensor,
+    collection_code_freq: np.ndarray,
     n_docs: int,
     alpha: float = 0.7,
     temperature: float = 1.0,
     smoothing: float = 1e-6,
-) -> Tensor:
+) -> np.ndarray:
     """
     Codeword weight:
 
@@ -497,7 +448,7 @@ def pq_prf_kl_tfidf(
         scores, codes, ks, temperature
     )
 
-    counts = collection_code_freq.to(device=p_r.device, dtype=p_r.dtype)
+    counts = collection_code_freq.astype(p_r.dtype, copy=False)
 
     # In ordinary PQ, every document contributes exactly one assignment
     # to each split, so dividing by N produces p_C(code | split).
@@ -507,15 +458,15 @@ def pq_prf_kl_tfidf(
 
     p_r_smooth = p_r + smoothing
     p_r_smooth = p_r_smooth / p_r_smooth.sum(
-        dim=-1, keepdim=True
+        axis=-1, keepdims=True
     )
 
-    log_ratio = torch.log(p_r_smooth / p_c)
+    log_ratio = np.log(p_r_smooth / p_c)
 
     weights = p_r * log_ratio
 
     # Only expansion toward positively enriched codes.
-    weights = weights.clamp_min(0)
+    weights = np.maximum(weights, 0)
 
     feedback = _weights_to_feedback_vector(weights, centroids)
 
@@ -529,16 +480,16 @@ class PQPrfTF(PQPrf):
 
     def pq_prf(
         self,
-        query: Tensor,
-        scores: Tensor,
-        codes: Tensor,
-        centroids: Tensor,
-        collection_code_freq: Optional[Tensor] = None,
+        query: np.ndarray,
+        scores: np.ndarray,
+        codes: np.ndarray,
+        centroids: np.ndarray,
+        collection_code_freq: Optional[np.ndarray] = None,
         n_docs: Optional[int] = None,
         *,
         alpha: float = 0.7,
         temperature: float = 1.0,
-    ) -> Tensor:
+    ) -> np.ndarray:
         return pq_prf_tf(
             query,
             scores,
@@ -554,16 +505,16 @@ class PQPrfTFIDF(PQPrf):
 
     def pq_prf(
         self,
-        query: Tensor,
-        scores: Tensor,
-        codes: Tensor,
-        centroids: Tensor,
-        collection_code_freq: Tensor,
+        query: np.ndarray,
+        scores: np.ndarray,
+        codes: np.ndarray,
+        centroids: np.ndarray,
+        collection_code_freq: np.ndarray,
         n_docs: int,
         *,
         alpha: float = 0.7,
         temperature: float = 1.0,
-    ) -> Tensor:
+    ) -> np.ndarray:
         return pq_prf_tfidf(
             query,
             scores,
@@ -581,16 +532,16 @@ class PQPrfProbabilisticTFIDF(PQPrf):
 
     def pq_prf(
         self,
-        query: Tensor,
-        scores: Tensor,
-        codes: Tensor,
-        centroids: Tensor,
-        collection_code_freq: Tensor,
+        query: np.ndarray,
+        scores: np.ndarray,
+        codes: np.ndarray,
+        centroids: np.ndarray,
+        collection_code_freq: np.ndarray,
         n_docs: int,
         *,
         alpha: float = 0.7,
         temperature: float = 1.0,
-    ) -> Tensor:
+    ) -> np.ndarray:
         return pq_prf_probabilistic_tfidf(
             query,
             scores,
@@ -612,17 +563,17 @@ class PQPrfKLTFIDF(PQPrf):
 
     def pq_prf(
         self,
-        query: Tensor,
-        scores: Tensor,
-        codes: Tensor,
-        centroids: Tensor,
-        collection_code_freq: Tensor,
+        query: np.ndarray,
+        scores: np.ndarray,
+        codes: np.ndarray,
+        centroids: np.ndarray,
+        collection_code_freq: np.ndarray,
         n_docs: int,
         *,
         alpha: float = 0.7,
         temperature: float = 1.0,
         smoothing: Optional[float] = None,
-    ) -> Tensor:
+    ) -> np.ndarray:
         return pq_prf_kl_tfidf(
             query,
             scores,
