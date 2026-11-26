@@ -2,7 +2,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import shutil
 import pyterrier as pt
-import pyterrier_alpha as pta
 import numpy as np
 import pandas as pd
 import more_itertools
@@ -285,9 +284,14 @@ class JPQVectorLoader(pt.Transformer):
         self.jpq_index = jpq_index
 
     def transform(self, inp: pd.DataFrame) -> pd.DataFrame:
-        with pta.validate.any(inp) as v:
+        with pt.validate.any(inp) as v:
             v.columns(includes=['docid'], mode='docid')
             v.columns(includes=['docno'], mode='docno')
+        if inp.empty:
+            return inp.assign(
+                doc_vec=pd.Series(index=inp.index, dtype=object),
+                codes=pd.Series(index=inp.index, dtype=object),
+            )
         if v.mode == 'docid':
             docids = inp['docid'].astype('int').values
         else:

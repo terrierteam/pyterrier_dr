@@ -41,13 +41,27 @@ class TestJPQ(unittest.TestCase):
 
                     result = loader(pd.DataFrame({'docid': [1], 'docno': ['a']}))
                     np.testing.assert_array_equal(result.iloc[0]['codes'], codes[1])
-                    empty = loader(pd.DataFrame({'docid': pd.Series(dtype=int)}))
-                    self.assertEqual(list(empty.columns), ['docid', 'doc_vec', 'codes'])
-                    self.assertTrue(empty.empty)
+                    for column in ('docid', 'docno'):
+                        inp = pd.DataFrame({column: pd.Series(dtype=object), 'score': pd.Series(dtype=float)})
+                        empty = loader(inp)
+                        pt.validate.columns(empty, includes=[column, 'score', 'doc_vec', 'codes'])
+                        self.assertEqual(list(empty.columns), [column, 'score', 'doc_vec', 'codes'])
+                        pd.testing.assert_frame_equal(empty[[column, 'score']], inp)
+                        self.assertTrue(empty.empty)
                     with self.assertRaises(pt.validate.InputValidationError):
                         loader(pd.DataFrame({'score': [1]}))
+                    with self.assertRaises(pt.validate.InputValidationError):
+                        loader(pd.DataFrame({'score': pd.Series(dtype=float)}))
                     self.assertEqual(loader, JPQIndex(path).vec_loader())
                     self.assertEqual(hash(loader), hash(JPQIndex(path).vec_loader()))
+
+            empty_index = JPQIndex.build(
+                destdir + '/empty', [], np.empty((0, 2), dtype=np.uint8), centroids, opq=None,
+            )
+            for column in ('docid', 'docno'):
+                empty = empty_index.vec_loader()(pd.DataFrame({column: pd.Series(dtype=object)}))
+                pt.validate.columns(empty, includes=[column, 'doc_vec', 'codes'])
+                self.assertTrue(empty.empty)
 
     @unittest.skipIf(not torch.cuda.is_available(), "No CUDA")
     def test_jpq(self):
